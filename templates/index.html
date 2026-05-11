@@ -517,8 +517,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   .sort-bar { padding:0 16px; }
   .ctx-info { padding:12px 16px 0; }
   .pv-wrap { padding:20px 16px 60px; }
-  .pv-search-wrap { max-width:140px; }
-  .pv-home { display:none; }
+  .pv-search-wrap { max-width:120px; }
 }
 </style>
 </head>
@@ -1441,11 +1440,11 @@ document.addEventListener('click', e => {
   const a = e.target.closest('a');
   if (!a || a.dataset.nav !== undefined || a.classList.contains('pv-open') || a.id === 'pv-open') return;
   const href = a.getAttribute('href') || '';
-  const mPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
+  const mPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
   if (mPost) { e.preventDefault(); navigate(`/r/${mPost[1]}/comments/${mPost[2]}`); return; }
-  const mSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/r\/([^\/?\s#]+)/);
+  const mSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?r\/([^\/?\s#]+)/);
   if (mSub)  { e.preventDefault(); navigate(`/r/${mSub[1]}`); return; }
-  const mUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/u(?:ser)?\/([^\/?\s#]+)/);
+  const mUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?u(?:ser)?\/([^\/?\s#]+)/);
   if (mUser) { e.preventDefault(); navigate(`/user/${mUser[1]}`); }
 });
 
