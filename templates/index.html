@@ -634,8 +634,17 @@ mdRenderer.link = (href, title, text) => {
   return (_link(href, title, text)||'').replace('<a ', '<a target="_blank" rel="noopener" ');
 };
 marked.use({ renderer: mdRenderer, breaks: true, gfm: true });
+function linkifyReddit(text) {
+  // Convert bare r/sub and u/user mentions to markdown links,
+  // but skip ones already inside a markdown link [...](...) or code spans `...`
+  return text
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\/\w])r\/([A-Za-z0-9_]+)/g,
+      (m, skip, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\/\w])u\/([A-Za-z0-9_-]+)/g,
+      (m, skip, user) => skip ? skip : `[u/${user}](/user/${user})`);
+}
 function renderMd(text) {
-  return text ? DOMPurify.sanitize(marked.parse(text)) : '';
+  return text ? DOMPurify.sanitize(marked.parse(linkifyReddit(text))) : '';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
