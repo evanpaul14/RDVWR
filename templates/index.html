@@ -512,7 +512,6 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width:680px) {
   .header-inner { gap:12px; padding:0 16px; }
-  .logo { display:none; }
   #feed { padding:12px 12px 80px; gap:10px; }
   .sort-bar { padding:0 16px; }
   .ctx-info { padding:12px 16px 0; }
@@ -684,7 +683,7 @@ async function initRedgifs(container) {
       const res = await fetch(`/api/redgifs/${id}`);
       const data = await res.json();
       if (!res.ok || (!data.hd && !data.sd)) throw new Error(data.error || 'no url');
-      wrap.innerHTML = `<video controls playsinline preload="metadata" src="${escHtml(data.hd || data.sd)}"></video>`;
+      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(data.hd || data.sd)}"></video>`;
     } catch {
       wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
     }
@@ -752,7 +751,7 @@ document.addEventListener('click', e => {
 // MEDIA RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 function mediaHtmlCard(p) {
-  if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="none" playsinline></video></div>`;
+  if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="none" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
@@ -770,7 +769,7 @@ function mediaHtmlCard(p) {
 }
 
 function mediaHtmlFull(p) {
-  if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="metadata" playsinline></video></div>`;
+  if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="metadata" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
@@ -910,7 +909,7 @@ const pvBreadcrumb = document.getElementById('pv-breadcrumb');
 function openPostView() { postView.classList.add('open'); document.body.style.overflow='hidden'; }
 function closePostView(){ postView.classList.remove('open'); document.body.style.overflow=''; }
 
-document.getElementById('pv-home').addEventListener('click', () => { navigate('/r/popular/top'); });
+document.getElementById('pv-home').addEventListener('click', () => { navigate('/r/popular/hot'); });
 
 function findComment(comments, id) {
   for (const c of comments) {
@@ -1295,7 +1294,7 @@ function parseRoute(path=location.pathname) {
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
   if (mSub) {
-    const sort = SORTS.has(mSub[2]) ? mSub[2] : 'top';
+    const sort = SORTS.has(mSub[2]) ? mSub[2] : (mSub[1].toLowerCase() === 'popular' ? 'hot' : 'top');
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
     const time = new URLSearchParams(qs).get('t') || (sort === 'top' ? 'day' : 'all');
     return { type:'sub', sub:mSub[1], sort, time };
@@ -1321,7 +1320,7 @@ function navigate(path, { replace=false }={}) {
 async function renderRoute(route, { restoreScroll=0 }={}) {
   switch (route.type) {
     case 'home':
-      navigate('/r/popular/top?t=day', { replace: true });
+      navigate('/r/popular/hot', { replace: true });
       return;
     case 'sub':
       closePostView();
