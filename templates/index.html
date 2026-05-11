@@ -756,6 +756,9 @@ function mediaHtmlCard(p) {
   if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  if (p.gif_url) return p.gif_is_video
+    ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" autoplay loop muted playsinline></video></div>`
+    : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
 
   if (p.gallery?.length > 1) return renderGallery(p.gallery);
   const imgSrc = p.gallery?.length ? p.gallery[0].url : p.preview_img;
@@ -771,6 +774,9 @@ function mediaHtmlFull(p) {
   if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  if (p.gif_url) return p.gif_is_video
+    ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" autoplay loop muted playsinline></video></div>`
+    : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
   if (p.gallery?.length) return renderGallery(p.gallery);
   if (p.preview_img) return `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
   return '';
@@ -811,7 +817,7 @@ function renderPost(p, idx, showSub=false) {
 
   // Compact layout for link posts (no rich embedded media)
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
-  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.redgifs_id && !p.embed_url && !(p.gallery?.length > 1) && !isImageDomain;
+  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.redgifs_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
     const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
     const thumbContent = imgSrc
@@ -987,11 +993,20 @@ pvContent.addEventListener('click', e => {
 // ═══════════════════════════════════════════════════════════════════════════
 // FEED STATE
 // ═══════════════════════════════════════════════════════════════════════════
-const SORT_BTN_HTML = `
-  <button class="sort-btn" data-sort="hot">Hot</button>
-  <button class="sort-btn" data-sort="new">New</button>
-  <button class="sort-btn active" data-sort="top">Top</button>
-  <button class="sort-btn" data-sort="rising">Rising</button>`;
+function buildSubSortHtml(sort='top', time='all') {
+  const btns = ['hot','new','top','rising'].map(s =>
+    `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+  ).join('');
+  return btns + (sort==='top' ? buildTimeFilterHtml(time) : '');
+}
+function buildProfileSortHtml(tab='posts', sort='new', time='all') {
+  const tabBtns = `<button class="sort-btn${tab==='posts'?' active':''}" data-ptab="posts">Posts</button><button class="sort-btn${tab==='comments'?' active':''}" data-ptab="comments">Comments</button>`;
+  const sorts = tab==='posts' ? ['hot','new','top'] : ['new','top'];
+  const sortBtns = sorts.map(s =>
+    `<button class="sort-btn${s===sort?' active':''}" data-psort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+  ).join('');
+  return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '');
+}
 const SEARCH_SORT_BTN_HTML = `
   <button class="sort-btn active" data-ssort="relevance">Relevance</button>
   <button class="sort-btn" data-ssort="hot">Hot</button>
@@ -1004,10 +1019,14 @@ const loadMoreBtn = document.getElementById('load-more-btn');
 
 let currentSub    = '';
 let currentSort   = 'top';
+let currentTime   = 'all';
 let afterToken    = null;
 let loading       = false;
+let feedGen       = 0;
 let profileMode   = false;
 let profileTab    = 'posts';
+let profileSort   = 'new';
+let profileTime   = 'all';
 let profileUser   = '';
 let profileAfter  = null;
 let searchMode    = false;
@@ -1046,20 +1065,24 @@ async function loadAbout(sub) {
   } catch {}
 }
 
-async function fetchPosts(sub, sort, after) {
+async function fetchPosts(sub, sort, time, after) {
   let url = `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
+  if (sort === 'top') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${after}`;
   return fetch(url);
 }
 
-async function loadSubFeed(sub, sort, after=null, append=false) {
-  if (loading) return;
+async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
   else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
   try {
-    const res  = await fetchPosts(sub, sort, after);
+    const res  = await fetchPosts(sub, sort, time, after);
     const data = await res.json();
+    if (myGen !== feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Error')}</div><div class="state-sub">check the subreddit name and try again</div></div>`;
       return;
@@ -1077,23 +1100,23 @@ async function loadSubFeed(sub, sort, after=null, append=false) {
     afterToken = data.after;
     loadMoreBtn.style.display = afterToken ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
-  finally  { loading = false; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  finally  { if (myGen === feedGen) loading = false; }
 }
 
-async function loadSubreddit(sub, sort='top') {
+async function loadSubreddit(sub, sort='top', time='all') {
   profileMode = false;
   currentSub  = sub.trim();
   currentSort = sort;
+  currentTime = time;
   afterToken  = null;
   document.getElementById('subreddit-input').value = currentSub;
   document.getElementById('pv-subreddit-input').value = currentSub;
-  sortBar.innerHTML = SORT_BTN_HTML;
+  sortBar.innerHTML = buildSubSortHtml(sort, time);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
-  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sort));
   loadAbout(currentSub);
-  await loadSubFeed(currentSub, currentSort);
+  await loadSubFeed(currentSub, currentSort, currentTime);
 }
 
 // ── Profile feed ───────────────────────────────────────────────────────────
@@ -1114,17 +1137,21 @@ function renderUserCommentCard(c, idx) {
   </div>`;
 }
 
-async function loadProfileTab(username, tab, after=null, append=false) {
-  if (loading) return;
+async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
   loading = true;
   if (!append) { showSkeletons(); profileAfter = null; }
   else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
   try {
     const endpoint = tab==='posts' ? 'posts' : 'comments';
-    let url = `/api/user/${encodeURIComponent(username)}/${endpoint}`;
-    if (after) url += `?after=${after}`;
+    let url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
+    if (sort === 'top') url += `&t=${time || 'all'}`;
+    if (after) url += `&after=${after}`;
     const res  = await fetch(url);
     const data = await res.json();
+    if (myGen !== feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Error')}</div></div>`;
       return;
@@ -1146,12 +1173,12 @@ async function loadProfileTab(username, tab, after=null, append=false) {
     profileAfter = data.after;
     loadMoreBtn.style.display = profileAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
-  finally  { loading = false; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  finally  { if (myGen === feedGen) loading = false; }
 }
 
 async function loadProfile(username) {
-  profileMode = true; profileUser = username; profileTab = 'posts'; profileAfter = null;
+  profileMode = true; profileUser = username; profileTab = 'posts'; profileSort = 'new'; profileTime = 'all'; profileAfter = null;
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
   document.getElementById('subreddit-input').value = '';
@@ -1174,27 +1201,18 @@ async function loadProfile(username) {
     }
   } catch {}
 
-  // Tab bar (reuse sort-bar for profile tabs)
-  sortBar.innerHTML = `
-    <button class="sort-btn active" data-ptab="posts">Posts</button>
-    <button class="sort-btn" data-ptab="comments">Comments</button>`;
+  sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
   sortBar.style.display = 'flex';
-  sortBar.querySelectorAll('[data-ptab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.ptab === profileTab) return;
-      profileTab = btn.dataset.ptab;
-      sortBar.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b===btn));
-      loadProfileTab(username, profileTab);
-    });
-  });
 
-  await loadProfileTab(username, 'posts');
+  await loadProfileTab(username, 'posts', profileSort, profileTime);
 }
 
 // ── Search feed ────────────────────────────────────────────────────────────
 
 async function loadSearchResults(query, sort, time, after=null, append=false) {
-  if (loading) return;
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
   else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
@@ -1205,6 +1223,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     if (after)      url += `&after=${encodeURIComponent(after)}`;
     const res  = await fetch(url);
     const data = await res.json();
+    if (myGen !== feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Search failed')}</div></div>`;
       return;
@@ -1221,8 +1240,8 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     searchAfter = data.after;
     loadMoreBtn.style.display = searchAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
-  finally  { loading = false; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  finally  { if (myGen === feedGen) loading = false; }
 }
 
 function buildTimeFilterHtml(selected) {
@@ -1275,7 +1294,12 @@ function parseRoute(path=location.pathname) {
   const mPost = pathname.match(/^\/r\/([^\/]+)\/comments\/([^\/]+)(?:\/[^\/]*(?:\/([a-z0-9]+))?)?/i);
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
-  if (mSub)  return { type:'sub', sub:mSub[1], sort:SORTS.has(mSub[2])?mSub[2]:'top' };
+  if (mSub) {
+    const sort = SORTS.has(mSub[2]) ? mSub[2] : 'top';
+    const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
+    const time = new URLSearchParams(qs).get('t') || (sort === 'top' ? 'day' : 'all');
+    return { type:'sub', sub:mSub[1], sort, time };
+  }
   const mUser = pathname.match(/^\/u(?:ser)?\/([^\/]+)/);
   if (mUser) return { type:'user', username:mUser[1] };
   if (pathname === '/search') {
@@ -1297,12 +1321,12 @@ function navigate(path, { replace=false }={}) {
 async function renderRoute(route, { restoreScroll=0 }={}) {
   switch (route.type) {
     case 'home':
-      navigate('/r/popular/top', { replace: true });
+      navigate('/r/popular/top?t=day', { replace: true });
       return;
     case 'sub':
       closePostView();
       searchMode = false;
-      await loadSubreddit(route.sub, route.sort);
+      await loadSubreddit(route.sub, route.sort, route.time || 'all');
       break;
     case 'post':
       if (currentSub !== route.sub) await loadSubreddit(route.sub, currentSort);
@@ -1325,8 +1349,8 @@ window.addEventListener('popstate', (e) => {
   const savedScroll = e.state?.scrollY || 0;
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
-  // Going back to the sub already in the feed — just restore scroll, skip reload
-  if (route.type === 'sub' && route.sub === currentSub && !searchMode && !profileMode) {
+  // Going back to the sub already in the feed with same sort/time — just restore scroll, skip reload
+  if (route.type === 'sub' && route.sub === currentSub && route.sort === currentSort && (route.time||'all') === currentTime && !searchMode && !profileMode) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -1371,7 +1395,7 @@ function buildSearchUrl(q=searchQuery, sort=searchSort, time=searchTime, sub=sea
   return url;
 }
 
-// Sort buttons (subreddit mode + search mode)
+// Sort buttons (subreddit mode + search mode + profile mode)
 sortBar.addEventListener('click', e => {
   if (e.target.closest('#nsfw-toggle') && searchMode) {
     searchNsfw = !searchNsfw;
@@ -1390,22 +1414,53 @@ sortBar.addEventListener('click', e => {
     navigate(buildSearchUrl(), { replace:true });
     return;
   }
+  // Profile tab switch
+  const ptabBtn = e.target.closest('.sort-btn[data-ptab]');
+  if (ptabBtn && profileMode) {
+    if (ptabBtn.dataset.ptab === profileTab) return;
+    profileTab = ptabBtn.dataset.ptab;
+    profileSort = 'new'; profileTime = 'all';
+    sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
+    loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+    return;
+  }
+  // Profile sort
+  const psortBtn = e.target.closest('.sort-btn[data-psort]');
+  if (psortBtn && profileMode) {
+    const newSort = psortBtn.dataset.psort;
+    if (newSort === profileSort) return;
+    profileSort = newSort; profileTime = 'all';
+    sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
+    loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+    return;
+  }
+  // Subreddit sort
   const sortBtn = e.target.closest('.sort-btn[data-sort]');
   if (!sortBtn || profileMode || searchMode) return;
-  currentSort = sortBtn.dataset.sort;
-  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===sortBtn));
+  const newSort = sortBtn.dataset.sort;
+  if (newSort === currentSort) return;
+  currentSort = newSort; currentTime = 'all';
   afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
   navigate(`/r/${currentSub}/${currentSort}`, { replace:true });
-  loadSubFeed(currentSub, currentSort);
 });
 
 sortBar.addEventListener('change', e => {
   const sel = e.target.closest('#time-filter');
-  if (!sel || !searchMode) return;
-  searchTime = sel.value;
-  navigate(buildSearchUrl(), { replace:true });
-  loadSearch(searchQuery, 'top', searchTime, searchSub, searchNsfw);
+  if (!sel) return;
+  if (searchMode) {
+    searchTime = sel.value;
+    navigate(buildSearchUrl(), { replace:true });
+  } else if (profileMode) {
+    profileTime = sel.value;
+    sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
+    loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+  } else {
+    currentTime = sel.value;
+    afterToken = null;
+    window.scrollTo({top:0, behavior:'instant'});
+    navigate(`/r/${currentSub}/${currentSort}?t=${currentTime}`, { replace:true });
+  }
 });
 
 // Search
@@ -1437,8 +1492,8 @@ document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
 // Load more
 loadMoreBtn.addEventListener('click', () => {
   if (searchMode)       loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
-  else if (profileMode) loadProfileTab(profileUser, profileTab, profileAfter, true);
-  else                  loadSubFeed(currentSub, currentSort, afterToken, true);
+  else if (profileMode) loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
+  else                  loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
 });
 
 // Logo → home

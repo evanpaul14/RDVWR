@@ -105,6 +105,18 @@ def process_post(p):
         if media_url:
             embed_url = media_url
 
+    # Direct GIF / GIFV URLs not already captured as video
+    gif_url = None
+    gif_is_video = False
+    if not is_video and not redgifs_id and not youtube_id and not embed_url:
+        post_url  = p.get("url", "")
+        lower_url = post_url.lower().split("?")[0]
+        if lower_url.endswith(".gif"):
+            gif_url = post_url
+        elif lower_url.endswith(".gifv"):
+            gif_url      = re.sub(r"\.gifv$", ".mp4", post_url, flags=re.I)
+            gif_is_video = True
+
     return {
         "id":           p["id"],
         "title":        p["title"],
@@ -127,6 +139,8 @@ def process_post(p):
         "youtube_id":   youtube_id,
         "embed_url":    embed_url,
         "redgifs_id":   redgifs_id,
+        "gif_url":      gif_url,
+        "gif_is_video": gif_is_video,
         "post_hint":    p.get("post_hint", ""),
         "over_18":      p.get("over_18", False),
         "flair":        p.get("link_flair_text") or "",
@@ -244,9 +258,12 @@ def search_posts():
 @app.route("/api/r/<subreddit>")
 def get_posts(subreddit):
     sort  = request.args.get("sort", "top")
+    t     = request.args.get("t", "")
     after = request.args.get("after", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": 25, "raw_json": 1}
+    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
     if after:
         params["after"] = after
     try:
@@ -360,8 +377,12 @@ def get_user_about(username):
 
 @app.route("/api/user/<username>/posts")
 def get_user_posts_api(username):
+    sort   = request.args.get("sort", "new")
+    t      = request.args.get("t", "")
     after  = request.args.get("after", "")
-    params = {"limit": 25, "raw_json": 1}
+    params = {"limit": 25, "raw_json": 1, "sort": sort}
+    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
     if after:
         params["after"] = after
     try:
@@ -381,8 +402,12 @@ def get_user_posts_api(username):
 
 @app.route("/api/user/<username>/comments")
 def get_user_comments_api(username):
+    sort   = request.args.get("sort", "new")
+    t      = request.args.get("t", "")
     after  = request.args.get("after", "")
-    params = {"limit": 25, "raw_json": 1}
+    params = {"limit": 25, "raw_json": 1, "sort": sort}
+    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
     if after:
         params["after"] = after
     try:
