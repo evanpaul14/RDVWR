@@ -47,18 +47,19 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   font-family:var(--mono); font-size:13px; color:var(--ac);
   padding:0 10px 0 14px; pointer-events:none;
 }
-#subreddit-input {
+#subreddit-input, #pv-subreddit-input {
   flex:1; background:transparent; border:none; outline:none;
   font-family:var(--mono); font-size:13px; color:var(--tx);
   padding:10px 4px; min-width:0;
 }
-#subreddit-input::placeholder { color:var(--tx3); }
-#search-btn {
+#subreddit-input::placeholder, #pv-subreddit-input::placeholder { color:var(--tx3); }
+.pv-search-wrap { flex:0 1 200px; }
+#search-btn, #pv-search-btn {
   background:transparent; border:none; border-left:1px solid var(--b2);
   cursor:pointer; padding:0 14px; height:100%; color:var(--tx2);
   transition:color .15s,background .15s; display:flex; align-items:center;
 }
-#search-btn:hover { color:var(--ac); background:var(--bg3); }
+#search-btn:hover, #pv-search-btn:hover { color:var(--ac); background:var(--bg3); }
 
 /* ── Time filter (search) ───────────────────────────────────────────────── */
 .time-filter-wrap { display:flex; align-items:center; padding:0 12px; border-left:1px solid var(--b); }
@@ -507,6 +508,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   .sort-bar { padding:0 16px; }
   .ctx-info { padding:12px 16px 0; }
   .pv-wrap { padding:20px 16px 60px; }
+  .pv-search-wrap { flex:0 1 140px; }
+  .pv-breadcrumb { display:none; }
 }
 </style>
 </head>
@@ -562,6 +565,15 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
       back
     </button>
     <div class="pv-breadcrumb" id="pv-breadcrumb"></div>
+    <div class="search-wrap pv-search-wrap">
+      <span class="search-prefix">r /</span>
+      <input id="pv-subreddit-input" type="text" placeholder="subreddit" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button id="pv-search-btn" title="Load subreddit">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M10 10L14 14M11 6A5 5 0 1 1 1 6a5 5 0 0 1 10 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
     <a class="pv-open" id="pv-open" href="#" target="_blank" rel="noopener">↗ reddit</a>
   </div>
   <div class="pv-scroll" id="pv-scroll">
@@ -1059,6 +1071,7 @@ async function loadSubreddit(sub, sort='top') {
   currentSort = sort;
   afterToken  = null;
   document.getElementById('subreddit-input').value = currentSub;
+  document.getElementById('pv-subreddit-input').value = currentSub;
   sortBar.innerHTML = SORT_BTN_HTML;
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
@@ -1126,6 +1139,7 @@ async function loadProfile(username) {
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
   document.getElementById('subreddit-input').value = '';
+  document.getElementById('pv-subreddit-input').value = '';
   document.title = `u/${username} — RDVWR`;
 
   // Load user info
@@ -1216,6 +1230,7 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=fals
   searchAfter = null;
   afterToken  = null;
   document.getElementById('subreddit-input').value = query;
+  document.getElementById('pv-subreddit-input').value = query;
   document.title = `Search: ${query}${sub ? ` in r/${sub}` : ''} — RDVWR`;
 
   document.getElementById('ctx-icon-wrap').innerHTML = `<div class="ctx-icon-placeholder">⌗</div>`;
@@ -1378,8 +1393,11 @@ sortBar.addEventListener('change', e => {
 });
 
 // Search
-function handleSearchInput() {
-  const val = document.getElementById('subreddit-input').value.trim();
+function handleSearchInput(e) {
+  const pvInput = document.getElementById('pv-subreddit-input');
+  const mainInput = document.getElementById('subreddit-input');
+  const activeInput = (e?.currentTarget?.id === 'pv-search-btn' || e?.target === pvInput || document.activeElement === pvInput) ? pvInput : mainInput;
+  const val = activeInput.value.trim();
   if (!val) return;
   if (val.startsWith('r/')) {
     const sub = val.slice(2).replace(/^\//, '');
@@ -1394,6 +1412,10 @@ function handleSearchInput() {
 document.getElementById('search-btn').addEventListener('click', handleSearchInput);
 document.getElementById('subreddit-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') handleSearchInput();
+});
+document.getElementById('pv-search-btn').addEventListener('click', handleSearchInput);
+document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleSearchInput(e);
 });
 
 // Load more
