@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="RDVWR">
 <title>RDVWR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1360,13 +1363,9 @@ window.addEventListener('popstate', (e) => {
 // EVENT WIRING
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Feed clicks: post title, comments button, author link, data-nav links
+// Feed clicks: comments button, author link (links handled by capture-phase global handler)
 feed.addEventListener('click', e => {
-  if (e.target.closest('a[data-nav]')) {
-    e.preventDefault();
-    navigate(e.target.closest('a[data-nav]').getAttribute('href'));
-    return;
-  }
+  if (e.defaultPrevented) return;
   const commBtn = e.target.closest('.comments-link[data-id]');
   const userBtn = e.target.closest('.post-author[data-user]');
   if (commBtn) {
@@ -1376,15 +1375,7 @@ feed.addEventListener('click', e => {
   }
 });
 
-// Post-view breadcrumb / data-nav links
-pvBreadcrumb.addEventListener('click', e => {
-  const a = e.target.closest('a[data-nav]');
-  if (a) { e.preventDefault(); navigate(a.getAttribute('href')); }
-});
-pvContent.addEventListener('click', e => {
-  const a = e.target.closest('a[data-nav]');
-  if (a) { e.preventDefault(); navigate(a.getAttribute('href')); }
-});
+// Post-view content: author clicks (links handled by capture-phase global handler)
 
 function buildSearchUrl(q=searchQuery, sort=searchSort, time=searchTime, sub=searchSub, nsfw=searchNsfw) {
   let url = `/search?q=${encodeURIComponent(q)}&sort=${sort}`;
@@ -1498,18 +1489,30 @@ loadMoreBtn.addEventListener('click', () => {
 // Logo → home
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
 
-// Intercept reddit.com and relative /r/ /u/ links → in-app navigation
+// Capture-phase global link handler — intercepts same-origin clicks before iOS PWA
+// can open them in Safari, and also rewrites absolute reddit.com links in-app.
 document.addEventListener('click', e => {
-  const a = e.target.closest('a');
-  if (!a || a.dataset.nav !== undefined || a.classList.contains('pv-open') || a.id === 'pv-open') return;
-  const href = a.getAttribute('href') || '';
-  const mPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-  if (mPost) { e.preventDefault(); navigate(`/r/${mPost[1]}/comments/${mPost[2]}`); return; }
-  const mSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?r\/([^\/?\s#]+)/);
-  if (mSub)  { e.preventDefault(); navigate(`/r/${mSub[1]}`); return; }
-  const mUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)?\/?u(?:ser)?\/([^\/?\s#]+)/);
-  if (mUser) { e.preventDefault(); navigate(`/user/${mUser[1]}`); }
-});
+  const a = e.target.closest('a[href]');
+  if (!a || a.getAttribute('target') === '_blank') return;
+  const href = a.getAttribute('href');
+  if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+  // Rewrite absolute reddit.com links → in-app paths
+  const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
+  if (redditPost) { e.preventDefault(); navigate(`/r/${redditPost[1]}/comments/${redditPost[2]}`); return; }
+  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
+  if (redditSub)  { e.preventDefault(); navigate(`/r/${redditSub[1]}`); return; }
+  const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
+  if (redditUser) { e.preventDefault(); navigate(`/user/${redditUser[1]}`); return; }
+
+  // Intercept same-origin relative links (handles iOS PWA new-tab issue)
+  try {
+    const url = new URL(href, location.origin);
+    if (url.origin !== location.origin) return;
+    e.preventDefault();
+    navigate(url.pathname + url.search);
+  } catch {}
+}, true); // capture phase: fires before browser default navigation
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 const lightbox    = document.getElementById('lightbox');
