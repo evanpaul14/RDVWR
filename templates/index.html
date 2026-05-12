@@ -1489,30 +1489,58 @@ loadMoreBtn.addEventListener('click', () => {
 // Logo → home
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
 
-// Capture-phase global link handler — intercepts same-origin clicks before iOS PWA
-// can open them in Safari, and also rewrites absolute reddit.com links in-app.
-document.addEventListener('click', e => {
+// Shared link-intercept logic — returns true if it handled the navigation.
+function interceptNavLink(href, e) {
+  const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
+  if (redditPost) { e.preventDefault(); navigate(`/r/${redditPost[1]}/comments/${redditPost[2]}`); return true; }
+  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
+  if (redditSub)  { e.preventDefault(); navigate(`/r/${redditSub[1]}`); return true; }
+  const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
+  if (redditUser) { e.preventDefault(); navigate(`/user/${redditUser[1]}`); return true; }
+  try {
+    const url = new URL(href, location.origin);
+    if (url.origin !== location.origin) return false;
+    e.preventDefault();
+    navigate(url.pathname + url.search);
+    return true;
+  } catch { return false; }
+}
+
+// iOS PWA fix: intercept in-app links on touchend, BEFORE the browser can open a
+// new standalone window. touchend fires before click, and preventDefault here
+// suppresses both the click event and native link navigation.
+let _touchStartX = 0, _touchStartY = 0, _navFromTouch = false;
+document.addEventListener('touchstart', e => {
+  _touchStartX = e.touches[0].clientX;
+  _touchStartY = e.touches[0].clientY;
+  _navFromTouch = false;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const dx = Math.abs(e.changedTouches[0].clientX - _touchStartX);
+  const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
+  if (dx > 10 || dy > 10) return; // scroll/swipe — not a tap
   const a = e.target.closest('a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
   const href = a.getAttribute('href');
-  if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+  if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) return;
+  if (interceptNavLink(href, e)) _navFromTouch = true;
+}, { passive: false });
 
-  // Rewrite absolute reddit.com links → in-app paths
-  const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-  if (redditPost) { e.preventDefault(); navigate(`/r/${redditPost[1]}/comments/${redditPost[2]}`); return; }
-  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
-  if (redditSub)  { e.preventDefault(); navigate(`/r/${redditSub[1]}`); return; }
-  const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
-  if (redditUser) { e.preventDefault(); navigate(`/user/${redditUser[1]}`); return; }
+// Capture-phase click handler — handles non-touch (desktop) and reddit.com link rewrites.
+document.addEventListener('click', e => {
+  if (_navFromTouch) { _navFromTouch = false; return; } // already handled by touchend
+  const a = e.target.closest('a[href]');
+  if (!a || a.getAttribute('target') === '_blank') return;
+  const href = a.getAttribute('href');
+  if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) return;
+  interceptNavLink(href, e);
+}, true);
 
-  // Intercept same-origin relative links (handles iOS PWA new-tab issue)
-  try {
-    const url = new URL(href, location.origin);
-    if (url.origin !== location.origin) return;
-    e.preventDefault();
-    navigate(url.pathname + url.search);
-  } catch {}
-}, true); // capture phase: fires before browser default navigation
+// Unmute video when user raises volume (volumechange doesn't bubble, use capture)
+document.addEventListener('volumechange', e => {
+  const v = e.target;
+  if (v.tagName === 'VIDEO' && v.muted && v.volume > 0) v.muted = false;
+}, true);
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 const lightbox    = document.getElementById('lightbox');
