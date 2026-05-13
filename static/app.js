@@ -778,7 +778,7 @@ function buildTimeFilterHtml(selected) {
   </select></div>`;
 }
 
-async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=false, type='posts') {
+async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts') {
   searchMode  = true;
   profileMode = false;
   searchQuery = query;
@@ -993,7 +993,7 @@ function parseRoute(path=location.pathname) {
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
     const params = new URLSearchParams(qs);
     const q = params.get('q') || '';
-    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', nsfw:params.get('nsfw')==='1', stype:params.get('stype')||'posts' };
+    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', nsfw:params.get('nsfw')!=='0', stype:params.get('stype')||'posts' };
   }
   return { type:'home' };
 }
@@ -1073,7 +1073,7 @@ function buildSearchUrl(q=searchQuery, sort=searchSort, time=searchTime, sub=sea
   let url = `/search?q=${encodeURIComponent(q)}&sort=${sort}`;
   if (time !== 'all') url += `&t=${time}`;
   if (sub)  url += `&sub=${encodeURIComponent(sub)}`;
-  if (nsfw) url += `&nsfw=1`;
+  if (!nsfw) url += `&nsfw=0`;
   return url;
 }
 
