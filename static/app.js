@@ -635,6 +635,7 @@ async function loadSubreddit(sub, sort='top', time='all') {
   currentSort = sort;
   currentTime = time;
   afterToken  = null;
+  document.title = `r/${currentSub} — RDVWR`;
   document.getElementById('subreddit-input').value = currentSub;
   document.getElementById('pv-subreddit-input').value = currentSub;
   sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
