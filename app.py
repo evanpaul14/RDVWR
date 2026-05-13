@@ -126,6 +126,9 @@ def process_post(p):
             "author":    orig.get("author", "[deleted]"),
         }
 
+    edited = p.get("edited")
+    edited_utc = edited if isinstance(edited, (int, float)) and edited else None
+
     return {
         "id":             p["id"],
         "title":          p["title"],
@@ -159,6 +162,11 @@ def process_post(p):
         "flair_tc":       p.get("link_flair_text_color") or "dark",
         "domain":         p.get("domain", ""),
         "crosspost_from": crosspost_from,
+        "is_stickied":    p.get("stickied", False),
+        "is_oc":          p.get("is_original_content", False),
+        "is_spoiler":     p.get("spoiler", False),
+        "locked":         p.get("locked", False),
+        "edited_utc":     edited_utc,
     }
 
 
@@ -331,12 +339,94 @@ def get_about(subreddit):
         return jsonify({
             "title":       d.get("title", subreddit),
             "description": d.get("public_description", ""),
+            "sidebar":     d.get("description", ""),
             "subscribers": d.get("subscribers", 0),
             "active":      active,
             "icon":        icon or "",
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/r/<subreddit>/rules")
+def get_rules(subreddit):
+    try:
+        resp = requests.get(
+            f"https://www.reddit.com/r/{subreddit}/about/rules.json",
+            headers=HEADERS, params={"raw_json": 1}, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"rules": []})
+        rules = resp.json().get("rules", [])
+        return jsonify({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]})
+    except Exception as e:
+        return jsonify({"rules": []})
+
+
+@app.route("/api/search/communities")
+def search_communities():
+    q = request.args.get("q", "").strip()
+    after = request.args.get("after", "")
+    if not q:
+        return jsonify({"communities": [], "after": None})
+    try:
+        params = {"q": q, "limit": 25, "raw_json": 1, "type": "sr"}
+        if after:
+            params["after"] = after
+        resp = requests.get("https://www.reddit.com/search.json",
+                            headers=HEADERS, params=params, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"communities": [], "after": None})
+        listing = resp.json()["data"]
+        results = []
+        for c in listing["children"]:
+            if c.get("kind") != "t5":
+                continue
+            d = c["data"]
+            icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
+            results.append({
+                "name":        d.get("display_name", ""),
+                "title":       d.get("title", ""),
+                "description": d.get("public_description", ""),
+                "subscribers": d.get("subscribers", 0),
+                "over_18":     d.get("over_18", False),
+                "icon":        icon or "",
+            })
+        return jsonify({"communities": results, "after": listing.get("after")})
+    except Exception as e:
+        return jsonify({"communities": [], "after": None})
+
+
+@app.route("/api/search/users")
+def search_users():
+    q = request.args.get("q", "").strip()
+    after = request.args.get("after", "")
+    if not q:
+        return jsonify({"users": [], "after": None})
+    try:
+        params = {"q": q, "limit": 25, "raw_json": 1, "type": "user"}
+        if after:
+            params["after"] = after
+        resp = requests.get("https://www.reddit.com/search.json",
+                            headers=HEADERS, params=params, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"users": [], "after": None})
+        listing = resp.json()["data"]
+        results = []
+        for c in listing["children"]:
+            if c.get("kind") != "t2":
+                continue
+            d = c["data"]
+            icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
+            results.append({
+                "name":          d.get("name", ""),
+                "icon":          icon or "",
+                "karma_post":    d.get("link_karma", 0),
+                "karma_comment": d.get("comment_karma", 0),
+                "created_utc":   d.get("created_utc", 0),
+            })
+        return jsonify({"users": results, "after": listing.get("after")})
+    except Exception as e:
+        return jsonify({"users": [], "after": None})
 
 
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
@@ -372,12 +462,15 @@ def get_comments(subreddit, post_id):
                     parsed = parse_comment(r)
                     if parsed:
                         replies.append(parsed)
+            c_edited = d.get("edited")
+            c_edited_utc = c_edited if isinstance(c_edited, (int, float)) and c_edited else None
             return {
                 "id":                    d["id"],
                 "author":                d.get("author", "[deleted]"),
                 "body":                  d.get("body", ""),
                 "score":                 d.get("score", 0),
                 "created_utc":           d.get("created_utc", 0),
+                "edited_utc":            c_edited_utc,
                 "depth":                 d.get("depth", 0),
                 "replies":               replies,
                 "distinguished":         d.get("distinguished"),

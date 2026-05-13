@@ -110,7 +110,7 @@ function isUsableBg(hex) {
   return lum < 180;
 }
 
-function renderFlair(p) {
+function renderFlair(p, clickable=false) {
   if (!p.flair && !p.flair_richtext?.length) return '';
   let inner = '';
   if (p.flair_type === 'richtext' && p.flair_richtext?.length) {
@@ -124,7 +124,9 @@ function renderFlair(p) {
   }
   const bg = isUsableBg(p.flair_bg) ? p.flair_bg : '';
   const style = bg ? ` style="background:${escHtml(bg)};color:${p.flair_tc==='light'?'#fff':'#1a1a1a'}"` : '';
-  return `<span class="flair"${style}>${inner}</span>`;
+  const cls = clickable && p.flair ? ' flair-clickable' : '';
+  const dataAttr = clickable && p.flair ? ` data-flair="${escHtml(p.flair)}" data-sub="${escHtml(p.subreddit)}"` : '';
+  return `<span class="flair${cls}"${style}${dataAttr}>${inner}</span>`;
 }
 
 function renderAuthorFlair(c) {
@@ -243,13 +245,18 @@ function mediaHtmlFull(p) {
 function renderPost(p, idx, showSub=false) {
   const delay = Math.min(idx*40, 400);
   let tags = '';
-  if (p.over_18) tags += `<span class="nsfw-tag">nsfw</span>`;
-  tags += renderFlair(p);
+  if (p.is_stickied) tags += `<span class="badge badge-sticky">📌 pinned</span>`;
+  if (p.over_18)     tags += `<span class="nsfw-tag">nsfw</span>`;
+  if (p.is_spoiler)  tags += `<span class="badge badge-spoiler">spoiler</span>`;
+  if (p.locked)      tags += `<span class="badge badge-locked">locked</span>`;
+  if (p.is_oc)       tags += `<span class="badge badge-oc">oc</span>`;
+  tags += renderFlair(p, true);
   const titleClass = 'post-title'+(p.is_self?' is-italic':'');
   const domainHtml  = !p.is_self && p.domain ? `<a class="ext-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : '';
   const subHtml = showSub ? `<a class="post-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>` : '';
   const metaTop = (subHtml || tags) ? `<div class="post-meta-top">${subHtml}${tags}</div>` : '';
   const titleLink = `<a class="${titleClass}" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}">${escHtml(p.title)}</a>`;
+  const editedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
   const footer = `
       <div class="post-footer">
         <div class="footer-left">
@@ -259,7 +266,7 @@ function renderPost(p, idx, showSub=false) {
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
           <button class="post-author" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
-          <span class="meta-item">${timeAgo(p.created_utc)}</span>
+          <span class="meta-item">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
         </div>
         <div class="footer-right">
           <button class="comments-link" data-sub="${escHtml(p.subreddit)}" data-id="${escHtml(p.id)}">
@@ -339,7 +346,7 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
         ${isOP    ? '<span class="comment-op">OP</span>'     : ''}
         ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
-        <span class="comment-time">${timeAgo(c.created_utc)}</span>
+        <span class="comment-time">${timeAgo(c.created_utc)}${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}</span>
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
       ${repliesHtml}
@@ -454,20 +461,28 @@ async function loadPostView(sub, postId, commentId='') {
     document.title = p.title + ' — RDVWR';
 
     const titleClass = 'pv-title'+(p.is_self?' is-italic':'');
-    const tags = [p.over_18?'<span class="nsfw-tag">nsfw</span>':'', renderFlair(p)].filter(Boolean).join('');
+    const pvBadges = [
+      p.is_stickied ? '<span class="badge badge-sticky">📌 pinned</span>' : '',
+      p.over_18     ? '<span class="nsfw-tag">nsfw</span>' : '',
+      p.is_spoiler  ? '<span class="badge badge-spoiler">spoiler</span>' : '',
+      p.locked      ? '<span class="badge badge-locked">locked</span>' : '',
+      p.is_oc       ? '<span class="badge badge-oc">oc</span>' : '',
+      renderFlair(p),
+    ].filter(Boolean).join('');
+    const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>` : '';
     const bodyHtml = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
     const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ cross-posted from <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a> · <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}/comments/${escHtml(p.crosspost_from.id)}">view original</a></div>` : '';
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
       ${crosspostHtml}
-      ${tags ? `<div class="post-meta-top" style="margin-bottom:10px">${tags}</div>` : ''}
+      ${pvBadges ? `<div class="post-meta-top" style="margin-bottom:10px">${pvBadges}</div>` : ''}
       <h1 class="${titleClass}">${escHtml(p.title)}</h1>
       <div class="pv-meta">
         <span class="up">▲ ${fmtNum(p.score)}</span>
         <span>${p.upvote_ratio}% upvoted</span>
         <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
-        <span>${timeAgo(p.created_utc)}</span>
+        <span>${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
       </div>
@@ -502,10 +517,11 @@ pvContent.addEventListener('click', e => {
 // FEED STATE
 // ═══════════════════════════════════════════════════════════════════════════
 function buildSubSortHtml(sort='top', time='all') {
-  const btns = ['hot','new','top','rising'].map(s =>
+  const btns = ['hot','new','top','rising','controversial'].map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
-  return btns + (sort==='top' ? buildTimeFilterHtml(time) : '');
+  const sidebarBtn = `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
+  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 function buildProfileSortHtml(tab='posts', sort='new', time='all') {
   const tabBtns = `<button class="sort-btn${tab==='posts'?' active':''}" data-ptab="posts">Posts</button><button class="sort-btn${tab==='comments'?' active':''}" data-ptab="comments">Comments</button>`;
@@ -762,7 +778,7 @@ function buildTimeFilterHtml(selected) {
   </select></div>`;
 }
 
-async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=false) {
+async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=false, type='posts') {
   searchMode  = true;
   profileMode = false;
   searchQuery = query;
@@ -772,6 +788,9 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=fals
   searchNsfw  = nsfw;
   searchAfter = null;
   afterToken  = null;
+  communityAfter = null;
+  userAfter   = null;
+  searchType  = type;
   document.getElementById('subreddit-input').value = query;
   document.getElementById('pv-subreddit-input').value = query;
   document.title = `Search: ${query}${sub ? ` in r/${sub}` : ''} — RDVWR`;
@@ -789,7 +808,167 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=fals
   sortBar.style.display = 'flex';
   sortBar.querySelectorAll('[data-ssort]').forEach(b => b.classList.toggle('active', b.dataset.ssort === sort));
 
-  await loadSearchResults(query, sort, time);
+  // Show/update the type bar
+  searchTypeBar.style.display = 'flex';
+  searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === type));
+  // Only show sort bar for posts tab
+  sortBar.style.display = type === 'posts' ? 'flex' : 'none';
+
+  if (type === 'communities') { await loadCommunityResults(query); }
+  else if (type === 'users')  { await loadUserResults(query); }
+  else                        { await loadSearchResults(query, sort, time); }
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+
+const sidebarPanel = document.getElementById('sidebar-panel');
+const sidebarInner = document.getElementById('sidebar-inner');
+let sidebarOpen    = false;
+let sidebarSub     = '';
+let sidebarLoaded  = false;
+
+function closeSidebar() {
+  sidebarOpen = false;
+  sidebarPanel.classList.remove('open');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  if (btn) btn.classList.remove('active');
+}
+
+async function toggleSidebar(sub) {
+  if (sidebarOpen && sidebarSub === sub) { closeSidebar(); return; }
+  sidebarSub = sub;
+  sidebarOpen = true;
+  sidebarPanel.classList.add('open');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  if (btn) btn.classList.add('active');
+
+  sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
+
+  try {
+    const [aboutRes, rulesRes] = await Promise.all([
+      fetch(`/api/r/${encodeURIComponent(sub)}/about`),
+      fetch(`/api/r/${encodeURIComponent(sub)}/rules`),
+    ]);
+    const about = aboutRes.ok ? await aboutRes.json() : {};
+    const rulesData = rulesRes.ok ? await rulesRes.json() : {rules:[]};
+
+    let html = '';
+    if (about.description) {
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">About</div>
+        <div class="sidebar-desc md">${renderMd(about.sidebar || about.description)}</div>
+      </div>`;
+    }
+    if (rulesData.rules?.length) {
+      const rulesHtml = rulesData.rules.map((r, i) =>
+        `<li class="sidebar-rule"><span class="sidebar-rule-num">${i+1}.</span>${escHtml(r.short_name)}</li>`
+      ).join('');
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Rules</div>
+        <ul class="sidebar-rules">${rulesHtml}</ul>
+      </div>`;
+    }
+    if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No sidebar content.</div>';
+    sidebarInner.innerHTML = html;
+  } catch {
+    sidebarInner.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">Failed to load sidebar.</div>';
+  }
+}
+
+// ── Search: communities & users ────────────────────────────────────────────
+
+const searchTypeBar = document.getElementById('search-type-bar');
+let searchType      = 'posts';  // 'posts' | 'communities' | 'users'
+let communityAfter  = null;
+let userAfter       = null;
+
+function renderCommunityCard(c, idx) {
+  const delay = Math.min(idx*40, 400);
+  const letter = escHtml((c.name||'?')[0].toUpperCase());
+  const iconHtml = c.icon
+    ? `<img src="${escHtml(c.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
+    : `<span>${letter}</span>`;
+  return `<div class="community-card" style="animation-delay:${delay}ms" data-nav="/r/${escHtml(c.name)}">
+    <div class="community-card-icon">${iconHtml}</div>
+    <div class="community-card-body">
+      <div class="community-card-name">r/${escHtml(c.name)}</div>
+      ${c.title ? `<div class="community-card-title">${escHtml(c.title)}</div>` : ''}
+      ${c.description ? `<div class="community-card-desc">${escHtml(c.description)}</div>` : ''}
+      <div class="community-card-stats"><span>${fmtNum(c.subscribers||0)}</span> members${c.over_18 ? ' · <span style="color:#ff5050">nsfw</span>' : ''}</div>
+    </div>
+  </div>`;
+}
+
+function renderUserCard(u, idx) {
+  const delay = Math.min(idx*40, 400);
+  const letter = escHtml((u.name||'?')[0].toUpperCase());
+  const iconHtml = u.icon
+    ? `<img src="${escHtml(u.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
+    : `<span>${letter}</span>`;
+  return `<div class="user-card" style="animation-delay:${delay}ms" data-nav="/user/${escHtml(u.name)}">
+    <div class="user-card-icon">${iconHtml}</div>
+    <div class="user-card-body">
+      <div class="user-card-name">u/${escHtml(u.name)}</div>
+      <div class="user-card-stats">
+        <span>${fmtNum(u.karma_post||0)}</span> post karma · <span>${fmtNum(u.karma_comment||0)}</span> comment karma
+        ${u.created_utc ? ` · joined ${fmtDate(u.created_utc)}` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadCommunityResults(query, after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
+  loading = true;
+  if (!append) showSkeletons();
+  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  try {
+    let url = `/api/search/communities?q=${encodeURIComponent(query)}`;
+    if (after) url += `&after=${encodeURIComponent(after)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== feedGen) return;
+    if (!append) feed.innerHTML = '';
+    if (!data.communities?.length && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No communities found</div></div>';
+      loadMoreBtn.style.display = 'none'; return;
+    }
+    const startIdx = append ? feed.children.length : 0;
+    feed.insertAdjacentHTML('beforeend', data.communities.map((c,i)=>renderCommunityCard(c,startIdx+i)).join(''));
+    communityAfter = data.after;
+    loadMoreBtn.style.display = communityAfter ? 'inline-block' : 'none';
+    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+  } catch { if (!append && myGen===feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  finally  { if (myGen===feedGen) loading = false; }
+}
+
+async function loadUserResults(query, after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
+  loading = true;
+  if (!append) showSkeletons();
+  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  try {
+    let url = `/api/search/users?q=${encodeURIComponent(query)}`;
+    if (after) url += `&after=${encodeURIComponent(after)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== feedGen) return;
+    if (!append) feed.innerHTML = '';
+    if (!data.users?.length && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No users found</div></div>';
+      loadMoreBtn.style.display = 'none'; return;
+    }
+    const startIdx = append ? feed.children.length : 0;
+    feed.insertAdjacentHTML('beforeend', data.users.map((u,i)=>renderUserCard(u,startIdx+i)).join(''));
+    userAfter = data.after;
+    loadMoreBtn.style.display = userAfter ? 'inline-block' : 'none';
+    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+  } catch { if (!append && myGen===feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  finally  { if (myGen===feedGen) loading = false; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -814,7 +993,7 @@ function parseRoute(path=location.pathname) {
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
     const params = new URLSearchParams(qs);
     const q = params.get('q') || '';
-    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', nsfw:params.get('nsfw')==='1' };
+    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', nsfw:params.get('nsfw')==='1', stype:params.get('stype')||'posts' };
   }
   return { type:'home' };
 }
@@ -827,12 +1006,17 @@ function navigate(path, { replace=false }={}) {
 }
 
 async function renderRoute(route, { restoreScroll=0 }={}) {
+  if (route.type !== 'search') {
+    searchTypeBar.style.display = 'none';
+    searchType = 'posts';
+  }
   switch (route.type) {
     case 'home':
       navigate('/r/popular/hot', { replace: true });
       return;
     case 'sub':
       closePostView();
+      closeSidebar();
       searchMode = false;
       await loadSubreddit(route.sub, route.sort, route.time || 'all');
       break;
@@ -842,12 +1026,14 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
       break;
     case 'user':
       closePostView();
+      closeSidebar();
       searchMode = false;
       await loadProfile(route.username);
       break;
     case 'search':
       closePostView();
-      await loadSearch(route.query, route.sort, route.time, route.sub, route.nsfw);
+      closeSidebar();
+      await loadSearch(route.query, route.sort, route.time, route.sub, route.nsfw, route.stype || 'posts');
       break;
   }
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
@@ -891,8 +1077,27 @@ function buildSearchUrl(q=searchQuery, sort=searchSort, time=searchTime, sub=sea
   return url;
 }
 
+// Search type tab bar
+searchTypeBar.addEventListener('click', e => {
+  const btn = e.target.closest('[data-stype]');
+  if (!btn || !searchMode) return;
+  const t = btn.dataset.stype;
+  if (t === searchType) return;
+  searchType = t;
+  searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === t));
+  sortBar.style.display = t === 'posts' ? 'flex' : 'none';
+  if (t === 'communities') loadCommunityResults(searchQuery);
+  else if (t === 'users')  loadUserResults(searchQuery);
+  else                     loadSearchResults(searchQuery, searchSort, searchTime);
+});
+
 // Sort buttons (subreddit mode + search mode + profile mode)
 sortBar.addEventListener('click', e => {
+  // Sidebar toggle
+  if (e.target.closest('#sidebar-toggle-btn')) {
+    toggleSidebar(currentSub);
+    return;
+  }
   if (e.target.closest('#nsfw-toggle') && searchMode) {
     searchNsfw = !searchNsfw;
     navigate(buildSearchUrl(), { replace:true });
@@ -987,9 +1192,30 @@ document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
 
 // Load more
 loadMoreBtn.addEventListener('click', () => {
-  if (searchMode)       loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
-  else if (profileMode) loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
-  else                  loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
+  if (searchMode) {
+    if (searchType === 'communities') loadCommunityResults(searchQuery, communityAfter, true);
+    else if (searchType === 'users')  loadUserResults(searchQuery, userAfter, true);
+    else loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
+  } else if (profileMode) {
+    loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
+  } else {
+    loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
+  }
+});
+
+// Flair click → filter by flair in subreddit
+// Community/User card clicks
+feed.addEventListener('click', e => {
+  const flairEl = e.target.closest('.flair.flair-clickable[data-flair]');
+  if (flairEl) {
+    e.stopPropagation();
+    const sub   = flairEl.dataset.sub;
+    const flair = flairEl.dataset.flair;
+    if (sub && flair) navigate(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`);
+    return;
+  }
+  const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
+  if (card) { navigate(card.dataset.nav); return; }
 });
 
 // Logo → home
