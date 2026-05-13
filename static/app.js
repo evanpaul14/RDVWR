@@ -591,7 +591,7 @@ async function loadAbout(sub) {
 
 async function fetchPosts(sub, sort, time, after) {
   let url = `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
-  if (sort === 'top') url += `&t=${time || 'all'}`;
+  if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${after}`;
   return fetch(url);
 }
@@ -1140,7 +1140,7 @@ sortBar.addEventListener('click', e => {
   if (!sortBtn || profileMode || searchMode) return;
   const newSort = sortBtn.dataset.sort;
   if (newSort === currentSort) return;
-  currentSort = newSort; currentTime = 'all';
+  currentSort = newSort; currentTime = newSort === 'controversial' ? 'day' : 'all';
   afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
   navigate(`/r/${currentSub}/${currentSort}`, { replace:true });

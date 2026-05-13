@@ -304,7 +304,7 @@ def get_posts(subreddit):
     after = request.args.get("after", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": 25, "raw_json": 1}
-    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
         params["after"] = after
