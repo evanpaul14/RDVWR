@@ -293,7 +293,7 @@ function renderPost(p, idx, showSub=false) {
 
   // Full layout for rich media posts and self/text posts
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
-  const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
+  const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}/comments/${escHtml(p.crosspost_from.id)}">view original</a> · <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
   return `
     <div class="post" style="animation-delay:${delay}ms">
       <div class="post-header">
@@ -456,7 +456,7 @@ async function loadPostView(sub, postId, commentId='') {
     const titleClass = 'pv-title'+(p.is_self?' is-italic':'');
     const tags = [p.over_18?'<span class="nsfw-tag">nsfw</span>':'', renderFlair(p)].filter(Boolean).join('');
     const bodyHtml = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
-    const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ cross-posted from <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
+    const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ cross-posted from <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a> · <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}/comments/${escHtml(p.crosspost_from.id)}">view original</a></div>` : '';
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
