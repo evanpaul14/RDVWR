@@ -2,7 +2,7 @@
 :root {
   --bg:   #0c0c0c; --bg2: #141414; --bg3: #1c1c1c;
   --b:    #242424; --b2:  #2e2e2e;
-  --tx:   #d8d8d8; --tx2: #888;    --tx3: #555;
+  --tx:   #e2e2e2; --tx2: #b0b0b0; --tx3: #878787;
   --ac:   #4a9eff; --acd: #1a3a66;
   --up:   #ff6b35;
   --serif:'Instrument Serif', Georgia, serif;
