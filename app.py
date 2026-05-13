@@ -155,6 +155,8 @@ def process_post(p):
         "flair":          p.get("link_flair_text") or "",
         "flair_richtext": p.get("link_flair_richtext") or [],
         "flair_type":     p.get("link_flair_type", "text"),
+        "flair_bg":       p.get("link_flair_background_color") or "",
+        "flair_tc":       p.get("link_flair_text_color") or "dark",
         "domain":         p.get("domain", ""),
         "crosspost_from": crosspost_from,
     }

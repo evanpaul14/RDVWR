@@ -100,17 +100,31 @@ async function initRedgifs(container) {
   }
 }
 
+// Returns true if a hex color is dark enough to use as a background in our dark theme.
+// Filters out Reddit's near-white defaults like #edeff1.
+function isUsableBg(hex) {
+  if (!hex || hex === 'transparent') return false;
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return false;
+  const lum = 0.299*parseInt(m[1],16) + 0.587*parseInt(m[2],16) + 0.114*parseInt(m[3],16);
+  return lum < 180;
+}
+
 function renderFlair(p) {
   if (!p.flair && !p.flair_richtext?.length) return '';
+  let inner = '';
   if (p.flair_type === 'richtext' && p.flair_richtext?.length) {
-    const inner = p.flair_richtext.map(part => {
+    inner = p.flair_richtext.map(part => {
       if (part.e === 'text')  return escHtml(part.t || '');
       if (part.e === 'emoji') return `<img class="flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
       return '';
     }).join('');
-    return `<span class="flair">${inner}</span>`;
+  } else {
+    inner = escHtml(p.flair);
   }
-  return `<span class="flair">${escHtml(p.flair)}</span>`;
+  const bg = isUsableBg(p.flair_bg) ? p.flair_bg : '';
+  const style = bg ? ` style="background:${escHtml(bg)};color:${p.flair_tc==='light'?'#fff':'#1a1a1a'}"` : '';
+  return `<span class="flair"${style}>${inner}</span>`;
 }
 
 function renderAuthorFlair(c) {
@@ -127,7 +141,7 @@ function renderAuthorFlair(c) {
     inner = escHtml(c.author_flair_text);
   }
   if (!inner.trim() && !c.author_flair_richtext?.some(p => p.e === 'emoji')) return '';
-  const bg = c.author_flair_bg && c.author_flair_bg !== 'transparent' ? c.author_flair_bg : '';
+  const bg = isUsableBg(c.author_flair_bg) ? c.author_flair_bg : '';
   const style = bg ? ` style="background:${escHtml(bg)};color:${c.author_flair_tc==='light'?'#fff':'#1a1a1a'}"` : '';
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
