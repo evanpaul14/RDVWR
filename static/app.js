@@ -221,7 +221,7 @@ function mediaHtmlCard(p) {
     : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
 
   if (p.gallery?.length > 1) return renderGallery(p.gallery);
-  const imgSrc = p.gallery?.length ? p.gallery[0].url : p.preview_img;
+  const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
   if (imgSrc) return `<div class="post-media">
     <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">
   </div>`;
@@ -238,7 +238,7 @@ function mediaHtmlFull(p) {
     ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" autoplay loop muted playsinline></video></div>`
     : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
   if (p.gallery?.length) return renderGallery(p.gallery);
-  if (p.preview_img) return `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
+  if (p.preview_img && !p.is_self) return `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
   return '';
 }
 
@@ -517,11 +517,11 @@ pvContent.addEventListener('click', e => {
 // ═══════════════════════════════════════════════════════════════════════════
 // FEED STATE
 // ═══════════════════════════════════════════════════════════════════════════
-function buildSubSortHtml(sort='top', time='all') {
+function buildSubSortHtml(sort='top', time='all', sub='') {
   const btns = ['hot','new','top','rising','controversial'].map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
-  const sidebarBtn = `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
+  const sidebarBtn = sub.toLowerCase() === 'popular' ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 function buildProfileSortHtml(tab='posts', sort='new', time='all') {
@@ -637,7 +637,7 @@ async function loadSubreddit(sub, sort='top', time='all') {
   afterToken  = null;
   document.getElementById('subreddit-input').value = currentSub;
   document.getElementById('pv-subreddit-input').value = currentSub;
-  sortBar.innerHTML = buildSubSortHtml(sort, time);
+  sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
   loadAbout(currentSub);
