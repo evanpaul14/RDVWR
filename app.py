@@ -117,34 +117,44 @@ def process_post(p):
             gif_url      = re.sub(r"\.gifv$", ".mp4", post_url, flags=re.I)
             gif_is_video = True
 
+    crosspost_from = None
+    if p.get("crosspost_parent_list"):
+        orig = p["crosspost_parent_list"][0]
+        crosspost_from = {
+            "subreddit": orig.get("subreddit", ""),
+            "id":        orig.get("id", ""),
+            "author":    orig.get("author", "[deleted]"),
+        }
+
     return {
-        "id":           p["id"],
-        "title":        p["title"],
-        "author":       p.get("author", "[deleted]"),
-        "subreddit":    p["subreddit"],
-        "score":        p.get("score", 0),
-        "upvote_ratio": round(p.get("upvote_ratio", 0) * 100),
-        "num_comments": p.get("num_comments", 0),
-        "created_utc":  p.get("created_utc", 0),
-        "url":          p.get("url", ""),
-        "permalink":    f"https://www.reddit.com{p.get('permalink', '')}",
-        "is_self":      p.get("is_self", False),
-        "selftext":     p.get("selftext", "")[:600] if p.get("is_self") else "",
-        "preview_img":  preview_img,
-        "gallery":      gallery,
-        "is_video":     is_video,
-        "video_url":    video_url,
-        "hls_url":      hls_url,
-        "audio_url":    audio_url,
-        "youtube_id":   youtube_id,
-        "embed_url":    embed_url,
-        "redgifs_id":   redgifs_id,
-        "gif_url":      gif_url,
-        "gif_is_video": gif_is_video,
-        "post_hint":    p.get("post_hint", ""),
-        "over_18":      p.get("over_18", False),
-        "flair":        p.get("link_flair_text") or "",
-        "domain":       p.get("domain", ""),
+        "id":             p["id"],
+        "title":          p["title"],
+        "author":         p.get("author", "[deleted]"),
+        "subreddit":      p["subreddit"],
+        "score":          p.get("score", 0),
+        "upvote_ratio":   round(p.get("upvote_ratio", 0) * 100),
+        "num_comments":   p.get("num_comments", 0),
+        "created_utc":    p.get("created_utc", 0),
+        "url":            p.get("url", ""),
+        "permalink":      f"https://www.reddit.com{p.get('permalink', '')}",
+        "is_self":        p.get("is_self", False),
+        "selftext":       p.get("selftext", "")[:600] if p.get("is_self") else "",
+        "preview_img":    preview_img,
+        "gallery":        gallery,
+        "is_video":       is_video,
+        "video_url":      video_url,
+        "hls_url":        hls_url,
+        "audio_url":      audio_url,
+        "youtube_id":     youtube_id,
+        "embed_url":      embed_url,
+        "redgifs_id":     redgifs_id,
+        "gif_url":        gif_url,
+        "gif_is_video":   gif_is_video,
+        "post_hint":      p.get("post_hint", ""),
+        "over_18":        p.get("over_18", False),
+        "flair":          p.get("link_flair_text") or "",
+        "domain":         p.get("domain", ""),
+        "crosspost_from": crosspost_from,
     }
 
 
@@ -203,6 +213,26 @@ def proxy_redgifs_media(filename):
                         status=upstream.status_code, headers=resp_headers)
     except Exception as e:
         return str(e), 502
+
+
+# ── Subreddit autocomplete ────────────────────────────────────────────────────
+
+@app.route("/api/subreddit-search")
+def subreddit_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify({"names": []})
+    try:
+        resp = requests.get(
+            "https://www.reddit.com/api/search_reddit_names.json",
+            headers=HEADERS,
+            params={"query": q, "include_over_18": 0, "exact": 0},
+            timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"names": []})
+        return jsonify({"names": resp.json().get("names", [])[:8]})
+    except Exception:
+        return jsonify({"names": []})
 
 
 # ── SPA catch-all routes ──────────────────────────────────────────────────────
@@ -305,11 +335,16 @@ def get_about(subreddit):
         return jsonify({"error": str(e)}), 500
 
 
+COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
+
 @app.route("/api/r/<subreddit>/comments/<post_id>")
 def get_comments(subreddit, post_id):
     try:
         comment_id = request.args.get('comment')
-        params = {"raw_json": 1, "limit": 200}
+        sort = request.args.get('sort', 'confidence')
+        if sort not in COMMENT_SORTS:
+            sort = 'confidence'
+        params = {"raw_json": 1, "limit": 200, "sort": sort}
         if comment_id:
             params["comment"] = comment_id
             params["context"] = 8

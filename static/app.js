@@ -22,7 +22,7 @@ function fmtDate(utc) {
   return new Date(utc*1000).toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
 }
 
-let userPrefersMuted = true; // set false when user unmutes; future videos respect it
+let userPrefersMuted = localStorage.getItem('mutePreference') !== 'unmuted';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MARKDOWN
@@ -247,11 +247,13 @@ function renderPost(p, idx, showSub=false) {
 
   // Full layout for rich media posts and self/text posts
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
+  const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
   return `
     <div class="post" style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
+        ${crosspostHtml}
       </div>
       ${mediaHtmlCard(p)}
       ${excerptHtml}
@@ -332,7 +334,56 @@ function findComment(comments, id) {
   return null;
 }
 
+let currentCommentSort = 'confidence';
+let _pvSub = '', _pvPostId = '', _pvCommentId = '';
+
+const COMMENT_SORTS = [
+  {value:'confidence',    label:'Best'},
+  {value:'top',           label:'Top'},
+  {value:'new',           label:'New'},
+  {value:'controversial', label:'Controversial'},
+  {value:'old',           label:'Old'},
+  {value:'qa',            label:'Q&A'},
+];
+
+function buildCommentSortBar(active) {
+  return `<div class="comment-sort-bar">${COMMENT_SORTS.map(s =>
+    `<button class="sort-btn${s.value===active?' active':''}" data-csort="${s.value}">${s.label}</button>`
+  ).join('')}</div>`;
+}
+
+function buildCommentsHtml(data, commentId) {
+  const p = data.post;
+  const threadBanner = commentId ? `<div class="thread-banner"><a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}">← View full thread</a></div>` : '';
+  let rootComments = data.comments;
+  if (commentId) {
+    const target = findComment(data.comments, commentId);
+    if (target) rootComments = [target];
+  }
+  if (!rootComments.length) return '<div class="state" style="padding:40px 0"><div class="state-icon">∅</div><div class="state-title">No comments yet</div></div>';
+  return `<div class="pv-comments">${threadBanner}${renderCommentTree(rootComments, 0, p.subreddit, p.id, p.author)}</div>`;
+}
+
+async function changeCommentSort(sort) {
+  currentCommentSort = sort;
+  pvContent.querySelectorAll('[data-csort]').forEach(b => b.classList.toggle('active', b.dataset.csort === sort));
+  const area = pvContent.querySelector('.pv-comments-area');
+  if (!area) return;
+  area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
+  try {
+    const apiUrl = `/api/r/${encodeURIComponent(_pvSub)}/comments/${encodeURIComponent(_pvPostId)}?sort=${sort}${_pvCommentId ? `&comment=${encodeURIComponent(_pvCommentId)}` : ''}`;
+    const res  = await fetch(apiUrl);
+    if (!res.ok) { area.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">Failed to load</div></div>`; return; }
+    const data = await res.json();
+    area.innerHTML = buildCommentsHtml(data, _pvCommentId);
+  } catch {
+    area.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`;
+  }
+}
+
 async function loadPostView(sub, postId, commentId='') {
+  _pvSub = sub; _pvPostId = postId; _pvCommentId = commentId;
+  currentCommentSort = 'confidence';
   pvContent.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   pvScroll.scrollTop = 0;
   openPostView();
@@ -341,7 +392,7 @@ async function loadPostView(sub, postId, commentId='') {
   pvOpen.href = '#';
 
   try {
-    const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}` + (commentId ? `?comment=${encodeURIComponent(commentId)}` : '');
+    const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=confidence` + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
     const res  = await fetch(apiUrl);
     const data = await res.json();
     if (!res.ok) { pvContent.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Failed to load')}</div></div>`; return; }
@@ -354,19 +405,11 @@ async function loadPostView(sub, postId, commentId='') {
     const titleClass = 'pv-title'+(p.is_self?' is-italic':'');
     const tags = [p.over_18?'<span class="nsfw-tag">nsfw</span>':'', p.flair?`<span class="flair">${escHtml(p.flair)}</span>`:''].filter(Boolean).join('');
     const bodyHtml = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
-    const threadBanner = commentId ? `<div class="thread-banner"><a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}">← View full thread</a></div>` : '';
-    // When viewing a sub-thread, find and render only from the target comment
-    let rootComments = data.comments;
-    if (commentId) {
-      const target = findComment(data.comments, commentId);
-      if (target) rootComments = [target];
-    }
-    const commentsHtml = rootComments.length
-      ? `<div class="pv-comments">${threadBanner}${renderCommentTree(rootComments, 0, p.subreddit, p.id, p.author)}</div>`
-      : '<div class="state" style="padding:40px 0"><div class="state-icon">∅</div><div class="state-title">No comments yet</div></div>';
+    const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ cross-posted from <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
+      ${crosspostHtml}
       ${tags ? `<div class="post-meta-top" style="margin-bottom:10px">${tags}</div>` : ''}
       <h1 class="${titleClass}">${escHtml(p.title)}</h1>
       <div class="pv-meta">
@@ -381,10 +424,13 @@ async function loadPostView(sub, postId, commentId='') {
       ${bodyHtml}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
-        <span class="pv-divider-label">${fmtNum(data.comments.length)} comments</span>
+        <span class="pv-divider-label">${fmtNum(p.num_comments)} comments</span>
         <div class="pv-divider-line"></div>
       </div>
-      ${commentsHtml}`;
+      ${buildCommentSortBar('confidence')}
+      <div class="pv-comments-area">
+        ${buildCommentsHtml(data, commentId)}
+      </div>`;
 
     initVideos(pvContent);
     initRedgifs(pvContent);
@@ -393,8 +439,10 @@ async function loadPostView(sub, postId, commentId='') {
   }
 }
 
-// Click author in post meta
+// Click author in post meta; comment sort buttons
 pvContent.addEventListener('click', e => {
+  const csort = e.target.closest('[data-csort]');
+  if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const btn = e.target.closest('[data-user]');
   if (btn && !e.target.closest('a')) { e.preventDefault(); navigate(`/user/${btn.dataset.user}`); }
 });
@@ -957,6 +1005,7 @@ document.addEventListener('volumechange', e => {
     v.muted = false; // raises volume on muted → unmute (fires volumechange again)
   } else if (!v.muted && !_propagatingUnmute) {
     userPrefersMuted = false;
+    localStorage.setItem('mutePreference', 'unmuted');
     _propagatingUnmute = true;
     document.querySelectorAll('video').forEach(other => { other.muted = false; });
     _propagatingUnmute = false;
@@ -987,6 +1036,81 @@ document.addEventListener('click', e => {
   e.stopPropagation();
   openLightbox(img.src);
 });
+
+// ── Subreddit autocomplete ────────────────────────────────────────────────
+function setupAutocomplete(inputEl, dropdownEl) {
+  let acTimer = null;
+  let acIdx = -1;
+  let preAcVal = '';
+
+  function hide() { dropdownEl.classList.remove('open'); dropdownEl.innerHTML = ''; acIdx = -1; }
+  function show(names) {
+    if (!names.length) { hide(); return; }
+    acIdx = -1;
+    dropdownEl.innerHTML = names.map(n =>
+      `<div class="autocomplete-item" data-sub="${escHtml(n)}">${escHtml(n)}</div>`
+    ).join('');
+    dropdownEl.classList.add('open');
+  }
+
+  inputEl.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    const val = inputEl.value.trim();
+    const query = val.startsWith('r/') ? val.slice(2) : val;
+    if (query.length < 2) { hide(); return; }
+    acTimer = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        show(data.names || []);
+      } catch {}
+    }, 280);
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (!dropdownEl.classList.contains('open')) return;
+    const items = [...dropdownEl.querySelectorAll('.autocomplete-item')];
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (acIdx === -1) preAcVal = inputEl.value;
+      acIdx = Math.min(acIdx + 1, items.length - 1);
+      items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
+      if (acIdx >= 0) inputEl.value = items[acIdx].dataset.sub;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      acIdx = Math.max(acIdx - 1, -1);
+      items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
+      inputEl.value = acIdx >= 0 ? items[acIdx].dataset.sub : preAcVal;
+    } else if (e.key === 'Enter' && acIdx >= 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const sub = items[acIdx]?.dataset.sub;
+      hide();
+      if (sub) navigate(`/r/${sub}`);
+    } else if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      hide();
+    }
+  }, true);
+
+  inputEl.addEventListener('blur', () => { setTimeout(hide, 150); });
+  dropdownEl.addEventListener('mousedown', e => e.preventDefault());
+  dropdownEl.addEventListener('click', e => {
+    const item = e.target.closest('.autocomplete-item');
+    if (!item) return;
+    hide();
+    navigate(`/r/${item.dataset.sub}`);
+  });
+}
+
+setupAutocomplete(
+  document.getElementById('subreddit-input'),
+  document.getElementById('autocomplete-dropdown')
+);
+setupAutocomplete(
+  document.getElementById('pv-subreddit-input'),
+  document.getElementById('pv-autocomplete-dropdown')
+);
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 renderRoute(parseRoute());
