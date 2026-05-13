@@ -51,7 +51,10 @@ function linkifyReddit(text) {
       (m, skip, user) => skip ? skip : `[u/${user}](/user/${user})`);
 }
 function renderMd(text) {
-  return text ? DOMPurify.sanitize(marked.parse(linkifyReddit(text))) : '';
+  if (!text) return '';
+  const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
+    `<span class="spoiler" onclick="this.classList.toggle('revealed')">${inner}</span>`);
+  return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['onclick', 'class'] });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -269,11 +272,11 @@ function renderPost(p, idx, showSub=false) {
           <span class="meta-item">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
         </div>
         <div class="footer-right">
+          ${domainHtml}
           <button class="comments-link" data-sub="${escHtml(p.subreddit)}" data-id="${escHtml(p.id)}">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             ${fmtNum(p.num_comments)} comments
           </button>
-          ${domainHtml}
         </div>
       </div>`;
 
@@ -489,8 +492,6 @@ async function loadPostView(sub, postId, commentId='') {
       ${mediaHtmlFull(p)}
       ${bodyHtml}
       <div class="pv-divider">
-        <div class="pv-divider-line"></div>
-        <span class="pv-divider-label">${fmtNum(p.num_comments)} comments</span>
         <div class="pv-divider-line"></div>
       </div>
       ${buildCommentSortBar('confidence')}
