@@ -371,13 +371,19 @@ def get_comments(subreddit, post_id):
                     if parsed:
                         replies.append(parsed)
             return {
-                "id":          d["id"],
-                "author":      d.get("author", "[deleted]"),
-                "body":        d.get("body", ""),
-                "score":       d.get("score", 0),
-                "created_utc": d.get("created_utc", 0),
-                "depth":       d.get("depth", 0),
-                "replies":     replies,
+                "id":                    d["id"],
+                "author":                d.get("author", "[deleted]"),
+                "body":                  d.get("body", ""),
+                "score":                 d.get("score", 0),
+                "created_utc":           d.get("created_utc", 0),
+                "depth":                 d.get("depth", 0),
+                "replies":               replies,
+                "distinguished":         d.get("distinguished"),
+                "author_flair_text":     d.get("author_flair_text") or "",
+                "author_flair_richtext": d.get("author_flair_richtext") or [],
+                "author_flair_type":     d.get("author_flair_type", "text"),
+                "author_flair_bg":       d.get("author_flair_background_color") or "",
+                "author_flair_tc":       d.get("author_flair_text_color") or "dark",
             }
 
         comments = [parse_comment(c) for c in data[1]["data"]["children"]]

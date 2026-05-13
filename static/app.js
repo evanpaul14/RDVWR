@@ -113,6 +113,25 @@ function renderFlair(p) {
   return `<span class="flair">${escHtml(p.flair)}</span>`;
 }
 
+function renderAuthorFlair(c) {
+  const hasRichtext = c.author_flair_type === 'richtext' && c.author_flair_richtext?.length;
+  if (!hasRichtext && !c.author_flair_text) return '';
+  let inner = '';
+  if (hasRichtext) {
+    inner = c.author_flair_richtext.map(part => {
+      if (part.e === 'text')  return escHtml(part.t || '');
+      if (part.e === 'emoji') return `<img class="author-flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
+      return '';
+    }).join('');
+  } else {
+    inner = escHtml(c.author_flair_text);
+  }
+  if (!inner.trim() && !c.author_flair_richtext?.some(p => p.e === 'emoji')) return '';
+  const bg = c.author_flair_bg && c.author_flair_bg !== 'transparent' ? c.author_flair_bg : '';
+  const style = bg ? ` style="background:${escHtml(bg)};color:${c.author_flair_tc==='light'?'#fff':'#1a1a1a'}"` : '';
+  return `<span class="author-flair"${style}>${inner}</span>`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GALLERY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -283,7 +302,9 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
     const isDeleted = !c.body || c.body==='[deleted]' || c.body==='[removed]';
     const isAutoMod = c.author === 'AutoModerator';
     const startCollapsed = isAutoMod;
-    const isOP = postAuthor && !isDeleted && c.author === postAuthor;
+    const isOP    = postAuthor && !isDeleted && c.author === postAuthor;
+    const isMod   = c.distinguished === 'moderator';
+    const isAdmin = c.distinguished === 'admin';
 
     let repliesHtml = '';
     if (c.replies?.length) {
@@ -298,8 +319,11 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
     return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
-        <span class="comment-author" data-user="${escHtml(c.author)}">${escHtml(c.author)}</span>
-        ${isOP ? '<span class="comment-op">OP</span>' : ''}
+        <span class="comment-author${isMod?' is-mod':''}" data-user="${escHtml(c.author)}">${escHtml(c.author)}</span>
+        ${isMod   ? '<span class="comment-mod">MOD</span>'   : ''}
+        ${isAdmin ? '<span class="comment-admin">ADMIN</span>' : ''}
+        ${isOP    ? '<span class="comment-op">OP</span>'     : ''}
+        ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
         <span class="comment-time">${timeAgo(c.created_utc)}</span>
       </div>
