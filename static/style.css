@@ -153,6 +153,11 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .flair {
   font-family:var(--mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase;
   background:var(--acd); color:var(--ac); padding:2px 6px; border-radius:2px;
+  display:inline-flex; align-items:center; gap:3px;
+}
+.flair-emoji {
+  width:16px; height:16px; vertical-align:middle; flex-shrink:0;
+  border-radius:2px;
 }
 .nsfw-tag {
   font-family:var(--mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase;

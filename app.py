@@ -153,6 +153,8 @@ def process_post(p):
         "post_hint":      p.get("post_hint", ""),
         "over_18":        p.get("over_18", False),
         "flair":          p.get("link_flair_text") or "",
+        "flair_richtext": p.get("link_flair_richtext") or [],
+        "flair_type":     p.get("link_flair_type", "text"),
         "domain":         p.get("domain", ""),
         "crosspost_from": crosspost_from,
     }
