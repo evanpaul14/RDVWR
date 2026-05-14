@@ -372,7 +372,7 @@ document.getElementById('post-view').addEventListener('click', e => {
   if (!header || e.target.tagName==='A') return;
   // navigate to user profile when clicking author
   const authorEl = e.target.closest('.comment-author[data-user]');
-  if (authorEl) { navigate(`/user/${authorEl.dataset.user}`); return; }
+  if (authorEl) { navigateOrOpen(`/user/${authorEl.dataset.user}`, e); return; }
   const comment   = header.closest('.comment');
   const collapsed = comment.classList.toggle('collapsed');
   const btn = comment.querySelector(':scope > .comment-header > .comment-collapse');
@@ -527,7 +527,7 @@ pvContent.addEventListener('click', e => {
   const csort = e.target.closest('[data-csort]');
   if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const btn = e.target.closest('[data-user]');
-  if (btn && !e.target.closest('a')) { e.preventDefault(); navigate(`/user/${btn.dataset.user}`); }
+  if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1041,6 +1041,11 @@ function parseRoute(path=location.pathname) {
   return { type:'home' };
 }
 
+function navigateOrOpen(path, e) {
+  if (e && (e.ctrlKey || e.metaKey || e.button === 1)) { window.open(path, '_blank'); return; }
+  navigate(path);
+}
+
 function navigate(path, { replace=false }={}) {
   history.replaceState({ ...(history.state||{}), scrollY: window.scrollY }, '', location.href);
   if (replace) history.replaceState(null,'',path);
@@ -1106,9 +1111,9 @@ feed.addEventListener('click', e => {
   const commBtn = e.target.closest('.comments-link[data-id]');
   const userBtn = e.target.closest('.post-author[data-user]');
   if (commBtn) {
-    navigate(`/r/${commBtn.dataset.sub}/comments/${commBtn.dataset.id}`);
+    navigateOrOpen(`/r/${commBtn.dataset.sub}/comments/${commBtn.dataset.id}`, e);
   } else if (userBtn) {
-    navigate(`/user/${userBtn.dataset.user}`);
+    navigateOrOpen(`/user/${userBtn.dataset.user}`, e);
   }
 });
 
@@ -1258,11 +1263,11 @@ feed.addEventListener('click', e => {
     e.stopPropagation();
     const sub   = flairEl.dataset.sub;
     const flair = flairEl.dataset.flair;
-    if (sub && flair) navigate(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`);
+    if (sub && flair) navigateOrOpen(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`, e);
     return;
   }
   const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
-  if (card) { navigate(card.dataset.nav); return; }
+  if (card) { navigateOrOpen(card.dataset.nav, e); return; }
 });
 
 // Logo → home
@@ -1272,23 +1277,23 @@ document.getElementById('logo-btn').addEventListener('click', () => navigate('/'
 function interceptNavLink(a, e) {
   // data-nav="/path" means it's a guaranteed in-app link; href is "javascript:;"
   const datanav = a.getAttribute('data-nav');
-  if (datanav) { e.preventDefault(); navigate(datanav); return true; }
+  if (datanav) { e.preventDefault(); navigateOrOpen(datanav, e); return true; }
 
   const href = a.getAttribute('href') || '';
   if (!href || href.startsWith('#') || href.startsWith('javascript:') ||
       href.startsWith('mailto:') || href.startsWith('tel:')) return false;
 
   const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-  if (redditPost) { e.preventDefault(); navigate(`/r/${redditPost[1]}/comments/${redditPost[2]}`); return true; }
+  if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
   const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
-  if (redditSub)  { e.preventDefault(); navigate(`/r/${redditSub[1]}`); return true; }
+  if (redditSub)  { e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true; }
   const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
-  if (redditUser) { e.preventDefault(); navigate(`/user/${redditUser[1]}`); return true; }
+  if (redditUser) { e.preventDefault(); navigateOrOpen(`/user/${redditUser[1]}`, e); return true; }
   try {
     const url = new URL(href, location.origin);
     if (url.origin !== location.origin) return false;
     e.preventDefault();
-    navigate(url.pathname + url.search);
+    navigateOrOpen(url.pathname + url.search, e);
     return true;
   } catch { return false; }
 }
@@ -1314,6 +1319,14 @@ document.addEventListener('touchend', e => {
 // Capture-phase click handler — handles non-touch (desktop) and reddit.com link rewrites.
 document.addEventListener('click', e => {
   if (_navFromTouch) { _navFromTouch = false; return; } // already handled by touchend
+  const a = e.target.closest('a[data-nav], a[href]');
+  if (!a || a.getAttribute('target') === '_blank') return;
+  interceptNavLink(a, e);
+}, true);
+
+// Middle-click on in-app links → open in new tab.
+document.addEventListener('auxclick', e => {
+  if (e.button !== 1) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
   interceptNavLink(a, e);
