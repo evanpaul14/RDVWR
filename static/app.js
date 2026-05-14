@@ -810,10 +810,16 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
   sortBar.style.display = 'flex';
   sortBar.querySelectorAll('[data-ssort]').forEach(b => b.classList.toggle('active', b.dataset.ssort === sort));
 
-  // Show/update the type bar
-  searchTypeBar.style.display = 'flex';
-  searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === type));
-  // Only show sort bar for posts tab
+  // Flair searches and community-scoped searches are posts-only — hide type tabs
+  const isScopedSearch = !!sub || query.includes('flair:');
+  if (isScopedSearch) {
+    searchTypeBar.style.display = 'none';
+    searchType = 'posts';
+    type = 'posts';
+  } else {
+    searchTypeBar.style.display = 'flex';
+    searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === type));
+  }
   sortBar.style.display = type === 'posts' ? 'flex' : 'none';
 
   if (type === 'communities') { await loadCommunityResults(query); }

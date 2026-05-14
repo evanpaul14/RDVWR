@@ -659,10 +659,66 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width:680px) {
-  .header-inner { gap:12px; padding:0 16px; }
+  /* ── Header ── */
+  .header-inner { gap:10px; padding:0 12px; }
+  #subreddit-input, #pv-subreddit-input { padding:12px 4px; }
+
+  /* ── Feed ── */
   #feed { padding:12px 12px 80px; gap:10px; }
-  .sort-bar { padding:0 16px; }
-  .ctx-info { padding:12px 16px 0; }
-  .pv-wrap { padding:20px 16px 60px; }
-  .pv-search-wrap { max-width:120px; }
+  /* iOS safe-area bottom padding */
+  #feed { padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ── Sort bar: scrollable so sidebar/scope chips never overflow viewport ── */
+  .sort-bar {
+    padding:0 12px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; flex-wrap:nowrap;
+  }
+  .sort-bar::-webkit-scrollbar { display:none; }
+  .sort-btn, .sidebar-toggle, .nsfw-toggle,
+  .time-filter-wrap { flex-shrink:0; }
+  /* Scope chip: remove auto-margin so it appears right after nsfw toggle */
+  .scope-chip { flex-shrink:0; margin-left:6px; }
+
+  /* ── Context info / sidebar ── */
+  .ctx-info { padding:12px 12px 0; }
+  .sidebar-panel { padding:0 12px; }
+  .sidebar-panel.open { padding:12px; }
+
+  /* ── Post view bar: center column expands to fill remaining space ── */
+  .pv-bar { grid-template-columns:auto 1fr auto; padding:0 12px; gap:8px; }
+  .pv-search-container { max-width:none; width:100%; }
+  .pv-search-wrap { max-width:none; }
+  .pv-open { font-size:10px; letter-spacing:0; }
+
+  /* ── Post view content ── */
+  .pv-wrap { padding:20px 16px calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .pv-title { font-size:18px; }
+  /* Cap video height so it doesn't eat the whole screen */
+  .pv-media video { max-height:min(640px, 60vh); }
+
+  /* ── Search type tabs: scrollable in case of overflow ── */
+  .search-type-bar {
+    padding:0 12px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .search-type-bar::-webkit-scrollbar { display:none; }
+  .search-type-btn { flex-shrink:0; }
+
+  /* ── Touch targets: increase tap area for small interactive elements ── */
+  .comments-link { padding:5px 0; }
+  .post-author    { padding:5px 0; }
+  .comment-collapse { padding:5px 9px; font-size:12px; }
+  .continue-thread  { padding:8px 0; }
+  .gallery-btn      { padding:8px 16px; }
+
+  /* ── Comment tree: reduce indent so deep threads don't overflow ── */
+  .comment-replies { margin-left:10px; }
+
+  /* ── Gallery image: don't let it dominate a short screen ── */
+  .gallery-stage img { max-height:55vh; }
+
+  /* ── Markdown tables: scroll horizontally instead of overflowing ── */
+  .md table { display:block; overflow-x:auto; max-width:100%; }
 }
