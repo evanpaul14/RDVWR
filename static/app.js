@@ -81,15 +81,16 @@ function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
   }
 }
 function initVideos(container) {
-  container.querySelectorAll('[data-hls]').forEach(wrap => {
+  container.querySelectorAll('[data-hls]:not([data-hls-init])').forEach(wrap => {
     const v = wrap.querySelector('video');
-    if (v) setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
+    if (v) { setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio); wrap.dataset.hlsInit = '1'; }
   });
   if (!userPrefersMuted) container.querySelectorAll('video').forEach(v => { v.muted = false; });
 }
 
 async function initRedgifs(container) {
-  for (const wrap of container.querySelectorAll('.redgifs-wrap[data-rgid]')) {
+  for (const wrap of container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')) {
+    wrap.dataset.rgInit = '1';
     const id = wrap.dataset.rgid;
     try {
       const res = await fetch(`/api/redgifs/${id}`);
