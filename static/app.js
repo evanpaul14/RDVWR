@@ -213,7 +213,7 @@ document.addEventListener('click', e => {
 // MEDIA RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 function mediaHtmlCard(p) {
-  if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="none" playsinline muted></video></div>`;
+  if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="none" playsinline muted${p.preview_img ? ` poster="${escHtml(p.preview_img)}"` : ''}></video></div>`;
   if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
@@ -231,7 +231,7 @@ function mediaHtmlCard(p) {
 }
 
 function mediaHtmlFull(p) {
-  if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="metadata" playsinline muted></video></div>`;
+  if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"><video controls preload="metadata" playsinline muted${p.preview_img ? ` poster="${escHtml(p.preview_img)}"` : ''}></video></div>`;
   if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
