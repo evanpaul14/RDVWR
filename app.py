@@ -3,11 +3,22 @@ import time
 import requests
 from flask import Flask, render_template, jsonify, request, Response, make_response
 
+CACHE_TTL_STATIC     = 604800   # 1 week
+CACHE_TTL_FEED       = 300
+CACHE_TTL_SUBREDDIT  = 600
+REDGIFS_TOKEN_TTL    = 23 * 3600
+SELFTEXT_MAX_LEN     = 600
+FEED_LIMIT           = 25
+COMMENTS_LIMIT       = 200
+STREAM_CHUNK_SIZE    = 65536
+
 app = Flask(__name__)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800  # 1 week for static assets
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 HEADERS    = {"User-Agent": "MinimalRedditViewer/1.0"}
 YOUTUBE_RE = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
+VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
+REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 
 _rg_token     = None
 _rg_token_exp = 0.0
@@ -25,7 +36,7 @@ def get_redgifs_token():
                      headers=HEADERS, timeout=10)
     r.raise_for_status()
     _rg_token     = r.json()["token"]
-    _rg_token_exp = time.time() + 23 * 3600
+    _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
     return _rg_token
 
 def extract_redgifs_id(url):
@@ -93,7 +104,7 @@ def process_post(p):
     # Audio track for v.redd.it videos (fallback_url is video-only; audio lives at DASH_audio.mp4)
     audio_url = None
     if video_url and 'v.redd.it' in video_url:
-        m = re.match(r'(https://v\.redd\.it/[^/?]+)', video_url)
+        m = VREDDDIT_RE.match(video_url)
         if m:
             audio_url = m.group(1) + '/DASH_audio.mp4'
 
@@ -147,7 +158,7 @@ def process_post(p):
         "url":            p.get("url", ""),
         "permalink":      f"https://www.reddit.com{p.get('permalink', '')}",
         "is_self":        p.get("is_self", False),
-        "selftext":       p.get("selftext", "")[:600] if p.get("is_self") else "",
+        "selftext":       p.get("selftext", "")[:SELFTEXT_MAX_LEN] if p.get("is_self") else "",
         "preview_img":    preview_img,
         "gallery":        gallery,
         "is_video":       is_video,
@@ -176,11 +187,15 @@ def process_post(p):
     }
 
 
+def extract_posts(listing):
+    return [process_post(c["data"]) for c in listing["children"] if c.get("kind") == "t3"]
+
+
 # ── RedGifs proxy ────────────────────────────────────────────────────────────
 
 @app.route("/api/redgifs/<gif_id>")
 def get_redgifs(gif_id):
-    if not re.match(r'^[a-zA-Z0-9]+$', gif_id):
+    if not REDGIFS_ID_VALID_RE.match(gif_id):
         return jsonify({"error": "Invalid ID"}), 400
     try:
         token = get_redgifs_token()
@@ -208,7 +223,7 @@ REDGIFS_MEDIA_RE = re.compile(r'^[A-Za-z0-9_-]+-?(?:mobile|silent)?\.mp4$')
 @app.route("/api/redgifs/media/<filename>")
 def proxy_redgifs_media(filename):
     if not REDGIFS_MEDIA_RE.match(filename):
-        return "Invalid filename", 400
+        return jsonify({"error": "Invalid filename"}), 400
     url = f"https://media.redgifs.com/{filename}"
     proxy_headers = {
         **HEADERS,
@@ -227,10 +242,10 @@ def proxy_redgifs_media(filename):
         for h in ("Content-Length", "Content-Range"):
             if h in upstream.headers:
                 resp_headers[h] = upstream.headers[h]
-        return Response(upstream.iter_content(chunk_size=65536),
+        return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE),
                         status=upstream.status_code, headers=resp_headers)
     except Exception as e:
-        return str(e), 502
+        return jsonify({"error": str(e)}), 502
 
 
 # ── Subreddit autocomplete ────────────────────────────────────────────────────
@@ -281,7 +296,7 @@ def search_posts():
         sort = "relevance"
     url    = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
     nsfw   = request.args.get("nsfw", "0") == "1"
-    params = {"q": q, "sort": sort, "t": t, "limit": 25, "raw_json": 1, "include_over_18": int(nsfw)}
+    params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1, "include_over_18": int(nsfw)}
     if sub:
         params["restrict_sr"] = 1
     if after:
@@ -293,7 +308,7 @@ def search_posts():
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
-        posts   = [process_post(c["data"]) for c in listing["children"] if c.get("kind") == "t3"]
+        posts   = extract_posts(listing)
         return jsonify({"posts": posts, "after": listing.get("after")})
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
@@ -309,7 +324,7 @@ def get_posts(subreddit):
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
-    params = {"limit": 25, "raw_json": 1}
+    params = {"limit": FEED_LIMIT, "raw_json": 1}
     if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
@@ -323,7 +338,7 @@ def get_posts(subreddit):
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
-        posts   = [process_post(c["data"]) for c in listing["children"] if c.get("kind") == "t3"]
+        posts   = extract_posts(listing)
         return jsonify({"posts": posts, "after": listing.get("after")})
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
@@ -349,7 +364,7 @@ def get_about(subreddit):
             "subscribers": d.get("subscribers", 0),
             "active":      active,
             "icon":        icon or "",
-        }, 300)
+        }, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -363,7 +378,7 @@ def get_rules(subreddit):
         if resp.status_code != 200:
             return jsonify({"rules": []})
         rules = resp.json().get("rules", [])
-        return cached_json({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]}, 600)
+        return cached_json({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]}, CACHE_TTL_SUBREDDIT)
     except Exception as e:
         return jsonify({"rules": []})
 
@@ -375,7 +390,7 @@ def search_communities():
     if not q:
         return jsonify({"communities": [], "after": None})
     try:
-        params = {"q": q, "limit": 25, "raw_json": 1, "type": "sr"}
+        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "sr"}
         if after:
             params["after"] = after
         resp = requests.get("https://www.reddit.com/search.json",
@@ -409,7 +424,7 @@ def search_users():
     if not q:
         return jsonify({"users": [], "after": None})
     try:
-        params = {"q": q, "limit": 25, "raw_json": 1, "type": "user"}
+        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "user"}
         if after:
             params["after"] = after
         resp = requests.get("https://www.reddit.com/search.json",
@@ -444,7 +459,7 @@ def get_comments(subreddit, post_id):
         sort = request.args.get('sort', 'confidence')
         if sort not in COMMENT_SORTS:
             sort = 'confidence'
-        params = {"raw_json": 1, "limit": 200, "sort": sort}
+        params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
         if comment_id:
             params["comment"] = comment_id
             params["context"] = 8
@@ -514,7 +529,7 @@ def get_user_about(username):
             "karma_comment":  d.get("comment_karma", 0),
             "created_utc":    d.get("created_utc", 0),
             "is_premium":     d.get("is_gold", False),
-        }, 300)
+        }, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -524,7 +539,7 @@ def get_user_posts_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
     after  = request.args.get("after", "")
-    params = {"limit": 25, "raw_json": 1, "sort": sort}
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
@@ -538,7 +553,7 @@ def get_user_posts_api(username):
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
-        posts   = [process_post(c["data"]) for c in listing["children"] if c.get("kind") == "t3"]
+        posts   = extract_posts(listing)
         return jsonify({"posts": posts, "after": listing.get("after")})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -549,7 +564,7 @@ def get_user_comments_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
     after  = request.args.get("after", "")
-    params = {"limit": 25, "raw_json": 1, "sort": sort}
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:

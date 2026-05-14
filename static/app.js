@@ -24,6 +24,12 @@ function fmtDate(utc) {
 
 let userPrefersMuted = localStorage.getItem('mutePreference') !== 'unmuted';
 
+const SKELETON_COUNT       = 5;
+const ANIM_DELAY_STEP      = 40;
+const ANIM_DELAY_MAX       = 400;
+const AUTOCOMPLETE_DEBOUNCE = 280;
+const TOUCH_MOVE_THRESHOLD  = 10;
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MARKDOWN
 // ═══════════════════════════════════════════════════════════════════════════
@@ -55,6 +61,12 @@ function renderMd(text) {
   const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
     `<span class="spoiler" onclick="this.classList.toggle('revealed')">${inner}</span>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['onclick', 'class'] });
+}
+
+function setActiveButton(container, dataAttr, activeVal) {
+  container.querySelectorAll(`[data-${dataAttr}]`).forEach(b =>
+    b.classList.toggle('active', b.dataset[dataAttr] === activeVal)
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,7 +267,10 @@ function mediaHtmlFull(p) {
 // POST CARD RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 function renderPost(p, idx, showSub=false) {
-  const delay = Math.min(idx*40, 400);
+  const sub   = escHtml(p.subreddit);
+  const author = escHtml(p.author);
+  const id    = escHtml(p.id);
+  const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   let tags = '';
   if (p.is_stickied) tags += `<span class="badge badge-sticky">📌 pinned</span>`;
   if (p.over_18)     tags += `<span class="nsfw-tag">nsfw</span>`;
@@ -265,9 +280,9 @@ function renderPost(p, idx, showSub=false) {
   tags += renderFlair(p, true);
   const titleClass = 'post-title'+(p.is_self?' is-italic':'');
   const domainHtml  = !p.is_self && p.domain ? `<a class="ext-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : '';
-  const subHtml = showSub ? `<a class="post-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>` : '';
+  const subHtml = showSub ? `<a class="post-sub-link" href="javascript:;" data-nav="/r/${sub}">r/${sub}</a>` : '';
   const metaTop = (subHtml || tags) ? `<div class="post-meta-top">${subHtml}${tags}</div>` : '';
-  const titleLink = `<a class="${titleClass}" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}">${escHtml(p.title)}</a>`;
+  const titleLink = `<a class="${titleClass}" href="javascript:;" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
   const editedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
   const footer = `
       <div class="post-footer">
@@ -277,12 +292,12 @@ function renderPost(p, idx, showSub=false) {
             <span class="score-num">${fmtNum(p.score)}</span>
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
-          <button class="post-author" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
+          <button class="post-author" data-user="${author}">u/${author}</button>
           <span class="meta-item">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
         </div>
         <div class="footer-right">
           ${domainHtml}
-          <button class="comments-link" data-sub="${escHtml(p.subreddit)}" data-id="${escHtml(p.id)}">
+          <button class="comments-link" data-sub="${sub}" data-id="${id}">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             ${fmtNum(p.num_comments)} comments
           </button>
@@ -436,7 +451,7 @@ function buildCommentsHtml(data, commentId) {
 
 async function changeCommentSort(sort) {
   currentCommentSort = sort;
-  pvContent.querySelectorAll('[data-csort]').forEach(b => b.classList.toggle('active', b.dataset.csort === sort));
+  setActiveButton(pvContent, 'csort', sort);
   const area = pvContent.querySelector('.pv-comments-area');
   if (!area) return;
   area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
@@ -557,6 +572,8 @@ const feed        = document.getElementById('feed');
 const sortBar     = document.getElementById('sort-bar');
 const ctxInfo     = document.getElementById('ctx-info');
 const loadMoreBtn = document.getElementById('load-more-btn');
+const subInput    = document.getElementById('subreddit-input');
+const pvSubInput  = document.getElementById('pv-subreddit-input');
 
 let currentSub    = '';
 let currentSort   = 'top';
@@ -580,7 +597,7 @@ let searchNsfw    = false;
 let searchAfter   = null;
 
 function showSkeletons() {
-  feed.innerHTML = Array.from({length:5}, ()=>`
+  feed.innerHTML = Array.from({length:SKELETON_COUNT}, ()=>`
     <div class="skeleton-post">
       <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
       <div class="skel skel-banner"></div>
@@ -668,8 +685,8 @@ async function loadSubreddit(sub, sort='top', time='all') {
   currentTime = time;
   afterToken  = null;
   document.title = `r/${currentSub} — RDVWR`;
-  document.getElementById('subreddit-input').value = currentSub;
-  document.getElementById('pv-subreddit-input').value = currentSub;
+  subInput.value = currentSub;
+  pvSubInput.value = currentSub;
   sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
@@ -680,7 +697,7 @@ async function loadSubreddit(sub, sort='top', time='all') {
 // ── Profile feed ───────────────────────────────────────────────────────────
 
 function renderUserCommentCard(c, idx) {
-  const delay = Math.min(idx*40,400);
+  const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   return `<div class="user-comment-card" style="animation-delay:${delay}ms">
     <div class="ucc-context">
       <span>in <a href="javascript:;" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
@@ -739,8 +756,8 @@ async function loadProfile(username) {
   profileMode = true; profileUser = username; profileTab = 'posts'; profileSort = 'new'; profileTime = 'all'; profileAfter = null;
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
-  document.getElementById('subreddit-input').value = '';
-  document.getElementById('pv-subreddit-input').value = '';
+  subInput.value = '';
+  pvSubInput.value = '';
   document.title = `u/${username} — RDVWR`;
 
   // Load user info
@@ -828,8 +845,8 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
   communityAfter = null;
   userAfter   = null;
   searchType  = type;
-  document.getElementById('subreddit-input').value = query;
-  document.getElementById('pv-subreddit-input').value = query;
+  subInput.value = query;
+  pvSubInput.value = query;
   document.title = `Search: ${query}${sub ? ` in r/${sub}` : ''} — RDVWR`;
 
   document.getElementById('ctx-icon-wrap').innerHTML = '';
@@ -843,7 +860,7 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
     : '';
   sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwToggleHtml + scopeCheckHtml;
   sortBar.style.display = 'flex';
-  sortBar.querySelectorAll('[data-ssort]').forEach(b => b.classList.toggle('active', b.dataset.ssort === sort));
+  setActiveButton(sortBar, 'ssort', sort);
 
   // Flair searches and community-scoped searches are posts-only — hide type tabs
   const isScopedSearch = !!sub || query.includes('flair:');
@@ -853,7 +870,7 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
     type = 'posts';
   } else {
     searchTypeBar.style.display = 'flex';
-    searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === type));
+    setActiveButton(searchTypeBar, 'stype', type);
   }
   sortBar.style.display = type === 'posts' ? 'flex' : 'none';
 
@@ -926,7 +943,7 @@ let communityAfter  = null;
 let userAfter       = null;
 
 function renderCommunityCard(c, idx) {
-  const delay = Math.min(idx*40, 400);
+  const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   const letter = escHtml((c.name||'?')[0].toUpperCase());
   const iconHtml = c.icon
     ? `<img src="${escHtml(c.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
@@ -943,7 +960,7 @@ function renderCommunityCard(c, idx) {
 }
 
 function renderUserCard(u, idx) {
-  const delay = Math.min(idx*40, 400);
+  const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   const letter = escHtml((u.name||'?')[0].toUpperCase());
   const iconHtml = u.icon
     ? `<img src="${escHtml(u.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
@@ -1134,7 +1151,7 @@ searchTypeBar.addEventListener('click', e => {
   const t = btn.dataset.stype;
   if (t === searchType) return;
   searchType = t;
-  searchTypeBar.querySelectorAll('[data-stype]').forEach(b => b.classList.toggle('active', b.dataset.stype === t));
+  setActiveButton(searchTypeBar, 'stype', t);
   sortBar.style.display = t === 'posts' ? 'flex' : 'none';
   if (t === 'communities') loadCommunityResults(searchQuery);
   else if (t === 'users')  loadUserResults(searchQuery);
@@ -1218,8 +1235,8 @@ sortBar.addEventListener('change', e => {
 
 // Search
 function handleSearchInput(e) {
-  const pvInput = document.getElementById('pv-subreddit-input');
-  const mainInput = document.getElementById('subreddit-input');
+  const pvInput = pvSubInput;
+  const mainInput = subInput;
   const activeInput = (e?.currentTarget?.id === 'pv-search-btn' || e?.target === pvInput || document.activeElement === pvInput) ? pvInput : mainInput;
   const val = activeInput.value.trim();
   if (!val) return;
@@ -1310,7 +1327,7 @@ document.addEventListener('touchstart', e => {
 document.addEventListener('touchend', e => {
   const dx = Math.abs(e.changedTouches[0].clientX - _touchStartX);
   const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
-  if (dx > 10 || dy > 10) return; // scroll/swipe — not a tap
+  if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) return; // scroll/swipe — not a tap
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
   if (interceptNavLink(a, e)) _navFromTouch = true;
@@ -1407,7 +1424,7 @@ function setupAutocomplete(inputEl, dropdownEl) {
         const data = await res.json();
         show(data.names || []);
       } catch {}
-    }, 280);
+    }, AUTOCOMPLETE_DEBOUNCE);
   });
 
   inputEl.addEventListener('keydown', e => {
@@ -1446,14 +1463,8 @@ function setupAutocomplete(inputEl, dropdownEl) {
   });
 }
 
-setupAutocomplete(
-  document.getElementById('subreddit-input'),
-  document.getElementById('autocomplete-dropdown')
-);
-setupAutocomplete(
-  document.getElementById('pv-subreddit-input'),
-  document.getElementById('pv-autocomplete-dropdown')
-);
+setupAutocomplete(subInput,   document.getElementById('autocomplete-dropdown'));
+setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown'));
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 renderRoute(parseRoute());
