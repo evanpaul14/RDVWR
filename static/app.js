@@ -434,11 +434,11 @@ async function changeCommentSort(sort) {
   try {
     const apiUrl = `/api/r/${encodeURIComponent(_pvSub)}/comments/${encodeURIComponent(_pvPostId)}?sort=${sort}${_pvCommentId ? `&comment=${encodeURIComponent(_pvCommentId)}` : ''}`;
     const res  = await fetch(apiUrl);
-    if (!res.ok) { area.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">Failed to load</div></div>`; return; }
+    if (!res.ok) { area.innerHTML = errState('Failed to load comments', 'comments'); return; }
     const data = await res.json();
     area.innerHTML = buildCommentsHtml(data, _pvCommentId);
   } catch {
-    area.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`;
+    area.innerHTML = errState('Network error', 'comments');
   }
 }
 
@@ -456,7 +456,7 @@ async function loadPostView(sub, postId, commentId='') {
     const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=confidence` + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
     const res  = await fetch(apiUrl);
     const data = await res.json();
-    if (!res.ok) { pvContent.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Failed to load')}</div></div>`; return; }
+    if (!res.ok) { pvContent.innerHTML = errState(escHtml(data.error||'Failed to load'), 'post'); return; }
 
     const p = data.post;
     pvOpen.href = p.permalink;
@@ -502,12 +502,19 @@ async function loadPostView(sub, postId, commentId='') {
     initVideos(pvContent);
     initRedgifs(pvContent);
   } catch(err) {
-    pvContent.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`;
+    pvContent.innerHTML = errState('Network error', 'post');
   }
 }
 
 // Click author in post meta; comment sort buttons
 pvContent.addEventListener('click', e => {
+  const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
+  if (retryBtn) {
+    const t = retryBtn.dataset.retry;
+    if (t === 'post') loadPostView(_pvSub, _pvPostId, _pvCommentId);
+    else if (t === 'comments') changeCommentSort(currentCommentSort);
+    return;
+  }
   const csort = e.target.closest('[data-csort]');
   if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const btn = e.target.closest('[data-user]');
@@ -558,7 +565,8 @@ let searchMode    = false;
 let searchQuery   = '';
 let searchSort    = 'relevance';
 let searchTime    = 'all';
-let searchSub     = '';
+let searchSub       = '';
+let searchSubStored = ''; // remembers last scoped sub for checkbox toggle
 let searchNsfw    = false;
 let searchAfter   = null;
 
@@ -572,6 +580,22 @@ function showSkeletons() {
   loadMoreBtn.style.display = 'none';
 }
 
+function errState(msg, retryTarget) {
+  return `<div class="state"><div class="state-icon">⚠</div><div class="state-title">${msg}</div><button class="state-retry-btn" data-retry="${retryTarget}">Try again</button></div>`;
+}
+
+function retryFeedLoad() {
+  if (searchMode) {
+    if (searchType === 'communities') loadCommunityResults(searchQuery);
+    else if (searchType === 'users')  loadUserResults(searchQuery);
+    else loadSearchResults(searchQuery, searchSort, searchTime);
+  } else if (profileMode) {
+    loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+  } else {
+    loadSubFeed(currentSub, currentSort, currentTime);
+  }
+}
+
 // ── Subreddit feed ─────────────────────────────────────────────────────────
 
 async function loadAbout(sub) {
@@ -581,8 +605,7 @@ async function loadAbout(sub) {
     const d = await res.json();
     const letter = escHtml(sub[0].toUpperCase());
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
-      ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.outerHTML='<div class=ctx-icon-placeholder>${letter}</div>'">`
-      : `<div class="ctx-icon-placeholder">${letter}</div>`;
+      ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;
     const activePart = d.active ? ` · <span>${fmtNum(d.active)}</span> online` : '';
     document.getElementById('ctx-stats').innerHTML = `<span>${fmtNum(d.subscribers)}</span> members${activePart}`;
@@ -609,7 +632,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
     const data = await res.json();
     if (myGen !== feedGen) return;
     if (!res.ok) {
-      if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Error')}</div><div class="state-sub">check the subreddit name and try again</div></div>`;
+      if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
       return;
     }
     if (!append) feed.innerHTML = '';
@@ -625,7 +648,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
     afterToken = data.after;
     loadMoreBtn.style.display = afterToken ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
 
@@ -679,7 +702,7 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
     const data = await res.json();
     if (myGen !== feedGen) return;
     if (!res.ok) {
-      if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Error')}</div></div>`;
+      if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
       return;
     }
     if (!append) feed.innerHTML = '';
@@ -699,7 +722,7 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
     profileAfter = data.after;
     loadMoreBtn.style.display = profileAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
 
@@ -718,8 +741,7 @@ async function loadProfile(username) {
       const d = await res.json();
       const letter = escHtml(username[0].toUpperCase());
       document.getElementById('ctx-icon-wrap').innerHTML = d.icon
-        ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.outerHTML='<div class=ctx-icon-placeholder>${letter}</div>'">`
-        : `<div class="ctx-icon-placeholder">${letter}</div>`;
+        ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
       document.getElementById('ctx-title').textContent = `u/${d.name}`;
       document.getElementById('ctx-stats').innerHTML =
         `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}`;
@@ -751,7 +773,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     const data = await res.json();
     if (myGen !== feedGen) return;
     if (!res.ok) {
-      if (!append) feed.innerHTML = `<div class="state"><div class="state-icon">✕</div><div class="state-title">${escHtml(data.error||'Search failed')}</div></div>`;
+      if (!append) feed.innerHTML = errState(escHtml(data.error||'Search failed'), 'feed');
       return;
     }
     if (!append) feed.innerHTML = '';
@@ -766,7 +788,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     searchAfter = data.after;
     loadMoreBtn.style.display = searchAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append && myGen === feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
 
@@ -781,6 +803,10 @@ function buildTimeFilterHtml(selected) {
 }
 
 async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts') {
+  // Track the scoped sub for checkbox toggle: update when sub changes, reset on new query
+  if (sub) searchSubStored = sub;
+  else if (query !== searchQuery) searchSubStored = '';
+
   searchMode  = true;
   profileMode = false;
   searchQuery = query;
@@ -797,16 +823,16 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
   document.getElementById('pv-subreddit-input').value = query;
   document.title = `Search: ${query}${sub ? ` in r/${sub}` : ''} — RDVWR`;
 
-  document.getElementById('ctx-icon-wrap').innerHTML = `<div class="ctx-icon-placeholder">⌗</div>`;
+  document.getElementById('ctx-icon-wrap').innerHTML = '';
   document.getElementById('ctx-title').textContent = sub ? `r/${sub}: "${query}"` : `Search: "${query}"`;
   document.getElementById('ctx-stats').innerHTML = `<span>${sort}</span>${time !== 'all' ? ` · <span>${time}</span>` : ''}`;
   ctxInfo.classList.add('visible');
 
-  const nsfwToggleHtml = `<button class="nsfw-toggle${nsfw?' active':''}" id="nsfw-toggle">18+</button>`;
-  const scopeChipHtml  = sub
-    ? `<div class="scope-chip"><span class="scope-chip-label">r/${escHtml(sub)}</span><button class="scope-chip-remove" id="scope-remove" title="Search all of Reddit">×</button></div>`
+  const nsfwToggleHtml  = `<button class="nsfw-toggle${nsfw?' active':''}" id="nsfw-toggle">18+</button>`;
+  const scopeCheckHtml  = searchSubStored
+    ? `<label class="scope-check-label"><input type="checkbox" class="scope-check-input" id="scope-check"${sub ? ' checked' : ''}><span>r/${escHtml(searchSubStored)}</span></label>`
     : '';
-  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwToggleHtml + scopeChipHtml;
+  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwToggleHtml + scopeCheckHtml;
   sortBar.style.display = 'flex';
   sortBar.querySelectorAll('[data-ssort]').forEach(b => b.classList.toggle('active', b.dataset.ssort === sort));
 
@@ -948,7 +974,7 @@ async function loadCommunityResults(query, after=null, append=false) {
     communityAfter = data.after;
     loadMoreBtn.style.display = communityAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append && myGen===feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  } catch { if (!append && myGen===feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen===feedGen) loading = false; }
 }
 
@@ -975,7 +1001,7 @@ async function loadUserResults(query, after=null, append=false) {
     userAfter = data.after;
     loadMoreBtn.style.display = userAfter ? 'inline-block' : 'none';
     loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
-  } catch { if (!append && myGen===feedGen) feed.innerHTML = `<div class="state"><div class="state-icon">⚠</div><div class="state-title">Network error</div></div>`; }
+  } catch { if (!append && myGen===feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen===feedGen) loading = false; }
 }
 
@@ -1063,9 +1089,11 @@ window.addEventListener('popstate', (e) => {
 // EVENT WIRING
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Feed clicks: comments button, author link (links handled by capture-phase global handler)
+// Feed clicks: comments button, author link, retry button
 feed.addEventListener('click', e => {
   if (e.defaultPrevented) return;
+  const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
+  if (retryBtn) { retryFeedLoad(); return; }
   const commBtn = e.target.closest('.comments-link[data-id]');
   const userBtn = e.target.closest('.post-author[data-user]');
   if (commBtn) {
@@ -1111,10 +1139,6 @@ sortBar.addEventListener('click', e => {
     navigate(buildSearchUrl(), { replace:true });
     return;
   }
-  if (e.target.closest('#scope-remove') && searchMode) {
-    navigate(buildSearchUrl(searchQuery, searchSort, searchTime, '', searchNsfw), { replace:true });
-    return;
-  }
   const ssortBtn = e.target.closest('.sort-btn[data-ssort]');
   if (ssortBtn && searchMode) {
     const newSort = ssortBtn.dataset.ssort;
@@ -1155,6 +1179,12 @@ sortBar.addEventListener('click', e => {
 });
 
 sortBar.addEventListener('change', e => {
+  const scopeCheck = e.target.closest('#scope-check');
+  if (scopeCheck && searchMode) {
+    searchSub = scopeCheck.checked ? searchSubStored : '';
+    navigate(buildSearchUrl(), { replace:true });
+    return;
+  }
   const sel = e.target.closest('#time-filter');
   if (!sel) return;
   if (searchMode) {
