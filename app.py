@@ -1,15 +1,21 @@
 import re
 import time
 import requests
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, make_response
 
 app = Flask(__name__)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 604800  # 1 week for static assets
 HEADERS    = {"User-Agent": "MinimalRedditViewer/1.0"}
 YOUTUBE_RE = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
 
 _rg_token     = None
 _rg_token_exp = 0.0
+
+def cached_json(data, seconds):
+    resp = make_response(jsonify(data))
+    resp.headers['Cache-Control'] = f'public, max-age={seconds}'
+    return resp
 
 def get_redgifs_token():
     global _rg_token, _rg_token_exp
@@ -192,7 +198,7 @@ def get_redgifs(gif_id):
                 return None
             fname = url.rsplit("/", 1)[-1]
             return f"/api/redgifs/media/{fname}"
-        return jsonify({"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))})
+        return cached_json({"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -336,14 +342,14 @@ def get_about(subreddit):
         d      = resp.json()["data"]
         icon   = clean_url(d.get("icon_img") or d.get("community_icon") or "")
         active = d.get("active_user_count") or d.get("accounts_active") or 0
-        return jsonify({
+        return cached_json({
             "title":       d.get("title", subreddit),
             "description": d.get("public_description", ""),
             "sidebar":     d.get("description", ""),
             "subscribers": d.get("subscribers", 0),
             "active":      active,
             "icon":        icon or "",
-        })
+        }, 300)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -357,7 +363,7 @@ def get_rules(subreddit):
         if resp.status_code != 200:
             return jsonify({"rules": []})
         rules = resp.json().get("rules", [])
-        return jsonify({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]})
+        return cached_json({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]}, 600)
     except Exception as e:
         return jsonify({"rules": []})
 
@@ -501,14 +507,14 @@ def get_user_about(username):
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         d    = resp.json()["data"]
         icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
-        return jsonify({
+        return cached_json({
             "name":           d["name"],
             "icon":           icon or "",
             "karma_post":     d.get("link_karma", 0),
             "karma_comment":  d.get("comment_karma", 0),
             "created_utc":    d.get("created_utc", 0),
             "is_premium":     d.get("is_gold", False),
-        })
+        }, 300)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
