@@ -29,6 +29,7 @@ const ANIM_DELAY_STEP      = 40;
 const ANIM_DELAY_MAX       = 400;
 const AUTOCOMPLETE_DEBOUNCE = 280;
 const TOUCH_MOVE_THRESHOLD  = 10;
+const GALLERY_SWIPE_MIN     = 40;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MARKDOWN
@@ -228,6 +229,21 @@ document.addEventListener('click', e => {
   if (caption) { caption.textContent = t.dataset.caption; caption.style.display = t.dataset.caption ? '' : 'none'; }
   thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
 });
+
+// Gallery swipe navigation
+let _galleryTouchX = 0;
+document.addEventListener('touchstart', e => {
+  if (e.target.closest('.gallery-stage')) _galleryTouchX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const stage = e.target.closest('.gallery-stage');
+  if (!stage || _galleryTouchX === 0) return;
+  const dx = e.changedTouches[0].clientX - _galleryTouchX;
+  _galleryTouchX = 0;
+  if (Math.abs(dx) < GALLERY_SWIPE_MIN) return;
+  const btn = stage.querySelector(dx < 0 ? '.gallery-next' : '.gallery-prev');
+  if (btn && !btn.disabled) btn.click();
+}, { passive: true });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MEDIA RENDERING
