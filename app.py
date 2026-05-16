@@ -459,7 +459,7 @@ def get_duplicates(subreddit, post_id):
         if after:
             params["after"] = after
         resp = requests.get(
-            f"https://www.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
+            f"https://old.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
             headers=HEADERS, params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
