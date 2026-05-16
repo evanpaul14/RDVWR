@@ -672,6 +672,22 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 .community-card-stats span, .user-card-stats span { color:var(--ac); }
 
+/* ── Duplicates page ─────────────────────────────────────────────────────── */
+.dupes-header {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  padding:12px 0 10px; border-bottom:1px solid var(--b); margin-bottom:6px;
+}
+.dupes-back {
+  font-family:var(--mono); font-size:11px; color:var(--ac); text-decoration:none;
+  transition:opacity .15s;
+}
+.dupes-back:hover { opacity:.7; }
+.dupes-count {
+  font-family:var(--mono); font-size:11px; color:var(--tx3);
+}
+.ctx-sub-link { color:var(--ac); text-decoration:none; }
+.ctx-sub-link:hover { text-decoration:underline; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width:680px) {
   /* ── Header ── */

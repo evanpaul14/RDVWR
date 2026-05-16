@@ -275,6 +275,7 @@ def subreddit_search():
 @app.route("/user/<username>")
 @app.route("/u/<username>")
 @app.route("/search")
+@app.route("/r/<subreddit>/duplicates/<post_id>")
 def spa(**kwargs):
     return render_template("index.html")
 
@@ -453,14 +454,23 @@ def search_users():
 @app.route("/api/r/<subreddit>/duplicates/<post_id>")
 def get_duplicates(subreddit, post_id):
     try:
+        after = request.args.get("after", "")
+        params = {"raw_json": 1, "limit": 25}
+        if after:
+            params["after"] = after
         resp = requests.get(
             f"https://www.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
-            headers=HEADERS, params={"raw_json": 1, "limit": 25}, timeout=10)
+            headers=HEADERS, params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing = resp.json()[1]["data"]
+        data = resp.json()
+        orig_children = data[0]["data"]["children"]
+        post = process_post(orig_children[0]["data"]) if orig_children else None
+        if post:
+            post["selftext"] = orig_children[0]["data"].get("selftext", "")
+        listing = data[1]["data"]
         posts = extract_posts(listing)
-        return jsonify({"posts": posts, "after": listing.get("after")})
+        return jsonify({"post": post, "posts": posts, "after": listing.get("after")})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

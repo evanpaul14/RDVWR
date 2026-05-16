@@ -437,7 +437,6 @@ function findComment(comments, id) {
 
 let currentCommentSort = 'confidence';
 let _pvSub = '', _pvPostId = '', _pvCommentId = '';
-let pvDupesMode = false;
 let _pvData = null;
 
 const COMMENT_SORTS = [
@@ -484,40 +483,8 @@ async function changeCommentSort(sort) {
   }
 }
 
-async function loadDuplicates() {
-  pvDupesMode = true;
-  const area = pvContent.querySelector('.pv-comments-area');
-  const btn  = pvContent.querySelector('.pv-dupes-btn');
-  if (btn) btn.classList.add('active');
-  if (!area) return;
-  area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
-  try {
-    const res  = await fetch(`/api/r/${encodeURIComponent(_pvSub)}/duplicates/${encodeURIComponent(_pvPostId)}`);
-    const data = await res.json();
-    if (!res.ok) { area.innerHTML = errState(escHtml(data.error || 'Failed to load'), 'dupes'); return; }
-    if (!data.posts.length) {
-      area.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No duplicates found</div></div>';
-      return;
-    }
-    area.innerHTML = `<div class="pv-dupes-list">${data.posts.map((p, i) => renderPost(p, i, true)).join('')}</div>`;
-    initVideos(area);
-    initRedgifs(area);
-  } catch {
-    area.innerHTML = errState('Network error', 'dupes');
-  }
-}
-
-function exitDupesMode() {
-  pvDupesMode = false;
-  const btn = pvContent.querySelector('.pv-dupes-btn');
-  if (btn) btn.classList.remove('active');
-  const area = pvContent.querySelector('.pv-comments-area');
-  if (area && _pvData) area.innerHTML = buildCommentsHtml(_pvData, _pvCommentId);
-}
-
 async function loadPostView(sub, postId, commentId='') {
   _pvSub = sub; _pvPostId = postId; _pvCommentId = commentId;
-  pvDupesMode = false; _pvData = null;
   currentCommentSort = 'confidence';
   pvContent.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   pvScroll.scrollTop = 0;
@@ -532,7 +499,6 @@ async function loadPostView(sub, postId, commentId='') {
     const data = await res.json();
     if (!res.ok) { pvContent.innerHTML = errState(escHtml(data.error||'Failed to load'), 'post'); return; }
 
-    _pvData = data;
     const p = data.post;
     pvOpen.href = p.permalink;
     pvBreadcrumb.innerHTML = `<a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
@@ -563,7 +529,7 @@ async function loadPostView(sub, postId, commentId='') {
         <span>${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
-        <button class="meta-item link pv-dupes-btn">dupes</button>
+        <a class="meta-item link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">dupes</a>
       </div>
       ${mediaHtmlFull(p)}
       ${bodyHtml}
@@ -588,14 +554,11 @@ pvContent.addEventListener('click', e => {
   if (retryBtn) {
     const t = retryBtn.dataset.retry;
     if (t === 'post') loadPostView(_pvSub, _pvPostId, _pvCommentId);
-    else if (t === 'dupes') loadDuplicates();
     else if (t === 'comments') changeCommentSort(currentCommentSort);
     return;
   }
-  const dupesBtn = e.target.closest('.pv-dupes-btn');
-  if (dupesBtn) { e.preventDefault(); pvDupesMode ? exitDupesMode() : loadDuplicates(); return; }
   const csort = e.target.closest('[data-csort]');
-  if (csort) { e.preventDefault(); if (pvDupesMode) exitDupesMode(); changeCommentSort(csort.dataset.csort); return; }
+  if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const btn = e.target.closest('[data-user]');
   if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
@@ -666,7 +629,9 @@ function errState(msg, retryTarget) {
 }
 
 function retryFeedLoad() {
-  if (searchMode) {
+  if (duplicatesMode) {
+    loadDuplicatesPage(duplicatesSub, duplicatesPostId);
+  } else if (searchMode) {
     if (searchType === 'communities') loadCommunityResults(searchQuery);
     else if (searchType === 'users')  loadUserResults(searchQuery);
     else loadSearchResults(searchQuery, searchSort, searchTime);
@@ -934,6 +899,80 @@ async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true
   else                        { await loadSearchResults(query, sort, time); }
 }
 
+// ── Duplicates page ────────────────────────────────────────────────────────
+
+let duplicatesMode = false;
+let duplicatesSub  = '';
+let duplicatesPostId = '';
+let duplicatesAfter  = null;
+
+async function loadDuplicatesPage(sub, postId, after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
+  loading = true;
+  duplicatesMode  = true;
+  duplicatesSub   = sub;
+  duplicatesPostId = postId;
+  if (!append) {
+    duplicatesAfter = null;
+    showSkeletons();
+    sortBar.style.display = 'none';
+    ctxInfo.classList.remove('visible');
+    subInput.value = '';
+    pvSubInput.value = '';
+  } else {
+    loadMoreBtn.textContent = 'Loading…'; loadMoreBtn.disabled = true;
+  }
+  try {
+    let url = `/api/r/${encodeURIComponent(sub)}/duplicates/${encodeURIComponent(postId)}`;
+    if (after) url += `?after=${encodeURIComponent(after)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== feedGen) return;
+    if (!res.ok) {
+      if (!append) feed.innerHTML = errState(escHtml(data.error || 'Failed to load'), 'feed');
+      return;
+    }
+    if (!append) {
+      const p = data.post;
+      if (p) {
+        document.title = `Duplicates: ${p.title} — RDVWR`;
+        document.getElementById('ctx-icon-wrap').innerHTML = '';
+        document.getElementById('ctx-title').textContent = p.title;
+        document.getElementById('ctx-stats').innerHTML =
+          `<a class="ctx-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
+        ctxInfo.classList.add('visible');
+      } else {
+        document.title = `Duplicates — RDVWR`;
+      }
+      const backSub  = escHtml(sub);
+      const backId   = escHtml(postId);
+      const titleTxt = data.post ? escHtml(data.post.title) : 'post';
+      feed.innerHTML = `<div class="dupes-header">
+        <a class="dupes-back" href="javascript:;" data-nav="/r/${backSub}/comments/${backId}">← back to post</a>
+        <span class="dupes-count">${data.posts.length} other post${data.posts.length !== 1 ? 's' : ''} linking to this URL</span>
+      </div>`;
+      if (!data.posts.length) {
+        feed.insertAdjacentHTML('beforeend', '<div class="state"><div class="state-icon">∅</div><div class="state-title">No duplicates found</div></div>');
+        loadMoreBtn.style.display = 'none';
+        return;
+      }
+    }
+    const startIdx = append ? feed.querySelectorAll('.post').length : 0;
+    feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
+    initVideos(feed);
+    initRedgifs(feed);
+    duplicatesAfter = data.after;
+    loadMoreBtn.style.display = duplicatesAfter ? 'inline-block' : 'none';
+    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+  } catch {
+    if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed');
+  } finally {
+    if (myGen === feedGen) loading = false;
+  }
+}
+
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 const sidebarPanel = document.getElementById('sidebar-panel');
@@ -1093,6 +1132,8 @@ const SORTS = new Set(['hot','new','top','rising','controversial','best']);
 
 function parseRoute(path=location.pathname) {
   const pathname = path.split('?')[0];
+  const mDupes = pathname.match(/^\/r\/([^\/]+)\/duplicates\/([^\/]+)/i);
+  if (mDupes) return { type: 'duplicates', sub: mDupes[1], postId: mDupes[2] };
   const mPost = pathname.match(/^\/r\/([^\/]+)\/comments\/([^\/]+)(?:\/[^\/]*(?:\/([a-z0-9]+))?)?/i);
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
@@ -1130,6 +1171,7 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
     searchTypeBar.style.display = 'none';
     searchType = 'posts';
   }
+  if (route.type !== 'duplicates') duplicatesMode = false;
   switch (route.type) {
     case 'home':
       navigate('/r/popular/hot', { replace: true });
@@ -1154,6 +1196,13 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
       closePostView();
       closeSidebar();
       await loadSearch(route.query, route.sort, route.time, route.sub, route.nsfw, route.stype || 'posts');
+      break;
+    case 'duplicates':
+      closePostView();
+      closeSidebar();
+      searchMode = false;
+      profileMode = false;
+      await loadDuplicatesPage(route.sub, route.postId);
       break;
   }
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
@@ -1316,7 +1365,9 @@ document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
 
 // Load more
 loadMoreBtn.addEventListener('click', () => {
-  if (searchMode) {
+  if (duplicatesMode) {
+    loadDuplicatesPage(duplicatesSub, duplicatesPostId, duplicatesAfter, true);
+  } else if (searchMode) {
     if (searchType === 'communities') loadCommunityResults(searchQuery, communityAfter, true);
     else if (searchType === 'users')  loadUserResults(searchQuery, userAfter, true);
     else loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
