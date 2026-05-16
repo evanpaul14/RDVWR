@@ -14,11 +14,15 @@ STREAM_CHUNK_SIZE    = 65536
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
-HEADERS    = {"User-Agent": "MinimalRedditViewer/1.0"}
+HEADERS    = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"}
 YOUTUBE_RE = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
 VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
+GIFV_RE             = re.compile(r'\.gifv$', re.I)
+
+SESSION = requests.Session()
+SESSION.headers.update(HEADERS)
 
 _rg_token     = None
 _rg_token_exp = 0.0
@@ -32,8 +36,7 @@ def get_redgifs_token():
     global _rg_token, _rg_token_exp
     if _rg_token and time.time() < _rg_token_exp:
         return _rg_token
-    r = requests.get("https://api.redgifs.com/v2/auth/temporary",
-                     headers=HEADERS, timeout=10)
+    r = SESSION.get("https://api.redgifs.com/v2/auth/temporary", timeout=10)
     r.raise_for_status()
     _rg_token     = r.json()["token"]
     _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
@@ -131,7 +134,7 @@ def process_post(p):
         if lower_url.endswith(".gif"):
             gif_url = post_url
         elif lower_url.endswith(".gifv"):
-            gif_url      = re.sub(r"\.gifv$", ".mp4", post_url, flags=re.I)
+            gif_url      = GIFV_RE.sub(".mp4", post_url)
             gif_is_video = True
 
     crosspost_from = None
@@ -199,9 +202,9 @@ def get_redgifs(gif_id):
         return jsonify({"error": "Invalid ID"}), 400
     try:
         token = get_redgifs_token()
-        resp  = requests.get(
+        resp  = SESSION.get(
             f"https://api.redgifs.com/v2/gifs/{gif_id}",
-            headers={**HEADERS, "Authorization": f"Bearer {token}"},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "Not found"}), 404
@@ -234,7 +237,7 @@ def proxy_redgifs_media(filename):
     if "Range" in request.headers:
         proxy_headers["Range"] = request.headers["Range"]
     try:
-        upstream = requests.get(url, headers=proxy_headers, stream=True, timeout=20)
+        upstream = SESSION.get(url, headers=proxy_headers, stream=True, timeout=20)
         resp_headers = {
             "Content-Type":  upstream.headers.get("Content-Type", "video/mp4"),
             "Accept-Ranges": "bytes",
@@ -256,9 +259,8 @@ def subreddit_search():
     if len(q) < 2:
         return jsonify({"names": []})
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             "https://www.reddit.com/api/search_reddit_names.json",
-            headers=HEADERS,
             params={"query": q, "include_over_18": 0, "exact": 0},
             timeout=5)
         if resp.status_code != 200:
@@ -303,14 +305,14 @@ def search_posts():
     if after:
         params["after"] = after
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        resp = SESSION.get(url, params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "Not found"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
-        return jsonify({"posts": posts, "after": listing.get("after")})
+        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
@@ -331,7 +333,7 @@ def get_posts(subreddit):
     if after:
         params["after"] = after
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        resp = SESSION.get(url, params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "Subreddit not found"}), 404
         if resp.status_code == 403:
@@ -340,7 +342,7 @@ def get_posts(subreddit):
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
-        return jsonify({"posts": posts, "after": listing.get("after")})
+        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
@@ -350,9 +352,9 @@ def get_posts(subreddit):
 @app.route("/api/r/<subreddit>/about")
 def get_about(subreddit):
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/r/{subreddit}/about.json",
-            headers=HEADERS, params={"raw_json": 1}, timeout=10)
+            params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": "Not found"}), resp.status_code
         d      = resp.json()["data"]
@@ -373,9 +375,9 @@ def get_about(subreddit):
 @app.route("/api/r/<subreddit>/rules")
 def get_rules(subreddit):
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/r/{subreddit}/about/rules.json",
-            headers=HEADERS, params={"raw_json": 1}, timeout=10)
+            params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
             return jsonify({"rules": []})
         rules = resp.json().get("rules", [])
@@ -394,8 +396,8 @@ def search_communities():
         params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "sr"}
         if after:
             params["after"] = after
-        resp = requests.get("https://www.reddit.com/search.json",
-                            headers=HEADERS, params=params, timeout=10)
+        resp = SESSION.get("https://www.reddit.com/search.json",
+                           params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"communities": [], "after": None})
         listing = resp.json()["data"]
@@ -428,8 +430,8 @@ def search_users():
         params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "user"}
         if after:
             params["after"] = after
-        resp = requests.get("https://www.reddit.com/search.json",
-                            headers=HEADERS, params=params, timeout=10)
+        resp = SESSION.get("https://www.reddit.com/search.json",
+                           params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"users": [], "after": None})
         listing = resp.json()["data"]
@@ -458,9 +460,9 @@ def get_duplicates(subreddit, post_id):
         params = {"raw_json": 1, "limit": 25}
         if after:
             params["after"] = after
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://old.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
-            headers=HEADERS, params=params, timeout=10)
+            params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         data = resp.json()
@@ -470,7 +472,7 @@ def get_duplicates(subreddit, post_id):
             post["selftext"] = orig_children[0]["data"].get("selftext", "")
         listing = data[1]["data"]
         posts = extract_posts(listing)
-        return jsonify({"post": post, "posts": posts, "after": listing.get("after")})
+        return cached_json({"post": post, "posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -488,9 +490,9 @@ def get_comments(subreddit, post_id):
         if comment_id:
             params["comment"] = comment_id
             params["context"] = 8
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-            headers=HEADERS, params=params, timeout=12)
+            params=params, timeout=12)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         data     = resp.json()
@@ -528,7 +530,7 @@ def get_comments(subreddit, post_id):
             }
 
         comments = [parse_comment(c) for c in data[1]["data"]["children"]]
-        return jsonify({"post": post, "comments": [c for c in comments if c]})
+        return cached_json({"post": post, "comments": [c for c in comments if c]}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -538,9 +540,9 @@ def get_comments(subreddit, post_id):
 @app.route("/api/user/<username>/about")
 def get_user_about(username):
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/user/{username}/about.json",
-            headers=HEADERS, params={"raw_json": 1}, timeout=10)
+            params={"raw_json": 1}, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "User not found"}), 404
         if resp.status_code != 200:
@@ -570,16 +572,16 @@ def get_user_posts_api(username):
     if after:
         params["after"] = after
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/user/{username}/submitted.json",
-            headers=HEADERS, params=params, timeout=10)
+            params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
-        return jsonify({"posts": posts, "after": listing.get("after")})
+        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -595,9 +597,9 @@ def get_user_comments_api(username):
     if after:
         params["after"] = after
     try:
-        resp = requests.get(
+        resp = SESSION.get(
             f"https://www.reddit.com/user/{username}/comments.json",
-            headers=HEADERS, params=params, timeout=10)
+            params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
@@ -619,7 +621,7 @@ def get_user_comments_api(username):
                 "link_permalink": f"https://www.reddit.com{d.get('link_permalink', '')}",
                 "link_id":        d.get("link_id", "").replace("t3_", ""),
             })
-        return jsonify({"comments": comments, "after": listing.get("after")})
+        return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

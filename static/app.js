@@ -110,7 +110,8 @@ function initVideos(container) {
 }
 
 async function initRedgifs(container) {
-  for (const wrap of container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')) {
+  const wraps = [...container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')];
+  await Promise.all(wraps.map(async wrap => {
     wrap.dataset.rgInit = '1';
     const id = wrap.dataset.rgid;
     try {
@@ -122,7 +123,7 @@ async function initRedgifs(container) {
     } catch {
       wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
     }
-  }
+  }));
 }
 
 // Returns true if a hex color is dark enough to use as a background in our dark theme.
@@ -980,6 +981,8 @@ const sidebarInner = document.getElementById('sidebar-inner');
 let sidebarOpen    = false;
 let sidebarSub     = '';
 let sidebarLoaded  = false;
+const _sidebarCache = new Map();
+const SIDEBAR_CACHE_TTL = 5 * 60 * 1000;
 
 function closeSidebar() {
   sidebarOpen = false;
@@ -995,6 +998,12 @@ async function toggleSidebar(sub) {
   sidebarPanel.classList.add('open');
   const btn = document.getElementById('sidebar-toggle-btn');
   if (btn) btn.classList.add('active');
+
+  const cached = _sidebarCache.get(sub);
+  if (cached && Date.now() - cached.ts < SIDEBAR_CACHE_TTL) {
+    sidebarInner.innerHTML = cached.html;
+    return;
+  }
 
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
@@ -1023,6 +1032,7 @@ async function toggleSidebar(sub) {
       </div>`;
     }
     if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No sidebar content.</div>';
+    _sidebarCache.set(sub, { html, ts: Date.now() });
     sidebarInner.innerHTML = html;
   } catch {
     sidebarInner.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">Failed to load sidebar.</div>';
