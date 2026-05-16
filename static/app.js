@@ -403,7 +403,7 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
     let repliesHtml = '';
     if (c.replies?.length) {
       if (depth >= THREAD_MAX_DEPTH) {
-        const href = `/r/${escHtml(sub)}/comments/${escHtml(postId)}/${escHtml(c.id)}`;
+        const href = `/r/${escHtml(sub)}/comments/${escHtml(postId)}/_/${escHtml(c.id)}`;
         repliesHtml = `<div class="comment-replies"><a class="continue-thread" href="javascript:;" data-nav="${href}">Continue thread →</a></div>`;
       } else {
         repliesHtml = `<div class="comment-replies">${renderCommentTree(c.replies, depth+1, sub, postId, postAuthor)}</div>`;
