@@ -137,6 +137,16 @@ def process_post(p):
             gif_url      = GIFV_RE.sub(".mp4", post_url)
             gif_is_video = True
 
+    # Poll data
+    poll = None
+    if p.get("poll_data"):
+        pd = p["poll_data"]
+        poll = {
+            "options":      [{"id": o.get("id", ""), "text": o.get("text", ""), "vote_count": o.get("vote_count")} for o in pd.get("options", [])],
+            "total_votes":  pd.get("total_vote_count", 0),
+            "closed":       pd.get("voting_end_timestamp", 0) < int(time.time() * 1000),
+        }
+
     crosspost_from = None
     if p.get("crosspost_parent_list"):
         orig = p["crosspost_parent_list"][0]
@@ -181,6 +191,7 @@ def process_post(p):
         "flair_bg":       p.get("link_flair_background_color") or "",
         "flair_tc":       p.get("link_flair_text_color") or "dark",
         "domain":         p.get("domain", ""),
+        "poll":           poll,
         "crosspost_from": crosspost_from,
         "is_stickied":    p.get("stickied", False),
         "is_oc":          p.get("is_original_content", False),

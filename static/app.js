@@ -247,9 +247,37 @@ document.addEventListener('touchend', e => {
 }, { passive: true });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// POLL RENDERING
+// ═══════════════════════════════════════════════════════════════════════════
+function renderPoll(poll) {
+  if (!poll?.options?.length) return '';
+  const total = poll.total_votes || 0;
+  const status = poll.closed ? 'Poll closed' : 'Poll open';
+  const optionsHtml = poll.options.map(opt => {
+    const count = opt.vote_count ?? null;
+    const pct = (count !== null && total > 0) ? Math.round(count / total * 100) : null;
+    const barHtml = pct !== null
+      ? `<div class="poll-bar"><div class="poll-bar-fill" style="width:${pct}%"></div></div><span class="poll-pct">${pct}%</span>`
+      : `<div class="poll-bar poll-bar-hidden"></div>`;
+    return `<div class="poll-option">
+      <span class="poll-option-text">${escHtml(opt.text)}</span>
+      ${barHtml}
+    </div>`;
+  }).join('');
+  return `<div class="poll-widget">
+    <div class="poll-options">${optionsHtml}</div>
+    <div class="poll-meta">
+      <span class="poll-status${poll.closed ? ' poll-closed' : ' poll-open'}">${status}</span>
+      <span class="poll-total">${fmtNum(total)} vote${total !== 1 ? 's' : ''}</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MEDIA RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 function mediaHtmlCard(p) {
+  if (p.poll) return renderPoll(p.poll);
   if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
@@ -268,6 +296,7 @@ function mediaHtmlCard(p) {
 }
 
 function mediaHtmlFull(p) {
+  if (p.poll) return renderPoll(p.poll);
   if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
@@ -1193,7 +1222,7 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
       await loadSubreddit(route.sub, route.sort, route.time || 'all');
       break;
     case 'post':
-      if (currentSub !== route.sub) await loadSubreddit(route.sub, currentSort);
+      if (!feed.querySelector('.post')) await loadSubreddit(route.sub, currentSort);
       await loadPostView(route.sub, route.postId, route.commentId||'');
       break;
     case 'user':
@@ -1222,8 +1251,11 @@ window.addEventListener('popstate', (e) => {
   const savedScroll = e.state?.scrollY || 0;
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
-  // Going back to the sub already in the feed with same sort/time — just restore scroll, skip reload
-  if (route.type === 'sub' && route.sub === currentSub && route.sort === currentSort && (route.time||'all') === currentTime && !searchMode && !profileMode) {
+  // Going back to a sub — if the feed already has posts for this sub, just restore scroll
+  const hasFeedPosts = !!feed.querySelector('.post');
+  if (route.type === 'sub' && hasFeedPosts && route.sub === currentSub && !searchMode && !profileMode && !duplicatesMode) {
+    currentSort = route.sort;
+    currentTime = route.time || 'all';
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -1430,6 +1462,29 @@ function interceptNavLink(a, e) {
     return true;
   } catch { return false; }
 }
+
+// Long-press on a post card → open in new tab (mobile)
+let _longPressTimer = null;
+let _longPressTriggered = false;
+document.addEventListener('touchstart', e => {
+  _longPressTriggered = false;
+  const post = e.target.closest('#feed .post, #feed .post-compact');
+  if (!post || e.target.closest('a, button, video, iframe, input')) return;
+  const titleLink = post.querySelector('a[data-nav]');
+  if (!titleLink) return;
+  _longPressTimer = setTimeout(() => {
+    _longPressTimer = null;
+    _longPressTriggered = true;
+    if (navigator.vibrate) navigator.vibrate(40);
+    window.open(titleLink.dataset.nav, '_blank');
+  }, 550);
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+}, { passive: true });
 
 // iOS PWA fix: intercept in-app links on touchend, BEFORE the browser can open a
 // new standalone window. touchend fires before click, and preventDefault here
