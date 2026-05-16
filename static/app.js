@@ -1396,11 +1396,17 @@ function handleSearchInput(e) {
     navigate(url);
   }
 }
-document.getElementById('search-btn').addEventListener('click', handleSearchInput);
+function hideAllAutocomplete() {
+  document.querySelectorAll('.autocomplete-dropdown').forEach(el => {
+    el.classList.remove('open');
+    el.innerHTML = '';
+  });
+}
+document.getElementById('search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('subreddit-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') handleSearchInput();
 });
-document.getElementById('pv-search-btn').addEventListener('click', handleSearchInput);
+document.getElementById('pv-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') handleSearchInput(e);
 });
@@ -1612,12 +1618,14 @@ function setupAutocomplete(inputEl, dropdownEl) {
       acIdx = Math.max(acIdx - 1, -1);
       items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
       inputEl.value = acIdx >= 0 ? items[acIdx].dataset.sub : preAcVal;
-    } else if (e.key === 'Enter' && acIdx >= 0) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const sub = items[acIdx]?.dataset.sub;
+    } else if (e.key === 'Enter') {
       hide();
-      if (sub) navigate(`/r/${sub}`);
+      if (acIdx >= 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const sub = items[acIdx]?.dataset.sub;
+        if (sub) navigate(`/r/${sub}`);
+      }
     } else if (e.key === 'Escape') {
       e.stopImmediatePropagation();
       hide();
