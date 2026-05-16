@@ -619,7 +619,7 @@ const SEARCH_SORT_BTN_HTML = `
 const feed        = document.getElementById('feed');
 const sortBar     = document.getElementById('sort-bar');
 const ctxInfo     = document.getElementById('ctx-info');
-const loadMoreBtn = document.getElementById('load-more-btn');
+const sentinel    = document.getElementById('scroll-sentinel');
 const subInput    = document.getElementById('subreddit-input');
 const pvSubInput  = document.getElementById('pv-subreddit-input');
 
@@ -651,7 +651,7 @@ function showSkeletons() {
       <div class="skel skel-banner"></div>
       <div class="skel skel-footer"></div>
     </div>`).join('');
-  loadMoreBtn.style.display = 'none';
+  sentinel.classList.remove('active', 'loading');
 }
 
 function errState(msg, retryTarget) {
@@ -702,7 +702,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
   const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
-  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  else sentinel.classList.add('loading');
   try {
     const res  = await fetchPosts(sub, sort, time, after);
     const data = await res.json();
@@ -722,8 +722,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
     initVideos(feed);
     initRedgifs(feed);
     afterToken = data.after;
-    loadMoreBtn.style.display = afterToken ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
@@ -768,7 +767,7 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
   const myGen = feedGen;
   loading = true;
   if (!append) { showSkeletons(); profileAfter = null; }
-  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  else sentinel.classList.add('loading');
   try {
     const endpoint = tab==='posts' ? 'posts' : 'comments';
     let url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
@@ -796,8 +795,7 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
       feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
     }
     profileAfter = data.after;
-    loadMoreBtn.style.display = profileAfter ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
@@ -839,7 +837,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
   const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
-  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  else sentinel.classList.add('loading');
   try {
     let url = `/api/search?q=${encodeURIComponent(query)}&sort=${sort}&t=${time}`;
     if (searchSub)  url += `&sub=${encodeURIComponent(searchSub)}`;
@@ -862,8 +860,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     initVideos(feed);
     initRedgifs(feed);
     searchAfter = data.after;
-    loadMoreBtn.style.display = searchAfter ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === feedGen) loading = false; }
 }
@@ -952,7 +949,7 @@ async function loadDuplicatesPage(sub, postId, after=null, append=false) {
     subInput.value = '';
     pvSubInput.value = '';
   } else {
-    loadMoreBtn.textContent = 'Loading…'; loadMoreBtn.disabled = true;
+    sentinel.classList.add('loading');
   }
   try {
     let url = `/api/r/${encodeURIComponent(sub)}/duplicates/${encodeURIComponent(postId)}`;
@@ -985,7 +982,6 @@ async function loadDuplicatesPage(sub, postId, after=null, append=false) {
       </div>`;
       if (!data.posts.length) {
         feed.insertAdjacentHTML('beforeend', '<div class="state"><div class="state-icon">∅</div><div class="state-title">No duplicates found</div></div>');
-        loadMoreBtn.style.display = 'none';
         return;
       }
     }
@@ -994,8 +990,7 @@ async function loadDuplicatesPage(sub, postId, after=null, append=false) {
     initVideos(feed);
     initRedgifs(feed);
     duplicatesAfter = data.after;
-    loadMoreBtn.style.display = duplicatesAfter ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch {
     if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed');
   } finally {
@@ -1116,7 +1111,7 @@ async function loadCommunityResults(query, after=null, append=false) {
   const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
-  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  else sentinel.classList.add('loading');
   try {
     let url = `/api/search/communities?q=${encodeURIComponent(query)}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
@@ -1126,13 +1121,12 @@ async function loadCommunityResults(query, after=null, append=false) {
     if (!append) feed.innerHTML = '';
     if (!data.communities?.length && !append) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No communities found</div></div>';
-      loadMoreBtn.style.display = 'none'; return;
+      return;
     }
     const startIdx = append ? feed.children.length : 0;
     feed.insertAdjacentHTML('beforeend', data.communities.map((c,i)=>renderCommunityCard(c,startIdx+i)).join(''));
     communityAfter = data.after;
-    loadMoreBtn.style.display = communityAfter ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch { if (!append && myGen===feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen===feedGen) loading = false; }
 }
@@ -1143,7 +1137,7 @@ async function loadUserResults(query, after=null, append=false) {
   const myGen = feedGen;
   loading = true;
   if (!append) showSkeletons();
-  else { loadMoreBtn.textContent='Loading…'; loadMoreBtn.disabled=true; }
+  else sentinel.classList.add('loading');
   try {
     let url = `/api/search/users?q=${encodeURIComponent(query)}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
@@ -1153,13 +1147,12 @@ async function loadUserResults(query, after=null, append=false) {
     if (!append) feed.innerHTML = '';
     if (!data.users?.length && !append) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No users found</div></div>';
-      loadMoreBtn.style.display = 'none'; return;
+      return;
     }
     const startIdx = append ? feed.children.length : 0;
     feed.insertAdjacentHTML('beforeend', data.users.map((u,i)=>renderUserCard(u,startIdx+i)).join(''));
     userAfter = data.after;
-    loadMoreBtn.style.display = userAfter ? 'inline-block' : 'none';
-    loadMoreBtn.textContent = 'Load more'; loadMoreBtn.disabled = false;
+    sentinel.classList.remove('loading');
   } catch { if (!append && myGen===feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen===feedGen) loading = false; }
 }
@@ -1412,19 +1405,24 @@ document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
 });
 
 // Load more
-loadMoreBtn.addEventListener('click', () => {
+function loadMore() {
+  if (loading) return;
   if (duplicatesMode) {
-    loadDuplicatesPage(duplicatesSub, duplicatesPostId, duplicatesAfter, true);
+    if (duplicatesAfter) loadDuplicatesPage(duplicatesSub, duplicatesPostId, duplicatesAfter, true);
   } else if (searchMode) {
-    if (searchType === 'communities') loadCommunityResults(searchQuery, communityAfter, true);
-    else if (searchType === 'users')  loadUserResults(searchQuery, userAfter, true);
-    else loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
+    if (searchType === 'communities' && communityAfter) loadCommunityResults(searchQuery, communityAfter, true);
+    else if (searchType === 'users' && userAfter)       loadUserResults(searchQuery, userAfter, true);
+    else if (searchAfter)                               loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
   } else if (profileMode) {
-    loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
+    if (profileAfter) loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
   } else {
-    loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
+    if (afterToken) loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
   }
-});
+}
+
+new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) loadMore();
+}, { rootMargin: '300px' }).observe(sentinel);
 
 // Flair click → filter by flair in subreddit
 // Community/User card clicks
