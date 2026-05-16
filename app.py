@@ -450,6 +450,21 @@ def search_users():
         return jsonify({"users": [], "after": None})
 
 
+@app.route("/api/r/<subreddit>/duplicates/<post_id>")
+def get_duplicates(subreddit, post_id):
+    try:
+        resp = requests.get(
+            f"https://www.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
+            headers=HEADERS, params={"raw_json": 1, "limit": 25}, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()[1]["data"]
+        posts = extract_posts(listing)
+        return jsonify({"posts": posts, "after": listing.get("after")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
 @app.route("/api/r/<subreddit>/comments/<post_id>")

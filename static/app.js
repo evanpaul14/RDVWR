@@ -254,7 +254,7 @@ function mediaHtmlCard(p) {
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   if (p.gif_url) return p.gif_is_video
-    ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" autoplay loop muted playsinline></video></div>`
+    ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
     : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
 
   if (p.gallery?.length > 1) return renderGallery(p.gallery);
@@ -272,7 +272,7 @@ function mediaHtmlFull(p) {
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   if (p.gif_url) return p.gif_is_video
-    ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" autoplay loop muted playsinline></video></div>`
+    ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
     : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
   if (p.gallery?.length) return renderGallery(p.gallery);
   if (p.preview_img && !p.is_self) return `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
@@ -437,6 +437,8 @@ function findComment(comments, id) {
 
 let currentCommentSort = 'confidence';
 let _pvSub = '', _pvPostId = '', _pvCommentId = '';
+let pvDupesMode = false;
+let _pvData = null;
 
 const COMMENT_SORTS = [
   {value:'confidence',    label:'Best'},
@@ -482,8 +484,40 @@ async function changeCommentSort(sort) {
   }
 }
 
+async function loadDuplicates() {
+  pvDupesMode = true;
+  const area = pvContent.querySelector('.pv-comments-area');
+  const btn  = pvContent.querySelector('.pv-dupes-btn');
+  if (btn) btn.classList.add('active');
+  if (!area) return;
+  area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
+  try {
+    const res  = await fetch(`/api/r/${encodeURIComponent(_pvSub)}/duplicates/${encodeURIComponent(_pvPostId)}`);
+    const data = await res.json();
+    if (!res.ok) { area.innerHTML = errState(escHtml(data.error || 'Failed to load'), 'dupes'); return; }
+    if (!data.posts.length) {
+      area.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No duplicates found</div></div>';
+      return;
+    }
+    area.innerHTML = `<div class="pv-dupes-list">${data.posts.map((p, i) => renderPost(p, i, true)).join('')}</div>`;
+    initVideos(area);
+    initRedgifs(area);
+  } catch {
+    area.innerHTML = errState('Network error', 'dupes');
+  }
+}
+
+function exitDupesMode() {
+  pvDupesMode = false;
+  const btn = pvContent.querySelector('.pv-dupes-btn');
+  if (btn) btn.classList.remove('active');
+  const area = pvContent.querySelector('.pv-comments-area');
+  if (area && _pvData) area.innerHTML = buildCommentsHtml(_pvData, _pvCommentId);
+}
+
 async function loadPostView(sub, postId, commentId='') {
   _pvSub = sub; _pvPostId = postId; _pvCommentId = commentId;
+  pvDupesMode = false; _pvData = null;
   currentCommentSort = 'confidence';
   pvContent.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   pvScroll.scrollTop = 0;
@@ -498,6 +532,7 @@ async function loadPostView(sub, postId, commentId='') {
     const data = await res.json();
     if (!res.ok) { pvContent.innerHTML = errState(escHtml(data.error||'Failed to load'), 'post'); return; }
 
+    _pvData = data;
     const p = data.post;
     pvOpen.href = p.permalink;
     pvBreadcrumb.innerHTML = `<a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
@@ -528,6 +563,7 @@ async function loadPostView(sub, postId, commentId='') {
         <span>${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
+        <button class="meta-item link pv-dupes-btn">dupes</button>
       </div>
       ${mediaHtmlFull(p)}
       ${bodyHtml}
@@ -552,11 +588,14 @@ pvContent.addEventListener('click', e => {
   if (retryBtn) {
     const t = retryBtn.dataset.retry;
     if (t === 'post') loadPostView(_pvSub, _pvPostId, _pvCommentId);
+    else if (t === 'dupes') loadDuplicates();
     else if (t === 'comments') changeCommentSort(currentCommentSort);
     return;
   }
+  const dupesBtn = e.target.closest('.pv-dupes-btn');
+  if (dupesBtn) { e.preventDefault(); pvDupesMode ? exitDupesMode() : loadDuplicates(); return; }
   const csort = e.target.closest('[data-csort]');
-  if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
+  if (csort) { e.preventDefault(); if (pvDupesMode) exitDupesMode(); changeCommentSort(csort.dataset.csort); return; }
   const btn = e.target.closest('[data-user]');
   if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
@@ -1260,7 +1299,7 @@ function handleSearchInput(e) {
     const sub = val.slice(2).replace(/^\//, '');
     if (sub) navigate(`/r/${sub}/top`);
   } else {
-    const sub = (!searchMode && currentSub) ? currentSub : '';
+    const sub = searchMode ? searchSub : (currentSub || '');
     let url = `/search?q=${encodeURIComponent(val)}`;
     if (sub) url += `&sub=${encodeURIComponent(sub)}`;
     navigate(url);
