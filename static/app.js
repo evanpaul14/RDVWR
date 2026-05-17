@@ -656,8 +656,10 @@ function buildSubSortHtml(sort='top', time='all', sub='') {
   const btns = ['hot','new','top','rising','controversial'].map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
-  const sidebarBtn = sub.toLowerCase() === 'popular' ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
-  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
+  const isPop = sub.toLowerCase() === 'popular';
+  const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
+  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="javascript:;" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
+  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
 function buildProfileSortHtml(tab='posts', sort='new', time='all') {
   const tabBtns = `<button class="sort-btn${tab==='posts'?' active':''}" data-ptab="posts">Posts</button><button class="sort-btn${tab==='comments'?' active':''}" data-ptab="comments">Comments</button>`;
@@ -992,6 +994,7 @@ let duplicatesMode = false;
 let duplicatesSub  = '';
 let duplicatesPostId = '';
 let duplicatesAfter  = null;
+let wikiMode = false;
 
 async function loadDuplicatesPage(sub, postId, after=null, append=false) {
   if (append && loading) return;
@@ -1064,6 +1067,7 @@ let _wikiSub = '', _wikiPage = '';
 
 async function loadWikiPage(sub, page) {
   _wikiSub = sub; _wikiPage = page;
+  wikiMode = true; afterToken = null;
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   sortBar.innerHTML = `<a class="sort-btn" href="javascript:;" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
   document.title = `${page} — ${sub} wiki — RDVWR`;
@@ -1297,6 +1301,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
     searchType = 'posts';
   }
   if (route.type !== 'duplicates') duplicatesMode = false;
+  if (route.type !== 'wiki') wikiMode = false;
   switch (route.type) {
     case 'home':
       navigate('/r/popular/hot', { replace: true });
@@ -1507,7 +1512,7 @@ document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
 
 // Load more
 function loadMore() {
-  if (loading) return;
+  if (loading || wikiMode) return;
   if (duplicatesMode) {
     if (duplicatesAfter) loadDuplicatesPage(duplicatesSub, duplicatesPostId, duplicatesAfter, true);
   } else if (searchMode) {
