@@ -359,8 +359,12 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .gallery-counter { font-family:var(--mono); font-size:11px; color:rgba(255,255,255,.8); }
 .gallery-thumbs {
   display:flex; gap:4px; padding:6px; overflow-x:auto;
-  scrollbar-width:thin; background:var(--bg3);
+  scrollbar-width:thin; scrollbar-color:var(--b2) transparent; background:var(--bg3);
 }
+.gallery-thumbs::-webkit-scrollbar { height:5px; }
+.gallery-thumbs::-webkit-scrollbar-track { background:transparent; }
+.gallery-thumbs::-webkit-scrollbar-thumb { background:var(--b2); border-radius:3px; }
+.gallery-thumbs::-webkit-scrollbar-thumb:hover { background:#3a3a3a; }
 .gallery-thumb {
   width:56px; height:42px; object-fit:cover; border-radius:3px; flex-shrink:0;
   cursor:pointer; opacity:.5; border:2px solid transparent; transition:opacity .15s,border-color .15s;
