@@ -22,6 +22,7 @@ TIKTOK_RE           = re.compile(r'tiktok\.com/player/v1/(\d+)', re.I)
 VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 GIFV_RE             = re.compile(r'\.gifv$', re.I)
+IMGUR_ALBUM_RE      = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -134,10 +135,17 @@ def process_post(p):
         if media_url:
             embed_url = media_url
 
+    # Imgur album/gallery
+    imgur_album_id = None
+    if not redgifs_id and not is_video and not youtube_id:
+        m = IMGUR_ALBUM_RE.search(p.get("url", ""))
+        if m:
+            imgur_album_id = m.group(1)
+
     # Direct GIF / GIFV URLs not already captured as video
     gif_url = None
     gif_is_video = False
-    if not is_video and not redgifs_id and not youtube_id and not embed_url:
+    if not is_video and not redgifs_id and not youtube_id and not embed_url and not imgur_album_id:
         post_url  = p.get("url", "")
         lower_url = post_url.lower().split("?")[0]
         if lower_url.endswith(".gif"):
@@ -203,6 +211,7 @@ def process_post(p):
         "redgifs_id":     redgifs_id,
         "gif_url":        gif_url,
         "gif_is_video":   gif_is_video,
+        "imgur_album_id": imgur_album_id,
         "post_hint":      p.get("post_hint", ""),
         "over_18":        p.get("over_18", False),
         "flair":          p.get("link_flair_text") or "",
@@ -574,6 +583,7 @@ def get_comments(subreddit, post_id):
                 "depth":                 d.get("depth", 0),
                 "replies":               replies,
                 "distinguished":         d.get("distinguished"),
+                "stickied":              d.get("stickied", False),
                 "author_flair_text":     d.get("author_flair_text") or "",
                 "author_flair_richtext": d.get("author_flair_richtext") or [],
                 "author_flair_type":     d.get("author_flair_type", "text"),
@@ -631,6 +641,7 @@ def get_morechildren(subreddit, post_id):
                 "depth":                 d.get("depth", 0),
                 "replies":               [],
                 "distinguished":         d.get("distinguished"),
+                "stickied":              d.get("stickied", False),
                 "author_flair_text":     d.get("author_flair_text") or "",
                 "author_flair_richtext": d.get("author_flair_richtext") or [],
                 "author_flair_type":     d.get("author_flair_type", "text"),
