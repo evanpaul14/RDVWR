@@ -1173,7 +1173,7 @@ function parseRoute(path=location.pathname) {
   if (mSub) {
     const sort = SORTS.has(mSub[2]) ? mSub[2] : (mSub[1].toLowerCase() === 'popular' ? 'hot' : 'top');
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
-    const time = new URLSearchParams(qs).get('t') || (sort === 'top' ? 'day' : 'all');
+    const time = new URLSearchParams(qs).get('t') || (sort === 'top' || sort === 'controversial' ? 'day' : 'all');
     return { type:'sub', sub:mSub[1], sort, time };
   }
   const mUser = pathname.match(/^\/u(?:ser)?\/([^\/]+)/);
