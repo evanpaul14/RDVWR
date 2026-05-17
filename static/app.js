@@ -340,39 +340,48 @@ function renderPoll(poll) {
 // ═══════════════════════════════════════════════════════════════════════════
 // MEDIA RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
+function spoilerWrap(html) {
+  return `<div class="spoiler-media-wrap"><div class="spoiler-veil" onclick="this.parentElement.classList.add('revealed')"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
+}
+
 function mediaHtmlCard(p) {
   if (p.poll) return renderPoll(p.poll);
-  if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
-  if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
-  if (p.tiktok_id)  return `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
-  if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
-  if (p.gif_url) return p.gif_is_video
+  let html = '';
+  if (p.is_video) html = `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
+  else if (p.youtube_id) html = `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  else if (p.tiktok_id)  html = `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  else if (p.redgifs_id) html = `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.imgur_album_id) html = `<div class="post-video"><iframe src="https://imgur.com/a/${escHtml(p.imgur_album_id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.embed_url)  html = `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.gif_url) html = p.gif_is_video
     ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
     : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
-
-  if (p.gallery?.length > 1) return renderGallery(p.gallery);
-  const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
-  if (imgSrc) return `<div class="post-media">
-    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">
-  </div>`;
-  if (!p.is_self) return `<div class="post-media link-thumb"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
-  return '';
+  else if (p.gallery?.length > 1) html = renderGallery(p.gallery);
+  else {
+    const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
+    if (imgSrc) html = `<div class="post-media">\n    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">\n  </div>`;
+    else if (!p.is_self) return `<div class="post-media link-thumb"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+  }
+  if (!html) return '';
+  return p.is_spoiler ? spoilerWrap(html) : html;
 }
 
 function mediaHtmlFull(p) {
   if (p.poll) return renderPoll(p.poll);
-  if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
-  if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
-  if (p.tiktok_id)  return `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
-  if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
-  if (p.gif_url) return p.gif_is_video
+  let html = '';
+  if (p.is_video) html = `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
+  else if (p.youtube_id) html = `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  else if (p.tiktok_id)  html = `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  else if (p.redgifs_id) html = `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.imgur_album_id) html = `<div class="pv-media"><iframe src="https://imgur.com/a/${escHtml(p.imgur_album_id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.embed_url)  html = `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.gif_url) html = p.gif_is_video
     ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
     : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
-  if (p.gallery?.length) return renderGallery(p.gallery);
-  if (p.preview_img && !p.is_self) return `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
-  return '';
+  else if (p.gallery?.length) html = renderGallery(p.gallery);
+  else if (p.preview_img && !p.is_self) html = `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
+  if (!html) return '';
+  return p.is_spoiler ? spoilerWrap(html) : html;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -419,7 +428,7 @@ function renderPost(p, idx, showSub=false) {
 
   // Compact layout for link posts (no rich embedded media)
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
-  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
+  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
     const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
     const thumbContent = imgSrc
@@ -471,10 +480,12 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
 
     const isDeleted = !c.body || c.body==='[deleted]' || c.body==='[removed]';
     const isAutoMod = c.author === 'AutoModerator';
+    const isStickied = c.stickied;
     const startCollapsed = isAutoMod;
     const isOP    = postAuthor && !isDeleted && c.author === postAuthor;
     const isMod   = c.distinguished === 'moderator';
     const isAdmin = c.distinguished === 'admin';
+    const permalinkHref = `/r/${escHtml(sub)}/comments/${escHtml(postId)}/_/${escHtml(c.id)}`;
 
     let repliesHtml = '';
     if (c.replies?.length) {
@@ -486,16 +497,17 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
       }
     }
 
-    return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}" data-depth="${depth}">
+    return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
         <span class="comment-author${isMod?' is-mod':''}" data-user="${escHtml(c.author)}">${escHtml(c.author)}</span>
-        ${isMod   ? '<span class="comment-mod">MOD</span>'   : ''}
-        ${isAdmin ? '<span class="comment-admin">ADMIN</span>' : ''}
-        ${isOP    ? '<span class="comment-op">OP</span>'     : ''}
+        ${isMod      ? '<span class="comment-mod">MOD</span>'        : ''}
+        ${isAdmin    ? '<span class="comment-admin">ADMIN</span>'    : ''}
+        ${isOP       ? '<span class="comment-op">OP</span>'         : ''}
+        ${isStickied ? '<span class="badge badge-sticky">📌 stickied</span>' : ''}
         ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
-        <span class="comment-time">${timeAgo(c.created_utc)}${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}</span>
+        <a class="comment-time" href="javascript:;" data-nav="${permalinkHref}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
         ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
