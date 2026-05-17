@@ -566,6 +566,13 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 ::-webkit-scrollbar-thumb:hover { background:#3a3a3a; }
 
 /* ── Cross-post banner ───────────────────────────────────────────────────── */
+.xlate-bar {
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em;
+  margin-bottom:12px;
+}
+.xlate-label { opacity:.7; }
+.xlate-btn { font-family:var(--mono); font-size:10px; letter-spacing:.03em; padding:0; }
 .crosspost-banner {
   font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em;
   margin-bottom:8px; display:flex; align-items:center; gap:4px;

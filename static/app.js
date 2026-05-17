@@ -57,6 +57,60 @@ function linkifyReddit(text) {
     .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\/\w])u\/([A-Za-z0-9_-]+)/g,
       (m, skip, user) => skip ? skip : `[u/${user}](/user/${user})`);
 }
+const _xlateCache = new Map();
+async function xlateText(text) {
+  if (!text?.trim()) return null;
+  const key = text.trim().slice(0, 1000);
+  if (_xlateCache.has(key)) return _xlateCache.get(key);
+  const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(key)}&langpair=autodetect|en`);
+  const d = await r.json();
+  const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
+  const result = { detected, translated: d.responseData?.translatedText || '' };
+  _xlateCache.set(key, result);
+  return result;
+}
+
+async function translatePost(p) {
+  const titleEl = pvContent.querySelector('.pv-title');
+  if (!titleEl) return;
+  const titleRes = await xlateText(p.title);
+  if (!titleRes || !titleRes.detected || titleRes.detected.toLowerCase().startsWith('en')) return;
+  if (!titleRes.translated || titleRes.translated === p.title) return;
+
+  const origTitle = p.title;
+  const origBody  = p.selftext || '';
+
+  titleEl.textContent = titleRes.translated;
+
+  const bodyEl = pvContent.querySelector('.pv-body');
+  let bodyRes = null;
+  if (bodyEl && origBody.trim()) {
+    bodyRes = await xlateText(origBody);
+    if (bodyRes?.translated && bodyRes.translated !== origBody)
+      bodyEl.innerHTML = renderMd(bodyRes.translated);
+  }
+
+  const bar = document.createElement('div');
+  bar.className = 'xlate-bar';
+  bar.innerHTML = `<span class="xlate-label">Translated from ${titleRes.detected}</span><button class="xlate-btn link">View original</button>`;
+  titleEl.after(bar);
+
+  let showingTranslation = true;
+  bar.querySelector('.xlate-btn').addEventListener('click', () => {
+    showingTranslation = !showingTranslation;
+    if (showingTranslation) {
+      titleEl.textContent = titleRes.translated;
+      if (bodyEl && bodyRes?.translated && bodyRes.translated !== origBody)
+        bodyEl.innerHTML = renderMd(bodyRes.translated);
+      bar.querySelector('.xlate-btn').textContent = 'View original';
+    } else {
+      titleEl.textContent = origTitle;
+      if (bodyEl) bodyEl.innerHTML = renderMd(origBody);
+      bar.querySelector('.xlate-btn').textContent = 'View translated';
+    }
+  });
+}
+
 function renderMd(text) {
   if (!text) return '';
   const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
@@ -574,6 +628,7 @@ async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
     initVideos(pvContent);
     initRedgifs(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
+    translatePost(p).catch(() => {});
   } catch(err) {
     pvContent.innerHTML = errState('Network error', 'post');
   }
