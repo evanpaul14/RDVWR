@@ -486,7 +486,7 @@ function buildCommentSortBar(active) {
 
 function buildCommentsHtml(data, commentId) {
   const p = data.post;
-  const threadBanner = commentId ? `<div class="thread-banner"><a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}">← View full thread</a></div>` : '';
+  const threadBanner = commentId ? `<div class="thread-banner"><a href="javascript:;" data-back="true">← View full thread</a></div>` : '';
   let rootComments = data.comments;
   if (commentId) {
     const target = findComment(data.comments, commentId);
@@ -1444,6 +1444,7 @@ document.getElementById('logo-btn').addEventListener('click', () => navigate('/'
 
 // Shared link-intercept logic — returns true if it handled the navigation.
 function interceptNavLink(a, e) {
+  if (a.getAttribute('data-back')) { e.preventDefault(); history.back(); return true; }
   // data-nav="/path" means it's a guaranteed in-app link; href is "javascript:;"
   const datanav = a.getAttribute('data-nav');
   if (datanav) { e.preventDefault(); navigateOrOpen(datanav, e); return true; }
