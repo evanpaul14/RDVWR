@@ -1086,8 +1086,15 @@ async function loadWikiPage(sub, page) {
           <span class="wiki-title">wiki/${escHtml(page)}</span>
         </div>
         ${revHtml}
-        <div class="wiki-body md">${DOMPurify.sanitize(data.content_html || '')}</div>
+        <div class="wiki-body md">${DOMPurify.sanitize(data.content_html || '', { ADD_ATTR: ['id', 'name'], FORBID_ATTR: ['style'] })}</div>
       </div>`;
+    feed.addEventListener('click', e => {
+      const a = e.target.closest('a[href^="#"]');
+      if (!a) return;
+      const id = a.getAttribute('href').slice(1);
+      const target = feed.querySelector(`#${CSS.escape(id)}`);
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    }, { once: true });
   } catch {
     feed.innerHTML = errState('Network error', 'wiki');
   }
