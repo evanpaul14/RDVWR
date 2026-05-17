@@ -62,10 +62,10 @@ async function xlateText(text) {
   if (!text?.trim()) return null;
   const key = text.trim().slice(0, 1000);
   if (_xlateCache.has(key)) return _xlateCache.get(key);
-  const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(key)}`);
+  const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(key)}&langpair=autodetect|en`);
   const d = await r.json();
-  const detected = d[2] || '';
-  const result = { detected, translated: (d[0] || []).map(s => s[0]).join('') };
+  const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
+  const result = { detected, translated: d.responseData?.translatedText || '' };
   _xlateCache.set(key, result);
   return result;
 }
