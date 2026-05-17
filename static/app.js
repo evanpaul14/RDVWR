@@ -92,7 +92,7 @@ async function translatePost(p) {
 
   const bar = document.createElement('div');
   bar.className = 'xlate-bar';
-  bar.innerHTML = `<span class="xlate-label">Translated from ${titleRes.detected}</span><button class="xlate-btn link">View original</button>`;
+  bar.innerHTML = `<span class="xlate-label">Translated from ${titleRes.detected}</span><button class="xlate-btn">View original</button>`;
   titleEl.after(bar);
 
   let showingTranslation = true;
