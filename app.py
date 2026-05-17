@@ -786,7 +786,7 @@ def get_multireddit(username, multiname):
         params["after"] = after
     try:
         meta = SESSION.get(
-            f"https://oauth.reddit.com/api/multi/user/{username}/m/{multiname}.json",
+            f"https://www.reddit.com/api/multi/user/{username}/m/{multiname}.json",
             params={"raw_json": 1}, timeout=10)
         if meta.status_code == 404:
             return jsonify({"error": "Multireddit not found"}), 404
