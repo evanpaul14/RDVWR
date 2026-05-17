@@ -1,3 +1,4 @@
+import os
 import re
 import html as html_lib
 import time
@@ -23,6 +24,8 @@ VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 GIFV_RE             = re.compile(r'\.gifv$', re.I)
 IMGUR_ALBUM_RE      = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
+IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
+IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -290,6 +293,39 @@ def proxy_redgifs_media(filename):
                         status=upstream.status_code, headers=resp_headers)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
+
+
+# ── Imgur album proxy ────────────────────────────────────────────────────────
+
+@app.route("/api/imgur/album/<album_id>")
+def get_imgur_album(album_id):
+    if not IMGUR_ALBUM_ID_RE.match(album_id):
+        return jsonify({"error": "Invalid album ID"}), 400
+    if not IMGUR_CLIENT_ID:
+        return jsonify({"error": "no_client_id"}), 503
+    try:
+        resp = SESSION.get(
+            f"https://api.imgur.com/3/album/{album_id}/images",
+            headers={"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"},
+            timeout=10)
+        if resp.status_code == 404:
+            return jsonify({"error": "Album not found"}), 404
+        if resp.status_code != 200:
+            return jsonify({"error": f"Imgur returned {resp.status_code}"}), resp.status_code
+        images = []
+        for img in resp.json().get("data", []):
+            url = img.get("link", "")
+            if not url:
+                continue
+            images.append({
+                "url":         url,
+                "width":       img.get("width", 0),
+                "height":      img.get("height", 0),
+                "description": img.get("description") or "",
+            })
+        return cached_json({"images": images}, CACHE_TTL_SUBREDDIT)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Subreddit autocomplete ────────────────────────────────────────────────────
