@@ -17,7 +17,7 @@ Opens at `http://localhost:8002`.
 - Post view with nested comment threads
 - User profiles (posts + comments)
 - Subreddit and post search
-- Media support: galleries, Reddit video (HLS + audio sync), RedGifs, YouTube, GIFs
+- Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - Dark theme, mobile-friendly
 
 ## Stack
