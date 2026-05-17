@@ -15,20 +15,20 @@
 <body>
 
 <!-- ── Header ── -->
-<div class="header">
+<header class="header">
   <div class="header-inner">
-    <button class="logo" id="logo-btn">RDVWR</button>
+    <button class="logo" id="logo-btn" aria-label="Go home">RDVWR</button>
     <div class="search-container">
       <div class="search-wrap">
-        <span class="search-prefix">r /</span>
-        <input id="subreddit-input" type="text" placeholder="subreddit" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button id="search-btn" title="Load subreddit">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <span class="search-prefix" aria-hidden="true">r /</span>
+        <input id="subreddit-input" type="text" placeholder="subreddit" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Subreddit name" aria-autocomplete="list" aria-expanded="false" aria-controls="autocomplete-dropdown">
+        <button id="search-btn" title="Load subreddit" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M10 10L14 14M11 6A5 5 0 1 1 1 6a5 5 0 0 1 10 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
-      <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+      <div class="autocomplete-dropdown" id="autocomplete-dropdown" role="listbox"></div>
     </div>
   </div>
   <div class="sort-bar" id="sort-bar" style="display:none">
@@ -37,8 +37,9 @@
     <button class="sort-btn active" data-sort="top">Top</button>
     <button class="sort-btn" data-sort="rising">Rising</button>
   </div>
-</div>
+</header>
 
+<main>
 <!-- ── Context info (sub or user) ── -->
 <div class="ctx-info" id="ctx-info">
   <div id="ctx-icon-wrap"></div>
@@ -68,9 +69,10 @@
   </div>
 </div>
 <div id="scroll-sentinel"></div>
+</main>
 
 <!-- ── Full-screen Post View ── -->
-<div class="post-view" id="post-view">
+<div class="post-view" id="post-view" role="dialog" aria-modal="true" aria-label="Post">
   <div class="pv-bar">
     <div class="pv-bar-left">
       <button class="pv-home" id="pv-home">home</button>
@@ -79,14 +81,14 @@
     <div class="search-container pv-search-container">
       <div class="search-wrap pv-search-wrap">
         <span class="search-prefix">r /</span>
-        <input id="pv-subreddit-input" type="text" placeholder="subreddit" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button id="pv-search-btn" title="Load subreddit">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <input id="pv-subreddit-input" type="text" placeholder="subreddit" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Subreddit name" aria-autocomplete="list" aria-expanded="false" aria-controls="pv-autocomplete-dropdown">
+        <button id="pv-search-btn" title="Load subreddit" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M10 10L14 14M11 6A5 5 0 1 1 1 6a5 5 0 0 1 10 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
-      <div class="autocomplete-dropdown" id="pv-autocomplete-dropdown"></div>
+      <div class="autocomplete-dropdown" id="pv-autocomplete-dropdown" role="listbox"></div>
     </div>
     <div class="pv-bar-right">
       <a class="pv-open" id="pv-open" href="#" target="_blank" rel="noopener">↗ reddit</a>
