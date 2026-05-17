@@ -290,7 +290,8 @@ def subreddit_search():
 @app.route("/search")
 @app.route("/r/<subreddit>/duplicates/<post_id>")
 def spa(**kwargs):
-    return render_template("index.html")
+    resp = render_template("index.html")
+    return resp, 200, {'Cache-Control': 'no-store'}
 
 
 # ── Search API ───────────────────────────────────────────────────────────────
