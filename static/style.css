@@ -544,6 +544,20 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   transition:opacity .15s;
 }
 .continue-thread:hover { opacity:1; }
+.more-comments-wrap { padding:6px 0; }
+.load-more-btn {
+  display:inline-block; font-family:var(--mono); font-size:11px; letter-spacing:.03em;
+  color:var(--ac); background:none; border:none; cursor:pointer; padding:4px 0;
+  opacity:.7; transition:opacity .15s;
+}
+.load-more-btn:hover:not(:disabled) { opacity:1; }
+.load-more-btn:disabled { opacity:.4; cursor:default; }
+
+/* ── Awards ─────────────────────────────────────────────────────────────── */
+.awards { display:inline-flex; align-items:center; gap:3px; margin-left:2px; vertical-align:middle; }
+.award-item { display:inline-flex; align-items:center; gap:2px; }
+.award-item img { width:16px; height:16px; object-fit:contain; }
+.award-count { font-family:var(--mono); font-size:9px; color:var(--tx3); letter-spacing:.02em; }
 .thread-banner {
   display:flex; align-items:center; gap:8px;
   padding:8px 12px; margin-bottom:12px;

@@ -209,6 +209,16 @@ function renderFlair(p, clickable=false) {
   return `<span class="flair${cls}"${style}${dataAttr}>${inner}</span>`;
 }
 
+function renderAwards(awards) {
+  if (!awards?.length) return '';
+  return `<span class="awards">${awards.map(a =>
+    `<span class="award-item" title="${escHtml(a.name)}${a.count > 1 ? ' ×'+a.count : ''}">` +
+    `<img src="${escHtml(a.icon)}" alt="${escHtml(a.name)}" loading="lazy" width="16" height="16">` +
+    (a.count > 1 ? `<span class="award-count">${a.count}</span>` : '') +
+    `</span>`
+  ).join('')}</span>`;
+}
+
 function renderAuthorFlair(c) {
   const hasRichtext = c.author_flair_type === 'richtext' && c.author_flair_richtext?.length;
   if (!hasRichtext && !c.author_flair_text) return '';
@@ -394,6 +404,7 @@ function renderPost(p, idx, showSub=false) {
           </div>
           <button class="post-author" data-user="${author}">u/${author}</button>
           <span class="meta-item">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
+          ${renderAwards(p.awards)}
         </div>
         <div class="footer-right">
           ${domainHtml}
@@ -447,6 +458,15 @@ function renderPost(p, idx, showSub=false) {
 const THREAD_MAX_DEPTH = 4;
 function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') {
   return comments.map(c => {
+    if (c.kind === 'more') {
+      if (!c.children?.length) return '';
+      const ids = c.children.slice(0, 100).join(',');
+      const label = c.count > 0 ? `Load ${c.count} more comment${c.count !== 1 ? 's' : ''}` : 'Load more comments';
+      return `<div class="more-comments-wrap" data-depth="${depth}">
+        <button class="load-more-btn" data-sub="${escHtml(sub)}" data-post="${escHtml(postId)}" data-ids="${escHtml(ids)}" data-depth="${depth}">${label}</button>
+      </div>`;
+    }
+
     const isDeleted = !c.body || c.body==='[deleted]' || c.body==='[removed]';
     const isAutoMod = c.author === 'AutoModerator';
     const startCollapsed = isAutoMod;
@@ -474,6 +494,7 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
         ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
         <span class="comment-time">${timeAgo(c.created_utc)}${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}</span>
+        ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
       ${repliesHtml}
@@ -521,7 +542,7 @@ function findComment(comments, id) {
 
 let currentCommentSort = 'confidence';
 let _pvSub = '', _pvPostId = '', _pvCommentId = '';
-let _pvData = null;
+let _pvData = null;  // full {post, comments} from last loaded post view
 
 const COMMENT_SORTS = [
   {value:'confidence',    label:'Best'},
@@ -561,6 +582,7 @@ async function changeCommentSort(sort) {
     const res  = await fetch(apiUrl);
     if (!res.ok) { area.innerHTML = errState('Failed to load comments', 'comments'); return; }
     const data = await res.json();
+    _pvData = data;
     area.innerHTML = buildCommentsHtml(data, _pvCommentId);
   } catch {
     area.innerHTML = errState('Network error', 'comments');
@@ -582,6 +604,7 @@ async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
     const res  = await fetch(apiUrl);
     const data = await res.json();
     if (!res.ok) { pvContent.innerHTML = errState(escHtml(data.error||'Failed to load'), 'post'); return; }
+    _pvData = data;
 
     const p = data.post;
     pvOpen.href = p.permalink;
@@ -614,6 +637,7 @@ async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
         <a class="meta-item link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">dupes</a>
+        ${renderAwards(p.awards)}
       </div>
       ${mediaHtmlFull(p)}
       ${bodyHtml}
@@ -634,7 +658,7 @@ async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
   }
 }
 
-// Click author in post meta; comment sort buttons
+// Click author in post meta; comment sort buttons; load more comments
 pvContent.addEventListener('click', e => {
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
   if (retryBtn) {
@@ -645,9 +669,37 @@ pvContent.addEventListener('click', e => {
   }
   const csort = e.target.closest('[data-csort]');
   if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
+  const moreBtn = e.target.closest('.load-more-btn');
+  if (moreBtn) { e.preventDefault(); loadMoreComments(moreBtn); return; }
   const btn = e.target.closest('[data-user]');
   if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
+
+async function loadMoreComments(btn) {
+  const sub   = btn.dataset.sub;
+  const postId = btn.dataset.post;
+  const ids   = btn.dataset.ids;
+  const depth = parseInt(btn.dataset.depth, 10) || 0;
+  const wrap  = btn.closest('.more-comments-wrap');
+  if (!wrap) return;
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  try {
+    const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${currentCommentSort}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) { btn.textContent = 'Failed to load'; btn.disabled = false; return; }
+    if (!data.comments?.length) { wrap.remove(); return; }
+    const html = renderCommentTree(data.comments, depth, sub, postId, _pvData?.post?.author || '');
+    wrap.insertAdjacentHTML('afterend', html);
+    initVideos(wrap.parentElement);
+    initRedgifs(wrap.parentElement);
+    wrap.remove();
+  } catch {
+    btn.textContent = 'Failed to load';
+    btn.disabled = false;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FEED STATE
@@ -687,6 +739,9 @@ let currentTime   = 'all';
 let afterToken    = null;
 let loading       = false;
 let feedGen       = 0;
+let multiMode     = false;
+let multiUsername = '';
+let multiName     = '';
 let profileMode   = false;
 let profileTab    = 'posts';
 let profileSort   = 'new';
@@ -729,6 +784,8 @@ function retryFeedLoad() {
     else loadSearchResults(searchQuery, searchSort, searchTime);
   } else if (profileMode) {
     loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+  } else if (multiMode) {
+    loadMultiFeed(multiUsername, multiName, currentSort, currentTime);
   } else {
     loadSubFeed(currentSub, currentSort, currentTime);
   }
@@ -791,6 +848,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
 
 async function loadSubreddit(sub, sort='top', time='all') {
   profileMode = false;
+  multiMode   = false;
   currentSub  = sub.trim();
   currentSort = sort;
   currentTime = time;
@@ -803,6 +861,63 @@ async function loadSubreddit(sub, sort='top', time='all') {
   ctxInfo.classList.remove('visible');
   loadAbout(currentSub);
   await loadSubFeed(currentSub, currentSort, currentTime);
+}
+
+async function loadMultiFeed(username, multiname, sort, time, after=null, append=false) {
+  if (append && loading) return;
+  if (!append) feedGen++;
+  const myGen = feedGen;
+  loading = true;
+  if (!append) showSkeletons();
+  else sentinel.classList.add('loading');
+  try {
+    let url = `/api/user/${encodeURIComponent(username)}/m/${encodeURIComponent(multiname)}?sort=${sort}`;
+    if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
+    if (after) url += `&after=${after}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== feedGen) return;
+    if (!res.ok) {
+      if (!append) feed.innerHTML = errState(escHtml(data.error || 'Error'), 'feed');
+      return;
+    }
+    if (!append && data.title) {
+      document.title = `${data.title} — RDVWR`;
+      document.getElementById('ctx-title').textContent = data.title;
+      document.getElementById('ctx-icon-wrap').innerHTML = '';
+      document.getElementById('ctx-stats').innerHTML = `<span>u/${escHtml(username)}</span> multireddit`;
+      ctxInfo.classList.add('visible');
+    }
+    if (!append) feed.innerHTML = '';
+    if (!data.posts.length && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      return;
+    }
+    const startIdx = append ? feed.querySelectorAll('.post').length : 0;
+    feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
+    initVideos(feed);
+    initRedgifs(feed);
+    afterToken = data.after;
+    sentinel.classList.remove('loading');
+  } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
+  finally  { if (myGen === feedGen) loading = false; }
+}
+
+async function loadMultireddit(username, multiname, sort='hot', time='all') {
+  profileMode  = false;
+  multiMode    = true;
+  multiUsername = username;
+  multiName    = multiname;
+  currentSort  = sort;
+  currentTime  = time;
+  afterToken   = null;
+  document.title = `${multiname} — RDVWR`;
+  subInput.value = `user/${username}/m/${multiname}`;
+  pvSubInput.value = `user/${username}/m/${multiname}`;
+  sortBar.innerHTML = buildSubSortHtml(sort, time, '');
+  sortBar.style.display = 'flex';
+  ctxInfo.classList.remove('visible');
+  await loadMultiFeed(username, multiname, sort, time);
 }
 
 // ── Profile feed ───────────────────────────────────────────────────────────
@@ -1279,6 +1394,13 @@ function parseRoute(path=location.pathname) {
     const time = new URLSearchParams(qs).get('t') || (sort === 'top' || sort === 'controversial' ? 'day' : 'all');
     return { type:'sub', sub:mSub[1], sort, time };
   }
+  const mMulti = pathname.match(/^\/u(?:ser)?\/([^\/]+)\/m\/([^\/]+)(?:\/([^\/]+))?/i);
+  if (mMulti) {
+    const sort = SORTS.has(mMulti[3]) ? mMulti[3] : 'hot';
+    const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
+    const time = new URLSearchParams(qs).get('t') || (sort === 'top' || sort === 'controversial' ? 'day' : 'all');
+    return { type: 'multi', username: mMulti[1], multiname: mMulti[2], sort, time };
+  }
   const mUser = pathname.match(/^\/u(?:ser)?\/([^\/]+)/);
   if (mUser) return { type:'user', username:mUser[1] };
   if (pathname === '/search') {
@@ -1318,6 +1440,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closeSidebar();
       searchMode = false;
       await loadSubreddit(route.sub, route.sort, route.time || 'all');
+      break;
+    case 'multi':
+      closePostView();
+      closeSidebar();
+      searchMode = false;
+      profileMode = false;
+      await loadMultireddit(route.username, route.multiname, route.sort, route.time || 'all');
       break;
     case 'post':
       if (!feed.querySelector('.post')) await loadSubreddit(route.sub, currentSort);
@@ -1359,7 +1488,13 @@ window.addEventListener('popstate', (e) => {
   if (route.type !== 'post') closePostView();
   // Going back to a sub — if the feed already has posts for this sub, just restore scroll
   const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === currentSub && !searchMode && !profileMode && !duplicatesMode) {
+  if (route.type === 'sub' && hasFeedPosts && route.sub === currentSub && !searchMode && !profileMode && !duplicatesMode && !multiMode) {
+    currentSort = route.sort;
+    currentTime = route.time || 'all';
+    window.scrollTo({top: savedScroll, behavior: 'instant'});
+    return;
+  }
+  if (route.type === 'multi' && hasFeedPosts && route.username === multiUsername && route.multiname === multiName && multiMode) {
     currentSort = route.sort;
     currentTime = route.time || 'all';
     window.scrollTo({top: savedScroll, behavior: 'instant'});
@@ -1450,7 +1585,7 @@ sortBar.addEventListener('click', e => {
     loadProfileTab(profileUser, profileTab, profileSort, profileTime);
     return;
   }
-  // Subreddit sort
+  // Subreddit / multi sort
   const sortBtn = e.target.closest('.sort-btn[data-sort]');
   if (!sortBtn || profileMode || searchMode) return;
   const newSort = sortBtn.dataset.sort;
@@ -1458,7 +1593,11 @@ sortBar.addEventListener('click', e => {
   currentSort = newSort; currentTime = newSort === 'controversial' ? 'day' : 'all';
   afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
-  navigate(`/r/${currentSub}/${currentSort}`, { replace:true });
+  if (multiMode) {
+    navigate(`/user/${multiUsername}/m/${multiName}/${currentSort}`, { replace:true });
+  } else {
+    navigate(`/r/${currentSub}/${currentSort}`, { replace:true });
+  }
 });
 
 sortBar.addEventListener('change', e => {
@@ -1477,6 +1616,11 @@ sortBar.addEventListener('change', e => {
     profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
     loadProfileTab(profileUser, profileTab, profileSort, profileTime);
+  } else if (multiMode) {
+    currentTime = sel.value;
+    afterToken = null;
+    window.scrollTo({top:0, behavior:'instant'});
+    navigate(`/user/${multiUsername}/m/${multiName}/${currentSort}?t=${currentTime}`, { replace:true });
   } else {
     currentTime = sel.value;
     afterToken = null;
@@ -1492,6 +1636,8 @@ function handleSearchInput(e) {
   const activeInput = (e?.currentTarget?.id === 'pv-search-btn' || e?.target === pvInput || document.activeElement === pvInput) ? pvInput : mainInput;
   const val = activeInput.value.trim();
   if (!val) return;
+  const mMultiInput = val.match(/^u(?:ser)?\/([^\/]+)\/m\/([^\/]+)/i);
+  if (mMultiInput) { navigate(`/user/${mMultiInput[1]}/m/${mMultiInput[2]}`); return; }
   if (val.startsWith('r/')) {
     const sub = val.slice(2).replace(/^\//, '');
     if (sub) navigate(`/r/${sub}/top`);
@@ -1528,6 +1674,8 @@ function loadMore() {
     else if (searchAfter)                               loadSearchResults(searchQuery, searchSort, searchTime, searchAfter, true);
   } else if (profileMode) {
     if (profileAfter) loadProfileTab(profileUser, profileTab, profileSort, profileTime, profileAfter, true);
+  } else if (multiMode) {
+    if (afterToken) loadMultiFeed(multiUsername, multiName, currentSort, currentTime, afterToken, true);
   } else {
     if (afterToken) loadSubFeed(currentSub, currentSort, currentTime, afterToken, true);
   }
