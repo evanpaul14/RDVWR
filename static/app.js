@@ -513,7 +513,7 @@ async function changeCommentSort(sort) {
   }
 }
 
-async function loadPostView(sub, postId, commentId='') {
+async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
   _pvSub = sub; _pvPostId = postId; _pvCommentId = commentId;
   currentCommentSort = 'confidence';
   pvContent.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
@@ -573,6 +573,7 @@ async function loadPostView(sub, postId, commentId='') {
 
     initVideos(pvContent);
     initRedgifs(pvContent);
+    if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
   } catch(err) {
     pvContent.innerHTML = errState('Network error', 'post');
   }
@@ -1192,13 +1193,13 @@ function navigateOrOpen(path, e) {
 }
 
 function navigate(path, { replace=false }={}) {
-  history.replaceState({ ...(history.state||{}), scrollY: window.scrollY }, '', location.href);
+  history.replaceState({ ...(history.state||{}), scrollY: window.scrollY, pvScrollTop: pvScroll.scrollTop }, '', location.href);
   if (replace) history.replaceState(null,'',path);
   else         history.pushState(null,'',path);
   renderRoute(parseRoute(path));
 }
 
-async function renderRoute(route, { restoreScroll=0 }={}) {
+async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'search') {
     searchTypeBar.style.display = 'none';
     searchType = 'posts';
@@ -1216,7 +1217,7 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
       break;
     case 'post':
       if (!feed.querySelector('.post')) await loadSubreddit(route.sub, currentSort);
-      await loadPostView(route.sub, route.postId, route.commentId||'');
+      await loadPostView(route.sub, route.postId, route.commentId||'', restorePvScroll);
       break;
     case 'user':
       closePostView();
@@ -1242,6 +1243,7 @@ async function renderRoute(route, { restoreScroll=0 }={}) {
 
 window.addEventListener('popstate', (e) => {
   const savedScroll = e.state?.scrollY || 0;
+  const savedPvScroll = e.state?.pvScrollTop || 0;
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
   // Going back to a sub — if the feed already has posts for this sub, just restore scroll
@@ -1252,7 +1254,7 @@ window.addEventListener('popstate', (e) => {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
-  renderRoute(route, { restoreScroll: savedScroll });
+  renderRoute(route, { restoreScroll: savedScroll, restorePvScroll: savedPvScroll });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
