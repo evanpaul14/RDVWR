@@ -852,3 +852,15 @@ a.comment-time:hover { color:var(--ac); }
 .wiki-body { font-size:15px; line-height:1.75; }
 .wiki-body a { color:var(--ac); text-decoration:none; }
 .wiki-body a:hover { text-decoration:underline; }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .post, .user-comment-card, .community-card, .user-card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .post-view { transition: none; }
+  #scroll-sentinel::after { animation: none; }
+  .skel { animation: none; opacity: 0.6; }
+}

@@ -114,8 +114,8 @@ async function translatePost(p) {
 function renderMd(text) {
   if (!text) return '';
   const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
-    `<span class="spoiler" onclick="this.classList.toggle('revealed')">${inner}</span>`);
-  return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['onclick', 'class'] });
+    `<span class="spoiler" role="button" tabindex="0" onclick="this.classList.toggle('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.classList.toggle('revealed');event.preventDefault()}">${inner}</span>`);
+  return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['onclick', 'onkeydown', 'class', 'tabindex', 'role'] });
 }
 
 function setActiveButton(container, dataAttr, activeVal) {
@@ -275,9 +275,9 @@ function renderGallery(images) {
         <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}">
         ${images.length > 1 ? `
           <div class="gallery-nav">
-            <button class="gallery-btn gallery-prev" disabled>‹</button>
+            <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
             <span class="gallery-counter">1 / ${images.length}</span>
-            <button class="gallery-btn gallery-next">›</button>
+            <button class="gallery-btn gallery-next" aria-label="Next image">›</button>
           </div>` : ''}
       </div>
       ${images[0].caption ? `<div class="gallery-caption">${escHtml(images[0].caption)}</div>` : ''}
@@ -364,7 +364,7 @@ function renderPoll(poll) {
 // MEDIA RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 function spoilerWrap(html) {
-  return `<div class="spoiler-media-wrap"><div class="spoiler-veil" onclick="this.parentElement.classList.add('revealed')"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
+  return `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
 }
 
 function mediaHtmlCard(p) {
@@ -561,8 +561,19 @@ const pvScroll  = document.getElementById('pv-scroll');
 const pvOpen    = document.getElementById('pv-open');
 const pvBreadcrumb = document.getElementById('pv-breadcrumb');
 
-function openPostView() { postView.classList.add('open'); document.body.style.overflow='hidden'; }
-function closePostView(){ postView.classList.remove('open'); document.body.style.overflow=''; }
+let _pvPrevFocus = null;
+function openPostView() {
+  _pvPrevFocus = document.activeElement;
+  postView.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const focusEl = document.getElementById('pv-home');
+  if (focusEl) focusEl.focus();
+}
+function closePostView() {
+  postView.classList.remove('open');
+  document.body.style.overflow = '';
+  if (_pvPrevFocus) { _pvPrevFocus.focus(); _pvPrevFocus = null; }
+}
 
 document.getElementById('pv-home').addEventListener('click', () => { navigate('/r/popular/hot'); });
 
@@ -748,7 +759,7 @@ function buildSubSortHtml(sort='top', time='all', sub='') {
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';
-  const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn">sidebar</button>`;
+  const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
   const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="javascript:;" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
@@ -1273,7 +1284,7 @@ function closeSidebar() {
   sidebarOpen = false;
   sidebarPanel.classList.remove('open');
   const btn = document.getElementById('sidebar-toggle-btn');
-  if (btn) btn.classList.remove('active');
+  if (btn) { btn.classList.remove('active'); btn.setAttribute('aria-expanded', 'false'); }
 }
 
 async function toggleSidebar(sub) {
@@ -1282,7 +1293,7 @@ async function toggleSidebar(sub) {
   sidebarOpen = true;
   sidebarPanel.classList.add('open');
   const btn = document.getElementById('sidebar-toggle-btn');
-  if (btn) btn.classList.add('active');
+  if (btn) { btn.classList.add('active'); btn.setAttribute('aria-expanded', 'true'); }
 
   const cached = _sidebarCache.get(sub);
   if (cached && Date.now() - cached.ts < SIDEBAR_CACHE_TTL) {
@@ -1337,7 +1348,7 @@ function renderCommunityCard(c, idx) {
   const iconHtml = c.icon
     ? `<img src="${escHtml(c.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
     : `<span>${letter}</span>`;
-  return `<div class="community-card" style="animation-delay:${delay}ms" data-nav="/r/${escHtml(c.name)}">
+  return `<div class="community-card" tabindex="0" role="button" style="animation-delay:${delay}ms" data-nav="/r/${escHtml(c.name)}">
     <div class="community-card-icon">${iconHtml}</div>
     <div class="community-card-body">
       <div class="community-card-name">r/${escHtml(c.name)}</div>
@@ -1354,7 +1365,7 @@ function renderUserCard(u, idx) {
   const iconHtml = u.icon
     ? `<img src="${escHtml(u.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
     : `<span>${letter}</span>`;
-  return `<div class="user-card" style="animation-delay:${delay}ms" data-nav="/user/${escHtml(u.name)}">
+  return `<div class="user-card" tabindex="0" role="button" style="animation-delay:${delay}ms" data-nav="/user/${escHtml(u.name)}">
     <div class="user-card-icon">${iconHtml}</div>
     <div class="user-card-body">
       <div class="user-card-name">u/${escHtml(u.name)}</div>
@@ -1744,6 +1755,14 @@ feed.addEventListener('click', e => {
   if (card) { navigateOrOpen(card.dataset.nav, e); return; }
 });
 
+feed.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
+  if (!card) return;
+  e.preventDefault();
+  navigateOrOpen(card.dataset.nav, e);
+});
+
 // Logo → home
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
 
@@ -1871,7 +1890,12 @@ function closeLightbox() {
 }
 lightbox.addEventListener('click', closeLightbox);
 lightboxImg.addEventListener('click', e => e.stopPropagation());
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (lightbox.classList.contains('open')) { closeLightbox(); return; }
+    if (postView.classList.contains('open') && _pvSub) { navigate(`/r/${_pvSub}`); return; }
+  }
+});
 
 document.addEventListener('click', e => {
   const img = e.target.closest('.post-media img, .pv-media img, .md img, .gallery-main-img');
@@ -1886,14 +1910,20 @@ function setupAutocomplete(inputEl, dropdownEl) {
   let acIdx = -1;
   let preAcVal = '';
 
-  function hide() { dropdownEl.classList.remove('open'); dropdownEl.innerHTML = ''; acIdx = -1; }
+  function hide() {
+    dropdownEl.classList.remove('open');
+    dropdownEl.innerHTML = '';
+    acIdx = -1;
+    inputEl.setAttribute('aria-expanded', 'false');
+  }
   function show(names) {
     if (!names.length) { hide(); return; }
     acIdx = -1;
     dropdownEl.innerHTML = names.map(n =>
-      `<div class="autocomplete-item" data-sub="${escHtml(n)}">${escHtml(n)}</div>`
+      `<div class="autocomplete-item" role="option" data-sub="${escHtml(n)}">${escHtml(n)}</div>`
     ).join('');
     dropdownEl.classList.add('open');
+    inputEl.setAttribute('aria-expanded', 'true');
   }
 
   inputEl.addEventListener('input', () => {
