@@ -180,6 +180,29 @@ async function initRedgifs(container) {
   }));
 }
 
+async function initImgurAlbums(container) {
+  const wraps = [...container.querySelectorAll('.imgur-album-wrap[data-iaid]:not([data-ia-init])')];
+  await Promise.all(wraps.map(async wrap => {
+    wrap.dataset.iaInit = '1';
+    const id = wrap.dataset.iaid;
+    try {
+      const res = await fetch(`/api/imgur/album/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (!res.ok || !data.images?.length) throw new Error(data.error || 'no images');
+      const imgs = data.images.map(img => ({url: img.url, width: img.width, height: img.height, caption: img.description || ''}));
+      const newHtml = imgs.length === 1
+        ? `<div class="post-media"><img src="${escHtml(imgs[0].url)}" loading="lazy" alt="${escHtml(imgs[0].caption)}"></div>`
+        : renderGallery(imgs);
+      wrap.insertAdjacentHTML('afterend', newHtml);
+      wrap.remove();
+    } catch {
+      // Fall back to embed iframe
+      wrap.insertAdjacentHTML('afterend', `<div class="${escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video')}"><iframe src="https://imgur.com/a/${escHtml(id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`);
+      wrap.remove();
+    }
+  }));
+}
+
 // Returns true if a hex color is dark enough to use as a background in our dark theme.
 // Filters out Reddit's near-white defaults like #edeff1.
 function isUsableBg(hex) {
@@ -351,7 +374,7 @@ function mediaHtmlCard(p) {
   else if (p.youtube_id) html = `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   else if (p.tiktok_id)  html = `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   else if (p.redgifs_id) html = `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.imgur_album_id) html = `<div class="post-video"><iframe src="https://imgur.com/a/${escHtml(p.imgur_album_id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.imgur_album_id) html = `<div class="post-video imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
   else if (p.embed_url)  html = `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   else if (p.gif_url) html = p.gif_is_video
     ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
@@ -373,7 +396,7 @@ function mediaHtmlFull(p) {
   else if (p.youtube_id) html = `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
   else if (p.tiktok_id)  html = `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   else if (p.redgifs_id) html = `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.imgur_album_id) html = `<div class="pv-media"><iframe src="https://imgur.com/a/${escHtml(p.imgur_album_id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.imgur_album_id) html = `<div class="pv-media imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
   else if (p.embed_url)  html = `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   else if (p.gif_url) html = p.gif_is_video
     ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
@@ -665,6 +688,7 @@ async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
 
     initVideos(pvContent);
     initRedgifs(pvContent);
+    initImgurAlbums(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p).catch(() => {});
   } catch(err) {
@@ -708,6 +732,7 @@ async function loadMoreComments(btn) {
     wrap.insertAdjacentHTML('afterend', html);
     initVideos(wrap.parentElement);
     initRedgifs(wrap.parentElement);
+    initImgurAlbums(wrap.parentElement);
     wrap.remove();
   } catch {
     btn.textContent = 'Failed to load';
@@ -854,6 +879,7 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
     feed.insertAdjacentHTML('beforeend', data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join(''));
     initVideos(feed);
     initRedgifs(feed);
+    initImgurAlbums(feed);
     afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -911,6 +937,7 @@ async function loadMultiFeed(username, multiname, sort, time, after=null, append
     feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
     initVideos(feed);
     initRedgifs(feed);
+    initImgurAlbums(feed);
     afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -982,6 +1009,7 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
       feed.insertAdjacentHTML('beforeend', items.map((p,i)=>renderPost(p,startIdx+i,true)).join(''));
       initVideos(feed);
       initRedgifs(feed);
+      initImgurAlbums(feed);
     } else {
       feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
     }
@@ -1050,6 +1078,7 @@ async function loadSearchResults(query, sort, time, after=null, append=false) {
     feed.insertAdjacentHTML('beforeend', data.posts.map((p,i)=>renderPost(p,startIdx+i,true)).join(''));
     initVideos(feed);
     initRedgifs(feed);
+    initImgurAlbums(feed);
     searchAfter = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -1181,6 +1210,7 @@ async function loadDuplicatesPage(sub, postId, after=null, append=false) {
     feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
     initVideos(feed);
     initRedgifs(feed);
+    initImgurAlbums(feed);
     duplicatesAfter = data.after;
     sentinel.classList.remove('loading');
   } catch {
