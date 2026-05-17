@@ -1,4 +1,5 @@
 import re
+import html as html_lib
 import time
 import requests
 from flask import Flask, render_template, jsonify, request, Response, make_response
@@ -658,8 +659,10 @@ def get_wiki(subreddit, page='index'):
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         d = resp.json()["data"]
+        raw_html = html_lib.unescape(d.get("content_html", ""))
+        raw_html = re.sub(r'<!--\s*SC_(?:OFF|ON)\s*-->', '', raw_html).strip()
         return cached_json({
-            "content_md":     d.get("content_md", ""),
+            "content_html":   raw_html,
             "revision_date":  d.get("revision_date"),
         }, CACHE_TTL_SUBREDDIT)
     except Exception as e:

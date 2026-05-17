@@ -1086,7 +1086,7 @@ async function loadWikiPage(sub, page) {
           <span class="wiki-title">wiki/${escHtml(page)}</span>
         </div>
         ${revHtml}
-        <div class="wiki-body md">${renderMd(data.content_md)}</div>
+        <div class="wiki-body md">${DOMPurify.sanitize(data.content_html || '')}</div>
       </div>`;
   } catch {
     feed.innerHTML = errState('Network error', 'wiki');
