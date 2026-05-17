@@ -18,6 +18,7 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 HEADERS    = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"}
 YOUTUBE_RE = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
+TIKTOK_RE           = re.compile(r'tiktok\.com/player/v1/(\d+)', re.I)
 VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 GIFV_RE             = re.compile(r'\.gifv$', re.I)
@@ -118,9 +119,16 @@ def process_post(p):
     if yt:
         youtube_id = yt.group(1)
 
-    # Generic iframe embed (non-redgifs, non-reddit, non-youtube)
+    # TikTok — extract player video ID from oembed HTML
+    tiktok_id = None
+    oembed_html = ((p.get("secure_media") or {}).get("oembed") or {}).get("html", "")
+    tt = TIKTOK_RE.search(oembed_html)
+    if tt:
+        tiktok_id = tt.group(1)
+
+    # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok)
     embed_url = None
-    if not redgifs_id and not is_video and not youtube_id:
+    if not redgifs_id and not is_video and not youtube_id and not tiktok_id:
         sec       = p.get("secure_media_embed") or {}
         media_url = clean_url(sec.get("media_domain_url", ""))
         if media_url:
@@ -190,6 +198,7 @@ def process_post(p):
         "hls_url":        hls_url,
         "audio_url":      audio_url,
         "youtube_id":     youtube_id,
+        "tiktok_id":      tiktok_id,
         "embed_url":      embed_url,
         "redgifs_id":     redgifs_id,
         "gif_url":        gif_url,

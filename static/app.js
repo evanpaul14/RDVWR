@@ -344,6 +344,7 @@ function mediaHtmlCard(p) {
   if (p.poll) return renderPoll(p.poll);
   if (p.is_video) return `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  if (p.tiktok_id)  return `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   if (p.redgifs_id) return `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   if (p.gif_url) return p.gif_is_video
@@ -363,6 +364,7 @@ function mediaHtmlFull(p) {
   if (p.poll) return renderPoll(p.poll);
   if (p.is_video) return `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
   if (p.youtube_id) return `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  if (p.tiktok_id)  return `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   if (p.redgifs_id) return `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   if (p.embed_url)  return `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   if (p.gif_url) return p.gif_is_video
@@ -417,7 +419,7 @@ function renderPost(p, idx, showSub=false) {
 
   // Compact layout for link posts (no rich embedded media)
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
-  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.redgifs_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
+  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
     const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
     const thumbContent = imgSrc

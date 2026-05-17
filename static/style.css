@@ -200,6 +200,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .post-video { width:100%; background:#000; border-top:1px solid var(--b); border-bottom:1px solid var(--b); }
 .post-video video { width:100%; max-height:560px; display:block; }
 .post-video iframe { width:100%; aspect-ratio:16/9; display:block; border:none; }
+.tiktok-wrap { display:flex; justify-content:center; background:#000; }
+.tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; border:none; }
 
 /* Poll widget */
 .poll-widget {
@@ -445,6 +447,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .pv-media img { width:100%; height:auto; max-height:640px; object-fit:contain; border-radius:6px; background:var(--bg3); }
 .pv-media video { width:100%; max-height:640px; border-radius:6px; display:block; background:#000; }
 .pv-media iframe { width:100%; aspect-ratio:16/9; border:none; border-radius:6px; display:block; }
+.pv-media.tiktok-wrap { display:flex; justify-content:center; background:#000; border-radius:6px; overflow:hidden; }
+.pv-media.tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; }
 .pv-body { margin-bottom:24px; font-size:14px; line-height:1.7; color:#d8d8d8; }
 .pv-body .md img { max-height:500px; }
 
