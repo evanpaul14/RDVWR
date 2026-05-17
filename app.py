@@ -289,6 +289,8 @@ def subreddit_search():
 @app.route("/u/<username>")
 @app.route("/search")
 @app.route("/r/<subreddit>/duplicates/<post_id>")
+@app.route("/r/<subreddit>/wiki")
+@app.route("/r/<subreddit>/wiki/<path:page>")
 def spa(**kwargs):
     resp = render_template("index.html")
     return resp, 200, {'Cache-Control': 'no-store'}
@@ -634,6 +636,32 @@ def get_user_comments_api(username):
                 "link_id":        d.get("link_id", "").replace("t3_", ""),
             })
         return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-\/\.]+$')
+
+@app.route("/api/r/<subreddit>/wiki")
+@app.route("/api/r/<subreddit>/wiki/<path:page>")
+def get_wiki(subreddit, page='index'):
+    if not WIKI_PAGE_RE.match(page):
+        return jsonify({"error": "Invalid page name"}), 400
+    try:
+        resp = SESSION.get(
+            f"https://www.reddit.com/r/{subreddit}/wiki/{page}.json",
+            params={"raw_json": 1}, timeout=10)
+        if resp.status_code == 404:
+            return jsonify({"error": "Wiki page not found"}), 404
+        if resp.status_code == 403:
+            return jsonify({"error": "Wiki is private or disabled"}), 403
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        d = resp.json()["data"]
+        return cached_json({
+            "content_md":     d.get("content_md", ""),
+            "revision_date":  d.get("revision_date"),
+        }, CACHE_TTL_SUBREDDIT)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

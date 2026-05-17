@@ -715,6 +715,10 @@ function errState(msg, retryTarget) {
 }
 
 function retryFeedLoad() {
+  if (_wikiSub && parseRoute().type === 'wiki') {
+    loadWikiPage(_wikiSub, _wikiPage);
+    return;
+  }
   if (duplicatesMode) {
     loadDuplicatesPage(duplicatesSub, duplicatesPostId);
   } else if (searchMode) {
@@ -1054,6 +1058,37 @@ async function loadDuplicatesPage(sub, postId, after=null, append=false) {
   }
 }
 
+// ── Wiki ───────────────────────────────────────────────────────────────────
+
+let _wikiSub = '', _wikiPage = '';
+
+async function loadWikiPage(sub, page) {
+  _wikiSub = sub; _wikiPage = page;
+  feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
+  sortBar.innerHTML = `<a class="sort-btn" href="javascript:;" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
+  document.title = `${page} — ${sub} wiki — RDVWR`;
+  try {
+    const res = await fetch(`/api/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
+    const data = await res.json();
+    if (!res.ok) { feed.innerHTML = errState(escHtml(data.error || 'Failed to load wiki'), 'wiki'); return; }
+    const revHtml = data.revision_date
+      ? `<div class="wiki-meta">Last revised ${fmtDate(data.revision_date)}</div>`
+      : '';
+    feed.innerHTML = `
+      <div class="wiki-page">
+        <div class="wiki-header">
+          <span class="wiki-sub"><a href="javascript:;" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a></span>
+          <span class="wiki-sep">/</span>
+          <span class="wiki-title">wiki/${escHtml(page)}</span>
+        </div>
+        ${revHtml}
+        <div class="wiki-body md">${renderMd(data.content_md)}</div>
+      </div>`;
+  } catch {
+    feed.innerHTML = errState('Network error', 'wiki');
+  }
+}
+
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 const sidebarPanel = document.getElementById('sidebar-panel');
@@ -1222,6 +1257,8 @@ function parseRoute(path=location.pathname) {
   const pathname = path.split('?')[0];
   const mDupes = pathname.match(/^\/r\/([^\/]+)\/duplicates\/([^\/]+)/i);
   if (mDupes) return { type: 'duplicates', sub: mDupes[1], postId: mDupes[2] };
+  const mWiki = pathname.match(/^\/r\/([^\/]+)\/wiki(?:\/(.+))?/i);
+  if (mWiki) return { type: 'wiki', sub: mWiki[1], page: mWiki[2] || 'index' };
   const mPost = pathname.match(/^\/r\/([^\/]+)\/comments\/([^\/]+)(?:\/[^\/]*(?:\/([a-z0-9]+))?)?/i);
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
@@ -1291,6 +1328,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       searchMode = false;
       profileMode = false;
       await loadDuplicatesPage(route.sub, route.postId);
+      break;
+    case 'wiki':
+      closePostView();
+      closeSidebar();
+      searchMode = false;
+      profileMode = false;
+      await loadWikiPage(route.sub, route.page);
       break;
   }
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
@@ -1512,6 +1556,8 @@ function interceptNavLink(a, e) {
 
   const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
   if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
+  const redditWiki = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
+  if (redditWiki) { e.preventDefault(); navigateOrOpen(`/r/${redditWiki[1]}/wiki/${redditWiki[2]||'index'}`, e); return true; }
   const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
   if (redditSub)  { e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true; }
   const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
