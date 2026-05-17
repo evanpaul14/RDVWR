@@ -148,6 +148,16 @@ def process_post(p):
             "closed":       pd.get("voting_end_timestamp", 0) < int(time.time() * 1000),
         }
 
+    # Awards (top 5 by coin price)
+    awards = []
+    for a in sorted(p.get("all_awardings") or [], key=lambda x: -x.get("coin_price", 0)):
+        resized = a.get("resized_icons") or []
+        icon = clean_url(resized[0]["url"]) if resized else clean_url(a.get("static_icon_url") or a.get("icon_url") or "")
+        if icon:
+            awards.append({"name": a.get("name", ""), "count": a.get("count", 1), "icon": icon})
+        if len(awards) >= 5:
+            break
+
     crosspost_from = None
     if p.get("crosspost_parent_list"):
         orig = p["crosspost_parent_list"][0]
@@ -199,6 +209,7 @@ def process_post(p):
         "is_spoiler":     p.get("spoiler", False),
         "locked":         p.get("locked", False),
         "edited_utc":     edited_utc,
+        "awards":         awards,
     }
 
 
@@ -287,6 +298,8 @@ def subreddit_search():
 @app.route("/")
 @app.route("/r/<path:path>")
 @app.route("/user/<username>")
+@app.route("/user/<username>/m/<multiname>")
+@app.route("/user/<username>/m/<multiname>/<path:rest>")
 @app.route("/u/<username>")
 @app.route("/search")
 @app.route("/r/<subreddit>/duplicates/<post_id>")
@@ -517,7 +530,14 @@ def get_comments(subreddit, post_id):
 
         def parse_comment(c):
             if c["kind"] == "more":
-                return None
+                d = c["data"]
+                return {
+                    "kind":     "more",
+                    "id":       d.get("id", ""),
+                    "children": d.get("children", [])[:100],
+                    "count":    d.get("count", 0),
+                    "depth":    d.get("depth", 0),
+                }
             d       = c["data"]
             replies = []
             if d.get("replies") and isinstance(d["replies"], dict):
@@ -527,6 +547,14 @@ def get_comments(subreddit, post_id):
                         replies.append(parsed)
             c_edited = d.get("edited")
             c_edited_utc = c_edited if isinstance(c_edited, (int, float)) and c_edited else None
+            c_awards = []
+            for a in sorted(d.get("all_awardings") or [], key=lambda x: -x.get("coin_price", 0)):
+                resized = a.get("resized_icons") or []
+                icon = clean_url(resized[0]["url"]) if resized else clean_url(a.get("static_icon_url") or a.get("icon_url") or "")
+                if icon:
+                    c_awards.append({"name": a.get("name", ""), "count": a.get("count", 1), "icon": icon})
+                if len(c_awards) >= 5:
+                    break
             return {
                 "id":                    d["id"],
                 "author":                d.get("author", "[deleted]"),
@@ -542,10 +570,78 @@ def get_comments(subreddit, post_id):
                 "author_flair_type":     d.get("author_flair_type", "text"),
                 "author_flair_bg":       d.get("author_flair_background_color") or "",
                 "author_flair_tc":       d.get("author_flair_text_color") or "dark",
+                "awards":                c_awards,
             }
 
         comments = [parse_comment(c) for c in data[1]["data"]["children"]]
         return cached_json({"post": post, "comments": [c for c in comments if c]}, CACHE_TTL_FEED)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/r/<subreddit>/morechildren/<post_id>")
+def get_morechildren(subreddit, post_id):
+    children = request.args.get("children", "")
+    sort     = request.args.get("sort", "confidence")
+    if sort not in COMMENT_SORTS:
+        sort = "confidence"
+    if not children:
+        return cached_json({"comments": []}, CACHE_TTL_FEED)
+    try:
+        resp = SESSION.get(
+            "https://www.reddit.com/api/morechildren.json",
+            params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
+                    "api_type": "json", "raw_json": 1},
+            timeout=12)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        things = resp.json().get("json", {}).get("data", {}).get("things", [])
+        by_id  = {}
+        ordered = []
+        for thing in things:
+            if thing["kind"] != "t1":
+                continue
+            d = thing["data"]
+            c_edited = d.get("edited")
+            c_edited_utc = c_edited if isinstance(c_edited, (int, float)) and c_edited else None
+            c_awards = []
+            for a in sorted(d.get("all_awardings") or [], key=lambda x: -x.get("coin_price", 0)):
+                resized = a.get("resized_icons") or []
+                icon = clean_url(resized[0]["url"]) if resized else clean_url(a.get("static_icon_url") or a.get("icon_url") or "")
+                if icon:
+                    c_awards.append({"name": a.get("name", ""), "count": a.get("count", 1), "icon": icon})
+                if len(c_awards) >= 5:
+                    break
+            comment = {
+                "id":                    d["id"],
+                "author":                d.get("author", "[deleted]"),
+                "body":                  d.get("body", ""),
+                "score":                 d.get("score", 0),
+                "created_utc":           d.get("created_utc", 0),
+                "edited_utc":            c_edited_utc,
+                "depth":                 d.get("depth", 0),
+                "replies":               [],
+                "distinguished":         d.get("distinguished"),
+                "author_flair_text":     d.get("author_flair_text") or "",
+                "author_flair_richtext": d.get("author_flair_richtext") or [],
+                "author_flair_type":     d.get("author_flair_type", "text"),
+                "author_flair_bg":       d.get("author_flair_background_color") or "",
+                "author_flair_tc":       d.get("author_flair_text_color") or "dark",
+                "awards":                c_awards,
+                "_pid":                  d.get("parent_id", ""),
+            }
+            by_id[d["id"]] = comment
+            ordered.append(comment)
+        roots = []
+        for c in ordered:
+            pid = c.pop("_pid", "")
+            if pid.startswith("t1_"):
+                parent = by_id.get(pid[3:])
+                if parent:
+                    parent["replies"].append(c)
+                    continue
+            roots.append(c)
+        return cached_json({"comments": roots}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -665,6 +761,41 @@ def get_wiki(subreddit, page='index'):
             "content_html":   raw_html,
             "revision_date":  d.get("revision_date"),
         }, CACHE_TTL_SUBREDDIT)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/user/<username>/m/<multiname>")
+def get_multireddit(username, multiname):
+    sort  = request.args.get("sort", "hot")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
+    params = {"limit": FEED_LIMIT, "raw_json": 1}
+    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
+    if after:
+        params["after"] = after
+    try:
+        meta = SESSION.get(
+            f"https://oauth.reddit.com/api/multi/user/{username}/m/{multiname}.json",
+            params={"raw_json": 1}, timeout=10)
+        if meta.status_code == 404:
+            return jsonify({"error": "Multireddit not found"}), 404
+        if meta.status_code != 200:
+            return jsonify({"error": f"Reddit returned {meta.status_code}"}), meta.status_code
+        meta_data = meta.json().get("data", {})
+        subs = [s["name"] for s in meta_data.get("subreddits", [])]
+        if not subs:
+            return cached_json({"posts": [], "after": None, "title": multiname}, CACHE_TTL_FEED)
+        combined = "+".join(subs[:100])
+        resp = SESSION.get(
+            f"https://www.reddit.com/r/{combined}/{sort}.json",
+            params=params, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()["data"]
+        display = meta_data.get("display_name") or meta_data.get("name") or multiname
+        return cached_json({"posts": extract_posts(listing), "after": listing.get("after"), "title": display}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
