@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import html as html_lib
 import time
 import requests
@@ -26,6 +27,8 @@ GIFV_RE             = re.compile(r'\.gifv$', re.I)
 IMGUR_ALBUM_RE      = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
+IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
+_IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -297,35 +300,110 @@ def proxy_redgifs_media(filename):
 
 # ── Imgur album proxy ────────────────────────────────────────────────────────
 
+def _imgur_items_to_images(items):
+    out = []
+    for item in (items or []):
+        url = item.get("url") or item.get("link", "")
+        if not url:
+            continue
+        if url.lower().endswith(".gifv"):
+            url = url[:-5] + ".mp4"
+        out.append({
+            "url":         url,
+            "width":       item.get("width")  or 0,
+            "height":      item.get("height") or 0,
+            "description": item.get("description") or "",
+        })
+    return out
+
+
+def _imgur_from_next_data(data):
+    page_props = data.get("props", {}).get("pageProps", {})
+    for obj in (page_props.get("album", {}), page_props.get("ssrData", {}), page_props):
+        if not isinstance(obj, dict):
+            continue
+        for key in ("media", "images", "imgs"):
+            items = obj.get(key)
+            if isinstance(items, dict):
+                items = items.get("images", [])
+            imgs = _imgur_items_to_images(items)
+            if imgs:
+                return imgs
+    return None
+
+
+def _imgur_from_post_data_json(html_text):
+    m = re.search(r'window\.postDataJSON\s*=\s*"((?:[^"\\]|\\.)*)"', html_text)
+    if not m:
+        return None
+    try:
+        data = json.loads(json.loads('"' + m.group(1) + '"'))
+        for key in ("media", "images"):
+            imgs = _imgur_items_to_images(data.get(key))
+            if imgs:
+                return imgs
+    except Exception:
+        pass
+    return None
+
+
+def _imgur_from_regex(html_text):
+    seen, out = set(), []
+    for m in IMGUR_IMG_URL_RE.finditer(html_text):
+        img_hash, ext = m.group(1), m.group(2).lower()
+        base = img_hash[:-1] if (len(img_hash) > 5 and img_hash[-1] in _IMGUR_THUMB_CHARS) else img_hash
+        if base not in seen:
+            seen.add(base)
+            out.append({"url": f"https://i.imgur.com/{base}.{ext}", "width": 0, "height": 0, "description": ""})
+    return out or None
+
+
+def _scrape_imgur_album(album_id):
+    resp = SESSION.get(f"https://imgur.com/a/{album_id}", timeout=15)
+    resp.raise_for_status()
+    html_text = resp.text
+
+    m = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', html_text, re.S)
+    if m:
+        try:
+            imgs = _imgur_from_next_data(json.loads(m.group(1)))
+            if imgs:
+                return imgs
+        except Exception:
+            pass
+
+    imgs = _imgur_from_post_data_json(html_text)
+    if imgs:
+        return imgs
+
+    return _imgur_from_regex(html_text)
+
+
 @app.route("/api/imgur/album/<album_id>")
 def get_imgur_album(album_id):
     if not IMGUR_ALBUM_ID_RE.match(album_id):
         return jsonify({"error": "Invalid album ID"}), 400
-    if not IMGUR_CLIENT_ID:
-        return jsonify({"error": "no_client_id"}), 503
+    # Official API if client ID is available (legacy support)
+    if IMGUR_CLIENT_ID:
+        try:
+            resp = SESSION.get(
+                f"https://api.imgur.com/3/album/{album_id}/images",
+                headers={"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"},
+                timeout=10)
+            if resp.status_code == 200:
+                imgs = _imgur_items_to_images(resp.json().get("data", []))
+                if imgs:
+                    return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
+        except Exception:
+            pass
+    # Fall back to scraping the album page
     try:
-        resp = SESSION.get(
-            f"https://api.imgur.com/3/album/{album_id}/images",
-            headers={"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"},
-            timeout=10)
-        if resp.status_code == 404:
-            return jsonify({"error": "Album not found"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Imgur returned {resp.status_code}"}), resp.status_code
-        images = []
-        for img in resp.json().get("data", []):
-            url = img.get("link", "")
-            if not url:
-                continue
-            images.append({
-                "url":         url,
-                "width":       img.get("width", 0),
-                "height":      img.get("height", 0),
-                "description": img.get("description") or "",
-            })
-        return cached_json({"images": images}, CACHE_TTL_SUBREDDIT)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        imgs = _scrape_imgur_album(album_id)
+        if imgs:
+            return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
+    except Exception:
+        pass
+    return jsonify({"error": "no_images"}), 404
 
 
 # ── Subreddit autocomplete ────────────────────────────────────────────────────
