@@ -505,7 +505,7 @@ function renderCommentTree(comments, depth=0, sub='', postId='', postAuthor='') 
     const isAutoMod = c.author === 'AutoModerator';
     const isStickied = c.stickied;
     const startCollapsed = isAutoMod;
-    const isOP    = postAuthor && !isDeleted && c.author === postAuthor;
+    const isOP    = postAuthor && postAuthor !== '[deleted]' && !isDeleted && c.author === postAuthor;
     const isMod   = c.distinguished === 'moderator';
     const isAdmin = c.distinguished === 'admin';
     const permalinkHref = `/r/${escHtml(sub)}/comments/${escHtml(postId)}/_/${escHtml(c.id)}`;
