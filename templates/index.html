@@ -100,9 +100,9 @@
 </div>
 
 <div id="lightbox"><img id="lightbox-img" alt=""></div>
-<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="{{ url_for('static', filename='marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='hls.min.js') }}"></script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
