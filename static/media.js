@@ -1,0 +1,191 @@
+import { state } from './state.js';
+import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
+
+export function syncAudio(videoEl, audioSrc) {
+  const audio = new Audio(audioSrc);
+  audio.preload = 'none';
+  videoEl.addEventListener('play',         () => { audio.currentTime = videoEl.currentTime; audio.play().catch(()=>{}); });
+  videoEl.addEventListener('pause',        () => audio.pause());
+  videoEl.addEventListener('seeked',       () => { audio.currentTime = videoEl.currentTime; });
+  videoEl.addEventListener('volumechange', () => { audio.volume = videoEl.volume; audio.muted = videoEl.muted; });
+}
+
+export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
+  if (hlsUrl && typeof Hls !== 'undefined' && Hls.isSupported()) {
+    const hls = new Hls({ autoStartLoad: false });
+    hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
+    videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
+  } else if (hlsUrl && videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+    videoEl.src = hlsUrl;
+  } else if (fallback) {
+    videoEl.src = fallback;
+    if (audioSrc) syncAudio(videoEl, audioSrc);
+  }
+}
+
+export function initVideos(container) {
+  container.querySelectorAll('[data-hls]:not([data-hls-init])').forEach(wrap => {
+    const v = wrap.querySelector('video');
+    if (v) {
+      setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
+      if (wrap.dataset.poster) {
+        const img = new Image();
+        img.onload = () => { v.poster = wrap.dataset.poster; };
+        img.src = wrap.dataset.poster;
+      }
+      wrap.dataset.hlsInit = '1';
+    }
+  });
+  if (!state.userPrefersMuted) container.querySelectorAll('video').forEach(v => { v.muted = false; });
+}
+
+export async function initRedgifs(container) {
+  const wraps = [...container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')];
+  await Promise.all(wraps.map(async wrap => {
+    wrap.dataset.rgInit = '1';
+    const id = wrap.dataset.rgid;
+    try {
+      const res = await fetch(`/api/redgifs/${id}`);
+      const data = await res.json();
+      if (!res.ok || (!data.hd && !data.sd)) throw new Error(data.error || 'no url');
+      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(data.hd || data.sd)}"></video>`;
+      if (!state.userPrefersMuted) { const v = wrap.querySelector('video'); if (v) v.muted = false; }
+    } catch {
+      wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
+    }
+  }));
+}
+
+export async function initImgurAlbums(container) {
+  const wraps = [...container.querySelectorAll('.imgur-album-wrap[data-iaid]:not([data-ia-init])')];
+  await Promise.all(wraps.map(async wrap => {
+    wrap.dataset.iaInit = '1';
+    const id = wrap.dataset.iaid;
+    try {
+      const res = await fetch(`/api/imgur/album/${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (!res.ok || !data.images?.length) throw new Error(data.error || 'no images');
+      const imgs = data.images.map(img => ({url: img.url, width: img.width, height: img.height, caption: img.description || ''}));
+      const newHtml = imgs.length === 1
+        ? `<div class="post-media"><img src="${escHtml(imgs[0].url)}" loading="lazy" alt="${escHtml(imgs[0].caption)}"></div>`
+        : renderGallery(imgs);
+      wrap.insertAdjacentHTML('afterend', newHtml);
+      wrap.remove();
+    } catch {
+      wrap.insertAdjacentHTML('afterend', `<div class="${escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video')}"><iframe src="https://imgur.com/a/${escHtml(id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`);
+      wrap.remove();
+    }
+  }));
+}
+
+export function renderGallery(images) {
+  if (!images?.length) return '';
+  const thumbsHtml = images.map((img,i) =>
+    `<img class="gallery-thumb${i===0?' active':''}" src="${escHtml(img.url)}" data-idx="${i}" data-caption="${escHtml(img.caption||'')}" loading="lazy" alt="${escHtml(img.caption||'')}">`
+  ).join('');
+  return `
+    <div class="gallery">
+      <div class="gallery-stage">
+        <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}">
+        ${images.length > 1 ? `
+          <div class="gallery-nav">
+            <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
+            <span class="gallery-counter">1 / ${images.length}</span>
+            <button class="gallery-btn gallery-next" aria-label="Next image">›</button>
+          </div>` : ''}
+      </div>
+      ${images[0].caption ? `<div class="gallery-caption">${escHtml(images[0].caption)}</div>` : ''}
+      ${images.length > 1 ? `<div class="gallery-thumbs">${thumbsHtml}</div>` : ''}
+    </div>`;
+}
+
+export function spoilerWrap(html) {
+  return `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
+}
+
+export function mediaHtmlCard(p) {
+  if (p.poll) return renderPoll(p.poll);
+  let html = '';
+  if (p.is_video) html = `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
+  else if (p.youtube_id) html = `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  else if (p.tiktok_id)  html = `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  else if (p.redgifs_id) html = `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.imgur_album_id) html = `<div class="post-video imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.embed_url)  html = `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.gif_url) html = p.gif_is_video
+    ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
+    : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+  else if (p.gallery?.length > 1) html = renderGallery(p.gallery);
+  else {
+    const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
+    if (imgSrc) html = `<div class="post-media">\n    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">\n  </div>`;
+    else if (!p.is_self && p.domain && !p.domain.includes('reddit.com') && !p.domain.startsWith('self.')) return `<div class="post-media link-thumb"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+  }
+  if (!html) return '';
+  return p.is_spoiler ? spoilerWrap(html) : html;
+}
+
+export function mediaHtmlFull(p) {
+  if (p.poll) return renderPoll(p.poll);
+  let html = '';
+  if (p.is_video) html = `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
+  else if (p.youtube_id) html = `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  else if (p.tiktok_id)  html = `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  else if (p.redgifs_id) html = `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.imgur_album_id) html = `<div class="pv-media imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
+  else if (p.embed_url)  html = `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.gif_url) html = p.gif_is_video
+    ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
+    : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
+  else if (p.gallery?.length) html = renderGallery(p.gallery);
+  else if (p.preview_img && !p.is_self) html = `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
+  if (!html) return '';
+  return p.is_spoiler ? spoilerWrap(html) : html;
+}
+
+// ── Gallery event delegation ─────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  const prev  = e.target.closest('.gallery-prev');
+  const next  = e.target.closest('.gallery-next');
+  const thumb = e.target.closest('.gallery-thumb');
+  const target = prev || next || thumb;
+  if (!target) return;
+  e.stopPropagation();
+
+  const gallery  = target.closest('.gallery');
+  const thumbs   = [...gallery.querySelectorAll('.gallery-thumb')];
+  const mainImg  = gallery.querySelector('.gallery-main-img');
+  const counter  = gallery.querySelector('.gallery-counter');
+  const prevBtn  = gallery.querySelector('.gallery-prev');
+  const nextBtn  = gallery.querySelector('.gallery-next');
+  const caption  = gallery.querySelector('.gallery-caption');
+  let cur = thumbs.findIndex(t => t.classList.contains('active'));
+  if (cur === -1) cur = 0;
+
+  let idx = cur;
+  if (prev)  idx = Math.max(0, cur - 1);
+  if (next)  idx = Math.min(thumbs.length - 1, cur + 1);
+  if (thumb) idx = parseInt(thumb.dataset.idx);
+
+  const t = thumbs[idx];
+  mainImg.src = t.src; mainImg.alt = t.alt;
+  if (counter) counter.textContent = `${idx+1} / ${thumbs.length}`;
+  if (prevBtn) prevBtn.disabled = idx === 0;
+  if (nextBtn) nextBtn.disabled = idx === thumbs.length - 1;
+  if (caption) { caption.textContent = t.dataset.caption; caption.style.display = t.dataset.caption ? '' : 'none'; }
+  thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
+});
+
+let _galleryTouchX = 0;
+document.addEventListener('touchstart', e => {
+  if (e.target.closest('.gallery-stage')) _galleryTouchX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const stage = e.target.closest('.gallery-stage');
+  if (!stage || _galleryTouchX === 0) return;
+  const dx = e.changedTouches[0].clientX - _galleryTouchX;
+  _galleryTouchX = 0;
+  if (Math.abs(dx) < GALLERY_SWIPE_MIN) return;
+  const btn = stage.querySelector(dx < 0 ? '.gallery-next' : '.gallery-prev');
+  if (btn && !btn.disabled) btn.click();
+}, { passive: true });
