@@ -52,10 +52,10 @@ function linkifyReddit(text) {
   // Convert bare r/sub and u/user mentions to markdown links,
   // but skip ones already inside a markdown link [...](...) or code spans `...`
   return text
-    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\/\w])r\/([A-Za-z0-9_]+)/g,
-      (m, skip, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
-    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\/\w])u\/([A-Za-z0-9_-]+)/g,
-      (m, skip, user) => skip ? skip : `[u/${user}](/user/${user})`);
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<!\w)(\/?)r\/([A-Za-z0-9_]+)/g,
+      (m, skip, slash, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<!\w)(\/?)u\/([A-Za-z0-9_-]+)/g,
+      (m, skip, slash, user) => skip ? skip : `[u/${user}](/user/${user})`);
 }
 const _xlateCache = new Map();
 async function xlateText(text) {
