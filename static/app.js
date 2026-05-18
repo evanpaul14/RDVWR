@@ -885,12 +885,12 @@ async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
-    const startIdx = append ? feed.querySelectorAll('.post').length : 0;
+    const startIdx = append ? feed.children.length : 0;
     const multiSub = currentSub === 'popular' || currentSub === 'all';
-    feed.insertAdjacentHTML('beforeend', data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join(''));
-    initVideos(feed);
-    initRedgifs(feed);
-    initImgurAlbums(feed);
+    const tmp = document.createElement('div');
+    tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join('');
+    initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
+    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -944,11 +944,11 @@ async function loadMultiFeed(username, multiname, sort, time, after=null, append
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
-    const startIdx = append ? feed.querySelectorAll('.post').length : 0;
-    feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
-    initVideos(feed);
-    initRedgifs(feed);
-    initImgurAlbums(feed);
+    const startIdx = append ? feed.children.length : 0;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
+    initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
+    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -1017,10 +1017,10 @@ async function loadProfileTab(username, tab, sort='new', time='all', after=null,
     }
     const startIdx = append ? feed.children.length : 0;
     if (tab==='posts') {
-      feed.insertAdjacentHTML('beforeend', items.map((p,i)=>renderPost(p,startIdx+i,true)).join(''));
-      initVideos(feed);
-      initRedgifs(feed);
-      initImgurAlbums(feed);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
+      initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
+      while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     } else {
       feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
     }
@@ -1038,12 +1038,17 @@ async function loadProfile(username) {
   pvSubInput.value = '';
   document.title = `u/${username} — RDVWR`;
 
-  // Load user info
+  const aboutFetch = fetch(`/api/user/${encodeURIComponent(username)}/about`);
+  sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
+  sortBar.style.display = 'flex';
+
+  const [, aboutRes] = await Promise.all([
+    loadProfileTab(username, 'posts', profileSort, profileTime),
+    aboutFetch
+  ]);
   try {
-    const res = await fetch(`/api/user/${encodeURIComponent(username)}/about`);
-    if (res.ok) {
-      const d = await res.json();
-      const letter = escHtml(username[0].toUpperCase());
+    if (aboutRes.ok) {
+      const d = await aboutRes.json();
       document.getElementById('ctx-icon-wrap').innerHTML = d.icon
         ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
       document.getElementById('ctx-title').textContent = `u/${d.name}`;
@@ -1052,11 +1057,6 @@ async function loadProfile(username) {
       ctxInfo.classList.add('visible');
     }
   } catch {}
-
-  sortBar.innerHTML = buildProfileSortHtml(profileTab, profileSort, profileTime);
-  sortBar.style.display = 'flex';
-
-  await loadProfileTab(username, 'posts', profileSort, profileTime);
 }
 
 // ── Search feed ────────────────────────────────────────────────────────────
