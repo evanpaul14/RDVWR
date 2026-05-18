@@ -30,6 +30,7 @@ IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
+STREAMABLE_RE       = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -134,6 +135,12 @@ def process_post(p):
     if yt:
         youtube_id = yt.group(1)
 
+    # Streamable — extract video ID from post URL
+    streamable_id = None
+    sm = STREAMABLE_RE.search(p.get("url", ""))
+    if sm:
+        streamable_id = sm.group(1)
+
     # TikTok — extract player video ID from oembed HTML
     tiktok_id = None
     oembed_html = ((p.get("secure_media") or {}).get("oembed") or {}).get("html", "")
@@ -141,9 +148,9 @@ def process_post(p):
     if tt:
         tiktok_id = tt.group(1)
 
-    # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok)
+    # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
-    if not redgifs_id and not is_video and not youtube_id and not tiktok_id:
+    if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
         sec       = p.get("secure_media_embed") or {}
         media_url = clean_url(sec.get("media_domain_url", ""))
         if media_url:
@@ -225,6 +232,7 @@ def process_post(p):
         "audio_url":      audio_url,
         "youtube_id":     youtube_id,
         "tiktok_id":      tiktok_id,
+        "streamable_id":  streamable_id,
         "embed_url":      embed_url,
         "redgifs_id":     redgifs_id,
         "gif_url":        gif_url,
