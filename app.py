@@ -25,6 +25,7 @@ VREDDDIT_RE         = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 GIFV_RE             = re.compile(r'\.gifv$', re.I)
 IMGUR_ALBUM_RE      = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
+IMGUR_DIRECT_RE     = re.compile(r'(?:^|/)imgur\.com/([a-zA-Z0-9]{5,9})(?:[?#]|$)', re.I)
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
@@ -166,6 +167,10 @@ def process_post(p):
         elif lower_url.endswith(".gifv"):
             gif_url      = GIFV_RE.sub(".mp4", post_url)
             gif_is_video = True
+        else:
+            m = IMGUR_DIRECT_RE.search(post_url)
+            if m:
+                gif_url = f"https://i.imgur.com/{m.group(1)}.jpg"
 
     # Poll data
     poll = None
