@@ -75,6 +75,13 @@ def process_post(p):
         elif imgs.get("resolutions"):
             preview_img = clean_url(imgs["resolutions"][-1]["url"])
 
+    # Fallback: NSFW/image posts often lack preview data; the URL itself is the image.
+    if not preview_img and p.get("url"):
+        _pu = p["url"]
+        _ext = _pu.lower().split("?")[0].rsplit(".", 1)[-1] if "." in _pu else ""
+        if p.get("post_hint") == "image" or _ext in {"jpg", "jpeg", "png", "webp"}:
+            preview_img = clean_url(_pu)
+
     # Gallery (ordered)
     gallery = []
     if p.get("is_gallery") and p.get("gallery_data") and p.get("media_metadata"):
