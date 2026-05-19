@@ -449,7 +449,7 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('.share-btn[data-share]');
   if (!btn) return;
   e.stopPropagation();
-  const url = location.origin + btn.dataset.share;
+  const url = 'https://www.reddit.com' + btn.dataset.share;
   const flash = () => {
     const prev = btn.innerHTML;
     btn.innerHTML = '✓ copied';
