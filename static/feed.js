@@ -60,7 +60,10 @@ const postView    = document.getElementById('post-view');
 const pvContent   = document.getElementById('pv-content');
 const pvScroll    = document.getElementById('pv-scroll');
 const pvOpen      = document.getElementById('pv-open');
+const mainOpen    = document.getElementById('main-open');
 const pvBreadcrumb = document.getElementById('pv-breadcrumb');
+
+function setMainOpen(href) { mainOpen.href = href || '#'; }
 export const searchTypeBar = document.getElementById('search-type-bar');
 
 // ── Sidebar state (private) ────────────────────────────────────────────────────
@@ -226,6 +229,7 @@ export async function loadSubreddit(sub, sort='top', time='all') {
   document.title = `r/${state.currentSub} — RDVWR`;
   subInput.value = state.currentSub;
   pvSubInput.value = state.currentSub;
+  setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
   sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
@@ -285,6 +289,7 @@ export async function loadMultireddit(username, multiname, sort='hot', time='all
   document.title = `${multiname} — RDVWR`;
   subInput.value = `user/${username}/m/${multiname}`;
   pvSubInput.value = `user/${username}/m/${multiname}`;
+  setMainOpen(`https://www.reddit.com/user/${encodeURIComponent(username)}/m/${encodeURIComponent(multiname)}/${sort}/`);
   sortBar.innerHTML = buildSubSortHtml(sort, time, '');
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
@@ -363,6 +368,7 @@ export async function loadProfile(username) {
   subInput.value = '';
   pvSubInput.value = '';
   document.title = `u/${username} — RDVWR`;
+  setMainOpen(`https://www.reddit.com/user/${encodeURIComponent(username)}/`);
 
   const aboutFetch = fetch(`/api/user/${encodeURIComponent(username)}/about`);
   sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
@@ -440,6 +446,9 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   subInput.value = query;
   pvSubInput.value = query;
   document.title = `Search: ${query}${sub ? ` in r/${sub}` : ''} — RDVWR`;
+  let _searchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}&sort=${sort}`;
+  if (sub) _searchUrl += `&restrict_sr=1&sr_nsfw=`;
+  setMainOpen(_searchUrl);
 
   document.getElementById('ctx-icon-wrap').innerHTML = '';
   document.getElementById('ctx-title').textContent = sub ? `r/${sub}: "${query}"` : `Search: "${query}"`;
@@ -486,6 +495,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
     ctxInfo.classList.remove('visible');
     subInput.value = '';
     pvSubInput.value = '';
+    setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(sub)}/duplicates/${encodeURIComponent(postId)}`);
   } else {
     sentinel.classList.add('loading');
   }
@@ -540,6 +550,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
 export async function loadWikiPage(sub, page) {
   state._wikiSub = sub; state._wikiPage = page;
   state.wikiMode = true; state.afterToken = null;
+  setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   sortBar.innerHTML = `<a class="sort-btn" href="javascript:;" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
   document.title = `${page} — ${sub} wiki — RDVWR`;
@@ -843,6 +854,7 @@ export async function loadLiveThread(threadId) {
   pvSubInput.value = '';
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
+  setMainOpen(`https://www.reddit.com/live/${encodeURIComponent(threadId)}`);
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   try {
     const res  = await fetch(`/api/live/${encodeURIComponent(threadId)}`);
