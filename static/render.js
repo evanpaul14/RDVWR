@@ -148,6 +148,18 @@ export function renderPost(p, idx, showSub=false) {
         </div>
       </div>`;
 
+  if (p.crosspost_from) {
+    return `
+    <div class="post" style="animation-delay:${delay}ms">
+      <div class="post-header">
+        ${metaTop}
+        ${titleLink}
+      </div>
+      ${renderCrosspostEmbed(p.crosspost_from)}
+      ${footer}
+    </div>`;
+  }
+
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
   const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
@@ -169,13 +181,11 @@ export function renderPost(p, idx, showSub=false) {
   }
 
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
-  const crosspostHtml = p.crosspost_from ? renderCrosspostEmbed(p.crosspost_from) : '';
   return `
     <div class="post" style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
-        ${crosspostHtml}
       </div>
       ${mediaHtmlCard(p)}
       ${excerptHtml}

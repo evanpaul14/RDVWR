@@ -625,29 +625,36 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .xlate-btn { background:none; border:none; padding:0; cursor:pointer; font-family:var(--mono); font-size:10px; letter-spacing:.03em; color:var(--tx3); transition:color .15s; }
 .xlate-btn:hover { color:var(--ac); }
 .crosspost-embed {
-  margin:10px 16px 4px;
+  margin:0 16px 4px;
   border:1px solid var(--b); border-radius:6px; overflow:hidden;
-  background:var(--bg3);
+  background:var(--bg3); cursor:pointer;
+  transition:border-color .15s;
 }
+.crosspost-embed:hover { border-color:var(--b2); }
 .crosspost-embed-header {
   font-family:var(--mono); font-size:10px; color:var(--tx3);
-  letter-spacing:.03em; padding:8px 12px 0;
+  letter-spacing:.03em; padding:8px 12px 4px;
 }
 .crosspost-embed-header a { color:var(--ac); text-decoration:none; }
 .crosspost-embed-header a:hover { text-decoration:underline; }
 .crosspost-embed-title {
-  display:block; font-family:var(--sans); font-size:14px; font-weight:500;
-  color:var(--tx); line-height:1.4; padding:5px 12px 8px;
+  display:block; font-family:var(--sans); font-size:13px; font-weight:500;
+  color:var(--tx2); line-height:1.4; padding:0 12px 8px;
   text-decoration:none; transition:color .15s;
 }
 .crosspost-embed-title:hover { color:var(--ac); }
 .crosspost-embed .post-media,
 .crosspost-embed .post-video,
-.crosspost-embed .pv-media { border-radius:0; border-left:none; border-right:none; margin-bottom:0; }
+.crosspost-embed .pv-media {
+  border-radius:0; border-left:none; border-right:none;
+  border-top:1px solid var(--b); border-bottom:none; margin-bottom:0;
+}
+#pv-content .crosspost-embed { margin:0 0 16px; }
+.crosspost-embed .post-media img { max-height:400px; }
 .crosspost-embed .xp-excerpt {
-  font-family:var(--sans); font-size:12px; line-height:1.6; color:#bbb;
+  font-family:var(--sans); font-size:12px; line-height:1.6; color:var(--tx3);
   padding:4px 12px 10px;
-  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
 }
 
 /* ── Comment sort bar (inside post view) ─────────────────────────────────── */

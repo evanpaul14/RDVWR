@@ -449,12 +449,23 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('.share-btn[data-share]');
   if (!btn) return;
   e.stopPropagation();
-  navigator.clipboard.writeText(location.origin + btn.dataset.share).then(() => {
+  const url = location.origin + btn.dataset.share;
+  const flash = () => {
     const prev = btn.innerHTML;
     btn.innerHTML = '✓ copied';
     btn.classList.add('share-copied');
     setTimeout(() => { btn.innerHTML = prev; btn.classList.remove('share-copied'); }, 1500);
-  }).catch(() => {});
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(flash).catch(() => {});
+  } else {
+    const ta = Object.assign(document.createElement('textarea'), { value: url });
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy'); flash(); } catch {}
+    ta.remove();
+  }
 });
 
 // Unmute propagation
