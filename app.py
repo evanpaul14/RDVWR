@@ -518,6 +518,41 @@ def get_imgur_album(album_id):
 
 # ── Subreddit autocomplete ────────────────────────────────────────────────────
 
+HOME_SORTS = {'hot', 'new', 'top', 'rising', 'controversial', 'best'}
+
+@app.route("/api/home")
+def get_home():
+    sort  = request.args.get("sort", "hot")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
+    loid  = request.args.get("loid", "")
+    pc    = request.args.get("pc", "")
+    if sort not in HOME_SORTS:
+        sort = "hot"
+    url    = f"https://www.reddit.com/{sort}.json"
+    params = {"limit": FEED_LIMIT, "raw_json": 1}
+    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
+    if after:
+        params["after"] = after
+    cookies = {}
+    if loid:
+        cookies["loid"] = loid
+    if pc:
+        cookies["pc"] = pc
+    try:
+        resp = SESSION.get(url, params=params, cookies=cookies, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()["data"]
+        posts   = extract_posts(listing)
+        return jsonify({"posts": posts, "after": listing.get("after")})
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/subreddit-search")
 def subreddit_search():
     q = request.args.get("q", "").strip()

@@ -3,6 +3,7 @@ import { escHtml, setActiveButton, AUTOCOMPLETE_DEBOUNCE, TOUCH_MOVE_THRESHOLD }
 import { parseRoute } from './router.js';
 import {
   loadSubreddit, loadSubFeed,
+  loadHomeFeed, loadHomeSubFeed,
   loadMultireddit, loadMultiFeed,
   loadProfile, loadProfileTab,
   loadSearch, loadSearchResults, loadCommunityResults, loadUserResults,
@@ -51,7 +52,17 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
     case 'home':
-      navigate('/r/popular/hot', { replace: true });
+      closePostView();
+      closeSidebar();
+      state.searchMode = false;
+      if (!localStorage.getItem('redditLoid')) {
+        openSettings();
+        feed.innerHTML = '<div class="state"><div class="state-icon">⌂</div><div class="state-title">Configure your home feed</div><div class="state-sub">Paste your Reddit <code>loid</code> cookie to load your personalized feed.</div></div>';
+        sortBar.style.display = 'none';
+        document.title = 'Home — RDVWR';
+        return;
+      }
+      await loadHomeFeed(state.currentSort || 'hot', state.currentTime || 'all');
       return;
     case 'sub':
       closePostView();
@@ -159,7 +170,40 @@ function interceptNavLink(a, e) {
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 // pv-home button
-document.getElementById('pv-home').addEventListener('click', () => { navigate('/r/popular/hot'); });
+document.getElementById('pv-home').addEventListener('click', () => { navigate('/'); });
+
+// ── Settings modal ────────────────────────────────────────────────────────────
+const settingsModal    = document.getElementById('settings-modal');
+const settingsBackdrop = document.getElementById('settings-backdrop');
+const settingsLoid     = document.getElementById('settings-loid');
+const settingsPc       = document.getElementById('settings-pc');
+
+export function openSettings() {
+  settingsLoid.value = localStorage.getItem('redditLoid') || '';
+  settingsPc.value   = localStorage.getItem('redditPc')   || '';
+  settingsModal.classList.add('open');
+  settingsBackdrop.classList.add('open');
+  settingsLoid.focus();
+}
+function closeSettings() {
+  settingsModal.classList.remove('open');
+  settingsBackdrop.classList.remove('open');
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+settingsBackdrop.addEventListener('click', closeSettings);
+document.getElementById('settings-close').addEventListener('click', closeSettings);
+document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+document.getElementById('settings-save').addEventListener('click', () => {
+  const loid = settingsLoid.value.trim();
+  const pc   = settingsPc.value.trim();
+  if (loid) localStorage.setItem('redditLoid', loid);
+  else      localStorage.removeItem('redditLoid');
+  if (pc)   localStorage.setItem('redditPc', pc);
+  else      localStorage.removeItem('redditPc');
+  closeSettings();
+  if (location.pathname === '/') navigate('/', { replace: true });
+});
 
 // Comment collapse
 document.getElementById('post-view').addEventListener('click', e => {
@@ -273,7 +317,10 @@ sortBar.addEventListener('click', e => {
   state.currentSort = newSort; state.currentTime = newSort === 'controversial' ? 'day' : 'all';
   state.afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
-  if (state.multiMode) {
+  if (state.homeMode) {
+    sortBar.innerHTML = buildSubSortHtml(state.currentSort, state.currentTime, '__home__');
+    loadHomeSubFeed(state.currentSort, state.currentTime);
+  } else if (state.multiMode) {
     navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
   } else {
     navigate(`/r/${state.currentSub}/${state.currentSort}`, { replace:true });
@@ -297,6 +344,11 @@ sortBar.addEventListener('change', e => {
     state.profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
+  } else if (state.homeMode) {
+    state.currentTime = sel.value;
+    state.afterToken = null;
+    window.scrollTo({top:0, behavior:'instant'});
+    loadHomeSubFeed(state.currentSort, state.currentTime);
   } else if (state.multiMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
@@ -357,6 +409,8 @@ function loadMore() {
     if (state.afterToken) loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime, state.afterToken, true);
   } else if (state.liveMode) {
     if (state.liveAfter) loadMoreLiveUpdates(state.liveThreadId, state.liveAfter);
+  } else if (state.homeMode) {
+    if (state.afterToken) loadHomeSubFeed(state.currentSort, state.currentTime, state.afterToken, true);
   } else {
     if (state.afterToken) loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, true);
   }
