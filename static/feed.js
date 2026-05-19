@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { escHtml, fmtNum, fmtDate, timeAgo, setActiveButton, renderFlair, renderAwards, SKELETON_COUNT } from './utils.js';
 import { initVideos, initRedgifs, initImgurAlbums, mediaHtmlFull } from './media.js';
-import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate } from './render.js';
+import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate, renderCrosspostFull } from './render.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed        = document.getElementById('feed');
@@ -730,7 +730,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
     ].filter(Boolean).join('');
     const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>` : '';
     const bodyHtml = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
-    const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ cross-posted from <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a> · <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}/comments/${escHtml(p.crosspost_from.id)}">view original</a></div>` : '';
+    const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : '';
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>

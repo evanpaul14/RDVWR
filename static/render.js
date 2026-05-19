@@ -88,6 +88,23 @@ export async function translatePost(p, container) {
   });
 }
 
+// ── Crosspost embed ───────────────────────────────────────────────────────────
+function renderCrosspostEmbed(orig, full=false) {
+  const sub  = escHtml(orig.subreddit || '');
+  const id   = escHtml(orig.id || '');
+  const nav  = `/r/${sub}/comments/${id}`;
+  const mediaHtml = orig.id ? (full ? mediaHtmlFull(orig) : mediaHtmlCard(orig)) : '';
+  const excerptHtml = orig.selftext?.trim()
+    ? `<div class="xp-excerpt md">${renderMd(orig.selftext)}</div>` : '';
+  return `<div class="crosspost-embed">
+    <div class="crosspost-embed-header">↪ crossposted from <a href="javascript:;" data-nav="/r/${sub}">r/${sub}</a></div>
+    <a class="crosspost-embed-title" href="javascript:;" data-nav="${escHtml(nav)}">${escHtml(orig.title || '')}</a>
+    ${mediaHtml}${excerptHtml}
+  </div>`;
+}
+
+export function renderCrosspostFull(orig) { return renderCrosspostEmbed(orig, true); }
+
 // ── Post card ─────────────────────────────────────────────────────────────────
 export function renderPost(p, idx, showSub=false) {
   const sub    = escHtml(p.subreddit);
@@ -152,7 +169,7 @@ export function renderPost(p, idx, showSub=false) {
   }
 
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
-  const crosspostHtml = p.crosspost_from ? `<div class="crosspost-banner">↪ <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}/comments/${escHtml(p.crosspost_from.id)}">view original</a> · <a href="javascript:;" data-nav="/r/${escHtml(p.crosspost_from.subreddit)}">r/${escHtml(p.crosspost_from.subreddit)}</a></div>` : '';
+  const crosspostHtml = p.crosspost_from ? renderCrosspostEmbed(p.crosspost_from) : '';
   return `
     <div class="post" style="animation-delay:${delay}ms">
       <div class="post-header">

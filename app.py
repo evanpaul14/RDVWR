@@ -202,12 +202,16 @@ def process_post(p):
 
     crosspost_from = None
     if p.get("crosspost_parent_list"):
-        orig = p["crosspost_parent_list"][0]
-        crosspost_from = {
-            "subreddit": orig.get("subreddit", ""),
-            "id":        orig.get("id", ""),
-            "author":    orig.get("author", "[deleted]"),
-        }
+        orig = dict(p["crosspost_parent_list"][0])
+        orig.pop("crosspost_parent_list", None)
+        try:
+            crosspost_from = process_post(orig)
+        except Exception:
+            crosspost_from = {
+                "subreddit": orig.get("subreddit", ""),
+                "id":        orig.get("id", ""),
+                "author":    orig.get("author", "[deleted]"),
+            }
 
     edited = p.get("edited")
     edited_utc = edited if isinstance(edited, (int, float)) and edited else None
