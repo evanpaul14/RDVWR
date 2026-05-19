@@ -52,4 +52,11 @@ export const state = {
   _pvPostId: '',
   _pvCommentId: '',
   _pvData: null,
+
+  // Live thread
+  liveMode: false,
+  liveThreadId: '',
+  liveState: 'complete',
+  liveAfter: null,
+  _liveNewestId: '',
 };

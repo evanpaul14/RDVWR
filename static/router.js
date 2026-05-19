@@ -22,6 +22,8 @@ export function parseRoute(path=location.pathname) {
     const time = new URLSearchParams(qs).get('t') || (sort === 'top' || sort === 'controversial' ? 'day' : 'all');
     return { type: 'multi', username: mMulti[1], multiname: mMulti[2], sort, time };
   }
+  const mLive = pathname.match(/^\/live\/([A-Za-z0-9_-]+)/i);
+  if (mLive) return { type: 'live', threadId: mLive[1] };
   const mUser = pathname.match(/^\/u(?:ser)?\/([^\/]+)/);
   if (mUser) return { type:'user', username:mUser[1] };
   if (pathname === '/search') {

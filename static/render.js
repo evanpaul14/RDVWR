@@ -264,3 +264,17 @@ export function renderUserCard(u, idx) {
     </div>
   </div>`;
 }
+
+export function renderLiveUpdate(u, isNew=false) {
+  const body = u.body?.trim()
+    ? `<div class="live-update-body md${u.stricken ? ' live-update-body-stricken' : ''}">${renderMd(u.body)}</div>`
+    : '';
+  return `<div class="live-update${u.stricken ? ' live-update-stricken' : ''}${isNew ? ' live-update-new' : ''}">
+    <div class="live-update-meta">
+      <span class="live-update-time" title="${new Date(u.created_utc * 1000).toISOString()}">${timeAgo(u.created_utc)}</span>
+      <button class="live-update-author" data-user="${escHtml(u.author)}">u/${escHtml(u.author)}</button>
+      ${u.stricken ? '<span class="live-update-retracted">retracted</span>' : ''}
+    </div>
+    ${body}
+  </div>`;
+}
