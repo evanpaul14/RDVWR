@@ -34,6 +34,10 @@ function buildDownloadBtn(p) {
   }
   let url = '', filename = '';
   if (p.is_video && p.video_url) {
+    if (p.audio_url) {
+      const href = `/api/download/reddit-video?video=${encodeURIComponent(p.video_url)}&audio=${encodeURIComponent(p.audio_url)}&filename=${encodeURIComponent(p.id + '.mp4')}`;
+      return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(p.id + '.mp4')}" title="Download video">${_DL_SVG} download</a>`;
+    }
     url = p.video_url; filename = `${p.id}.mp4`;
   } else if (p.gif_url) {
     url = p.gif_url; filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
