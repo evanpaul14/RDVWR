@@ -444,6 +444,19 @@ document.addEventListener('auxclick', e => {
   interceptNavLink(a, e);
 }, true);
 
+// Share / copy link
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.share-btn[data-share]');
+  if (!btn) return;
+  e.stopPropagation();
+  navigator.clipboard.writeText(location.origin + btn.dataset.share).then(() => {
+    const prev = btn.innerHTML;
+    btn.innerHTML = '✓ copied';
+    btn.classList.add('share-copied');
+    setTimeout(() => { btn.innerHTML = prev; btn.classList.remove('share-copied'); }, 1500);
+  }).catch(() => {});
+});
+
 // Unmute propagation
 let _propagatingUnmute = false;
 document.addEventListener('volumechange', e => {

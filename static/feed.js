@@ -744,6 +744,10 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
         <a class="meta-item link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">dupes</a>
+        <button class="share-btn" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          share
+        </button>
         ${renderAwards(p.awards)}
       </div>
       ${mediaHtmlFull(p)}
