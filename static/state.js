@@ -1,6 +1,9 @@
 export const state = {
   userPrefersMuted: localStorage.getItem('mutePreference') !== 'unmuted',
 
+  // Home
+  homeMode: false,
+
   // Feed
   currentSub: '',
   currentSort: 'top',

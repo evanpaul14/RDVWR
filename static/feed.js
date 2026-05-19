@@ -93,8 +93,9 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';
-  const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
-  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="javascript:;" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
+  const isHome = sub === '__home__';
+  const sidebarBtn = (isPop || isHome) ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
+  const wikiBtn = (isPop || isHome) ? '' : `<a class="sort-btn sort-btn-wiki" href="javascript:;" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
 
@@ -160,6 +161,8 @@ export function retryFeedLoad() {
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
   } else if (state.multiMode) {
     loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime);
+  } else if (state.homeMode) {
+    loadHomeSubFeed(state.currentSort, state.currentTime);
   } else {
     loadSubFeed(state.currentSub, state.currentSort, state.currentTime);
   }
@@ -235,6 +238,63 @@ export async function loadSubreddit(sub, sort='top', time='all') {
   ctxInfo.classList.remove('visible');
   loadAbout(state.currentSub);
   await loadSubFeed(state.currentSub, state.currentSort, state.currentTime);
+}
+
+// ── Home feed ─────────────────────────────────────────────────────────────────
+export async function loadHomeSubFeed(sort, time, after=null, append=false) {
+  if (append && state.loading) return;
+  if (!append) state.feedGen++;
+  const myGen = state.feedGen;
+  state.loading = true;
+  if (!append) showSkeletons();
+  else sentinel.classList.add('loading');
+  const loid = localStorage.getItem('redditLoid') || '';
+  const pc   = localStorage.getItem('redditPc')   || '';
+  try {
+    let url = `/api/home?sort=${sort}`;
+    if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
+    if (after) url += `&after=${after}`;
+    if (loid) url += `&loid=${encodeURIComponent(loid)}`;
+    if (pc)   url += `&pc=${encodeURIComponent(pc)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== state.feedGen) return;
+    if (!res.ok) {
+      if (!append) feed.innerHTML = errState(escHtml(data.error || 'Error'), 'feed');
+      return;
+    }
+    if (!append) feed.innerHTML = '';
+    if (!data.posts.length && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      return;
+    }
+    const startIdx = append ? feed.children.length : 0;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
+    initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
+    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+    state.afterToken = data.after;
+    sentinel.classList.remove('loading');
+  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
+  finally  { if (myGen === state.feedGen) state.loading = false; }
+}
+
+export async function loadHomeFeed(sort='hot', time='all') {
+  state.homeMode    = true;
+  state.profileMode = false;
+  state.multiMode   = false;
+  state.currentSub  = '';
+  state.currentSort = sort;
+  state.currentTime = time;
+  state.afterToken  = null;
+  document.title = 'Home — RDVWR';
+  subInput.value = '';
+  pvSubInput.value = '';
+  setMainOpen('https://www.reddit.com/');
+  sortBar.innerHTML = buildSubSortHtml(sort, time, '__home__');
+  sortBar.style.display = 'flex';
+  ctxInfo.classList.remove('visible');
+  await loadHomeSubFeed(sort, time);
 }
 
 export async function loadMultiFeed(username, multiname, sort, time, after=null, append=false) {
