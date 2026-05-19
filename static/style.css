@@ -260,6 +260,14 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   display:flex; align-items:center; gap:4px; white-space:nowrap;
 }
 .comments-link:hover { color:var(--ac); }
+.share-btn {
+  font-family:var(--mono); font-size:10px; color:var(--tx3);
+  background:none; border:none; padding:0; cursor:pointer;
+  letter-spacing:.03em; transition:color .15s;
+  display:flex; align-items:center; gap:4px; white-space:nowrap;
+}
+.share-btn:hover { color:var(--ac); }
+.share-btn.share-copied { color:var(--ac); }
 .ext-link {
   font-family:var(--mono); font-size:10px; color:var(--tx3); text-decoration:none;
   letter-spacing:.03em; transition:color .15s;
