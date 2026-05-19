@@ -377,13 +377,15 @@ feed.addEventListener('click', e => {
   }
   const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
   if (card) { navigateOrOpen(card.dataset.nav, e); return; }
+  const commentCard = e.target.closest('.user-comment-card[data-nav]');
+  if (commentCard && !e.target.closest('a')) { navigateOrOpen(commentCard.dataset.nav, e); return; }
 });
 feed.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
   const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
-  if (!card) return;
-  e.preventDefault();
-  navigateOrOpen(card.dataset.nav, e);
+  if (card) { e.preventDefault(); navigateOrOpen(card.dataset.nav, e); return; }
+  const commentCard = e.target.closest('.user-comment-card[data-nav]');
+  if (commentCard) { e.preventDefault(); navigateOrOpen(commentCard.dataset.nav, e); }
 });
 
 // Logo
