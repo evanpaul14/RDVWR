@@ -26,12 +26,16 @@ function buildDownloadBtn(p) {
     const fname = `${p.id}_1.${_pvDlExt(first)}`;
     return `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
   }
+  // Imgur album: placeholder replaced by initImgurAlbums once images are loaded
+  if (p.imgur_album_id) {
+    return `<span class="share-btn pv-dl-placeholder" data-imgur-dl="${escHtml(p.imgur_album_id)}" title="Download (loading…)">${_DL_SVG} download</span>`;
+  }
   let url = '', filename = '';
   if (p.is_video && p.video_url) {
     url = p.video_url; filename = `${p.id}.mp4`;
   } else if (p.gif_url) {
     url = p.gif_url; filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
-  } else if (!p.imgur_album_id && !p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url && !p.is_self && p.preview_img) {
+  } else if (!p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url && !p.is_self && p.preview_img) {
     url = p.preview_img; filename = `${p.id}.${_pvDlExt(p.preview_img)}`;
   }
   if (!url || !_pvDlOk(url)) return '';
