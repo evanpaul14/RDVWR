@@ -9,28 +9,34 @@ function _pvDlOk(url) {
   if (!url) return false;
   try { return _PV_DL_HOSTS.has(new URL(url).hostname); } catch { return false; }
 }
+function _pvDlExt(url) {
+  const ext = url.split('?')[0].split('.').pop().toLowerCase();
+  return ['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg';
+}
+const _DL_SVG = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function buildDownloadBtn(p) {
+  // Redgifs: placeholder replaced by initRedgifs once video URL is resolved
+  if (p.redgifs_id) {
+    return `<span class="share-btn pv-dl-placeholder" data-rg-dl="${escHtml(p.redgifs_id)}" title="Download (loading…)">${_DL_SVG} download</span>`;
+  }
+  // Gallery: downloads current image; gallery nav updates the href
+  if (p.gallery?.length) {
+    const first = p.gallery[0].url;
+    if (!_pvDlOk(first)) return '';
+    const fname = `${p.id}_1.${_pvDlExt(first)}`;
+    return `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
+  }
   let url = '', filename = '';
   if (p.is_video && p.video_url) {
-    url = p.video_url;
-    filename = `${p.id}.mp4`;
+    url = p.video_url; filename = `${p.id}.mp4`;
   } else if (p.gif_url) {
-    url = p.gif_url;
-    filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
-  } else if (!p.redgifs_id && !p.imgur_album_id && !p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url) {
-    const imgUrl = (p.gallery?.length === 1 ? p.gallery[0].url : null) || (!p.is_self ? p.preview_img : null);
-    if (imgUrl) {
-      url = imgUrl;
-      const ext = url.split('?')[0].split('.').pop().toLowerCase();
-      filename = `${p.id}.${['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg'}`;
-    }
+    url = p.gif_url; filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
+  } else if (!p.imgur_album_id && !p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url && !p.is_self && p.preview_img) {
+    url = p.preview_img; filename = `${p.id}.${_pvDlExt(p.preview_img)}`;
   }
   if (!url || !_pvDlOk(url)) return '';
   const href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-  return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(filename)}" title="Download media">
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    download
-  </a>`;
+  return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(filename)}" title="Download media">${_DL_SVG} download</a>`;
 }
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
