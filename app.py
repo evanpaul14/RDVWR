@@ -893,6 +893,51 @@ def get_user_comments_api(username):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/user/<username>/overview")
+def get_user_overview_api(username):
+    sort  = request.args.get("sort", "new")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
+    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
+    if after:
+        params["after"] = after
+    try:
+        resp = SESSION.get(
+            f"https://www.reddit.com/user/{username}/overview.json",
+            params=params, timeout=10)
+        if resp.status_code == 404:
+            return jsonify({"error": "User not found or profile is private"}), 404
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()["data"]
+        items = []
+        for child in listing["children"]:
+            kind = child.get("kind")
+            d    = child.get("data", {})
+            if kind == "t3":
+                try:
+                    items.append({"type": "post", "data": process_post(d)})
+                except Exception:
+                    pass
+            elif kind == "t1":
+                items.append({"type": "comment", "data": {
+                    "id":             d.get("id", ""),
+                    "author":         d.get("author", "[deleted]"),
+                    "body":           d.get("body", ""),
+                    "score":          d.get("score", 0),
+                    "created_utc":    d.get("created_utc", 0),
+                    "subreddit":      d.get("subreddit", ""),
+                    "link_title":     d.get("link_title", ""),
+                    "link_permalink": f"https://www.reddit.com{d.get('link_permalink', '')}",
+                    "link_id":        d.get("link_id", "").replace("t3_", ""),
+                }})
+        return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-\/\.]+$')
 
 @app.route("/api/r/<subreddit>/wiki")

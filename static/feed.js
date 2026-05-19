@@ -49,9 +49,13 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
 
-export function buildProfileSortHtml(tab='posts', sort='new', time='all') {
-  const tabBtns = `<button class="sort-btn${tab==='posts'?' active':''}" data-ptab="posts">Posts</button><button class="sort-btn${tab==='comments'?' active':''}" data-ptab="comments">Comments</button>`;
-  const sorts = tab==='posts' ? ['hot','new','top'] : ['new','top'];
+export function buildProfileSortHtml(tab='overview', sort='new', time='all') {
+  const tabBtns = [
+    `<button class="sort-btn${tab==='overview'?' active':''}" data-ptab="overview">Overview</button>`,
+    `<button class="sort-btn${tab==='posts'?' active':''}" data-ptab="posts">Posts</button>`,
+    `<button class="sort-btn${tab==='comments'?' active':''}" data-ptab="comments">Comments</button>`,
+  ].join('');
+  const sorts = tab==='comments' ? ['new','top'] : ['hot','new','top'];
   const sortBtns = sorts.map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-psort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
@@ -249,9 +253,15 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
   if (!append) { showSkeletons(); state.profileAfter = null; }
   else sentinel.classList.add('loading');
   try {
-    const endpoint = tab==='posts' ? 'posts' : 'comments';
-    let url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
-    if (sort === 'top') url += `&t=${time || 'all'}`;
+    let url;
+    if (tab === 'overview') {
+      url = `/api/user/${encodeURIComponent(username)}/overview?sort=${sort}`;
+      if (sort === 'top') url += `&t=${time || 'all'}`;
+    } else {
+      const endpoint = tab === 'posts' ? 'posts' : 'comments';
+      url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
+      if (sort === 'top') url += `&t=${time || 'all'}`;
+    }
     if (after) url += `&after=${after}`;
     const res  = await fetch(url);
     const data = await res.json();
@@ -261,19 +271,37 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
       return;
     }
     if (!append) feed.innerHTML = '';
-    const items = tab==='posts' ? data.posts : data.comments;
-    if (!items?.length && !append) {
-      feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>`;
-      return;
-    }
-    const startIdx = append ? feed.children.length : 0;
-    if (tab==='posts') {
+
+    if (tab === 'overview') {
+      const items = data.items;
+      if (!items?.length && !append) {
+        feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>`;
+        return;
+      }
+      const startIdx = append ? feed.children.length : 0;
       const tmp = document.createElement('div');
-      tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
+      tmp.innerHTML = items.map((item, i) =>
+        item.type === 'post'
+          ? renderPost(item.data, startIdx + i, true)
+          : renderUserCommentCard(item.data, startIdx + i)
+      ).join('');
       initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
       while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     } else {
-      feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
+      const items = tab === 'posts' ? data.posts : data.comments;
+      if (!items?.length && !append) {
+        feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>`;
+        return;
+      }
+      const startIdx = append ? feed.children.length : 0;
+      if (tab === 'posts') {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
+        initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
+        while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+      } else {
+        feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
+      }
     }
     state.profileAfter = data.after;
     sentinel.classList.remove('loading');
@@ -282,7 +310,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
 }
 
 export async function loadProfile(username) {
-  state.profileMode = true; state.profileUser = username; state.profileTab = 'posts'; state.profileSort = 'new'; state.profileTime = 'all'; state.profileAfter = null;
+  state.profileMode = true; state.profileUser = username; state.profileTab = 'overview'; state.profileSort = 'new'; state.profileTime = 'all'; state.profileAfter = null;
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
   subInput.value = '';
@@ -294,7 +322,7 @@ export async function loadProfile(username) {
   sortBar.style.display = 'flex';
 
   const [, aboutRes] = await Promise.all([
-    loadProfileTab(username, 'posts', state.profileSort, state.profileTime),
+    loadProfileTab(username, 'overview', state.profileSort, state.profileTime),
     aboutFetch
   ]);
   try {
