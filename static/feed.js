@@ -3,6 +3,36 @@ import { escHtml, fmtNum, fmtDate, timeAgo, setActiveButton, renderFlair, render
 import { initVideos, initRedgifs, initImgurAlbums, mediaHtmlFull } from './media.js';
 import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate, renderCrosspostFull } from './render.js';
 
+// ── Download helper ───────────────────────────────────────────────────────────
+const _PV_DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
+function _pvDlOk(url) {
+  if (!url) return false;
+  try { return _PV_DL_HOSTS.has(new URL(url).hostname); } catch { return false; }
+}
+function buildDownloadBtn(p) {
+  let url = '', filename = '';
+  if (p.is_video && p.video_url) {
+    url = p.video_url;
+    filename = `${p.id}.mp4`;
+  } else if (p.gif_url) {
+    url = p.gif_url;
+    filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
+  } else if (!p.redgifs_id && !p.imgur_album_id && !p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url) {
+    const imgUrl = (p.gallery?.length === 1 ? p.gallery[0].url : null) || (!p.is_self ? p.preview_img : null);
+    if (imgUrl) {
+      url = imgUrl;
+      const ext = url.split('?')[0].split('.').pop().toLowerCase();
+      filename = `${p.id}.${['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg'}`;
+    }
+  }
+  if (!url || !_pvDlOk(url)) return '';
+  const href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(filename)}" title="Download media">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    download
+  </a>`;
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed        = document.getElementById('feed');
 const sortBar     = document.getElementById('sort-bar');
@@ -748,6 +778,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           share
         </button>
+        ${buildDownloadBtn(p)}
         ${renderAwards(p.awards)}
       </div>
       ${crosspostHtml}

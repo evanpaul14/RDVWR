@@ -4,6 +4,7 @@ import json
 import html as html_lib
 import time
 import requests
+from urllib.parse import urlparse
 from flask import Flask, render_template, jsonify, request, Response, make_response
 
 CACHE_TTL_STATIC     = 604800   # 1 week
@@ -321,6 +322,41 @@ def proxy_redgifs_media(filename):
                         status=upstream.status_code, headers=resp_headers)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
+
+
+# ── Generic media download proxy ─────────────────────────────────────────────
+
+DOWNLOAD_ALLOWED_HOSTS = frozenset({
+    'v.redd.it',
+    'i.redd.it',
+    'preview.redd.it',
+    'external-preview.redd.it',
+    'i.imgur.com',
+})
+
+@app.route("/api/download")
+def download_media():
+    url = request.args.get('url', '').strip()
+    filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'media'))[:128]
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return jsonify({'error': 'Invalid URL'}), 400
+    if parsed.scheme not in ('http', 'https') or parsed.netloc not in DOWNLOAD_ALLOWED_HOSTS:
+        return jsonify({'error': 'URL not allowed'}), 400
+    try:
+        upstream = SESSION.get(url, stream=True, timeout=30)
+        upstream.raise_for_status()
+        content_type = upstream.headers.get('Content-Type', 'application/octet-stream')
+        resp_headers = {
+            'Content-Type': content_type,
+            'Content-Disposition': f'attachment; filename="{filename}"',
+        }
+        if 'Content-Length' in upstream.headers:
+            resp_headers['Content-Length'] = upstream.headers['Content-Length']
+        return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), status=200, headers=resp_headers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
 
 
 # ── Imgur album proxy ────────────────────────────────────────────────────────

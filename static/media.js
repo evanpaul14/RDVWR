@@ -1,6 +1,20 @@
 import { state } from './state.js';
 import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
+const _DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
+function _dlOk(url) {
+  if (!url) return false;
+  try { return _DL_HOSTS.has(new URL(url).hostname); } catch { return false; }
+}
+function _dlHref(url, filename) {
+  return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+}
+function _dlFilename(url) {
+  try { return new URL(url).pathname.split('/').filter(Boolean).pop() || 'media'; }
+  catch { return 'media'; }
+}
+const _DL_ICON = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 export function syncAudio(videoEl, audioSrc) {
   const audio = new Audio(audioSrc);
   audio.preload = 'none';
@@ -48,7 +62,9 @@ export async function initRedgifs(container) {
       const res = await fetch(`/api/redgifs/${id}`);
       const data = await res.json();
       if (!res.ok || (!data.hd && !data.sd)) throw new Error(data.error || 'no url');
-      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(data.hd || data.sd)}"></video>`;
+      const videoSrc = data.hd || data.sd;
+      const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
+      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video><a class="media-dl-btn" href="${escHtml(videoSrc)}" download="${escHtml(rgFname)}" title="Download video">${_DL_ICON} download</a>`;
       if (!state.userPrefersMuted) { const v = wrap.querySelector('video'); if (v) v.muted = false; }
     } catch {
       wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
@@ -87,12 +103,17 @@ export function renderGallery(images) {
     <div class="gallery">
       <div class="gallery-stage">
         <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}">
-        ${images.length > 1 ? `
-          <div class="gallery-nav">
+        ${images.length > 1 ? (() => {
+          const fn0 = _dlFilename(images[0].url);
+          const dlHref0 = _dlOk(images[0].url) ? _dlHref(images[0].url, fn0) : '';
+          const dlBtn = dlHref0 ? `<a class="gallery-dl-btn" href="${escHtml(dlHref0)}" download="${escHtml(fn0)}" title="Download image">${_DL_ICON}</a>` : '';
+          return `<div class="gallery-nav">
             <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
             <span class="gallery-counter">1 / ${images.length}</span>
             <button class="gallery-btn gallery-next" aria-label="Next image">›</button>
-          </div>` : ''}
+            ${dlBtn}
+          </div>`;
+        })() : ''}
       </div>
       ${images[0].caption ? `<div class="gallery-caption">${escHtml(images[0].caption)}</div>` : ''}
       ${images.length > 1 ? `<div class="gallery-thumbs">${thumbsHtml}</div>` : ''}
@@ -176,6 +197,11 @@ document.addEventListener('click', e => {
   if (nextBtn) nextBtn.disabled = idx === thumbs.length - 1;
   if (caption) { caption.textContent = t.dataset.caption; caption.style.display = t.dataset.caption ? '' : 'none'; }
   thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
+  const dlBtn = gallery.querySelector('.gallery-dl-btn');
+  if (dlBtn) {
+    const fn = _dlFilename(t.src);
+    if (_dlOk(t.src)) { dlBtn.href = _dlHref(t.src, fn); dlBtn.download = fn; }
+  }
 });
 
 let _galleryTouchX = 0;
