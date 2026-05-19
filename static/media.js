@@ -64,8 +64,19 @@ export async function initRedgifs(container) {
       if (!res.ok || (!data.hd && !data.sd)) throw new Error(data.error || 'no url');
       const videoSrc = data.hd || data.sd;
       const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
-      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video><a class="media-dl-btn" href="${escHtml(videoSrc)}" download="${escHtml(rgFname)}" title="Download video">${_DL_ICON} download</a>`;
+      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
       if (!state.userPrefersMuted) { const v = wrap.querySelector('video'); if (v) v.muted = false; }
+      // Activate the pv-meta placeholder if present
+      const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
+      if (placeholder) {
+        const a = document.createElement('a');
+        a.className = 'share-btn';
+        a.href = videoSrc;
+        a.download = rgFname;
+        a.title = 'Download video';
+        a.innerHTML = `${_DL_ICON} download`;
+        placeholder.replaceWith(a);
+      }
     } catch {
       wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
     }
@@ -103,17 +114,12 @@ export function renderGallery(images) {
     <div class="gallery">
       <div class="gallery-stage">
         <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}">
-        ${images.length > 1 ? (() => {
-          const fn0 = _dlFilename(images[0].url);
-          const dlHref0 = _dlOk(images[0].url) ? _dlHref(images[0].url, fn0) : '';
-          const dlBtn = dlHref0 ? `<a class="gallery-dl-btn" href="${escHtml(dlHref0)}" download="${escHtml(fn0)}" title="Download image">${_DL_ICON}</a>` : '';
-          return `<div class="gallery-nav">
+        ${images.length > 1 ? `
+          <div class="gallery-nav">
             <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
             <span class="gallery-counter">1 / ${images.length}</span>
             <button class="gallery-btn gallery-next" aria-label="Next image">›</button>
-            ${dlBtn}
-          </div>`;
-        })() : ''}
+          </div>` : ''}
       </div>
       ${images[0].caption ? `<div class="gallery-caption">${escHtml(images[0].caption)}</div>` : ''}
       ${images.length > 1 ? `<div class="gallery-thumbs">${thumbsHtml}</div>` : ''}
@@ -197,10 +203,12 @@ document.addEventListener('click', e => {
   if (nextBtn) nextBtn.disabled = idx === thumbs.length - 1;
   if (caption) { caption.textContent = t.dataset.caption; caption.style.display = t.dataset.caption ? '' : 'none'; }
   thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
-  const dlBtn = gallery.querySelector('.gallery-dl-btn');
-  if (dlBtn) {
-    const fn = _dlFilename(t.src);
-    if (_dlOk(t.src)) { dlBtn.href = _dlHref(t.src, fn); dlBtn.download = fn; }
+  // Update pv-meta gallery download button if present
+  const pvDlGallery = document.querySelector('.pv-dl-gallery');
+  if (pvDlGallery && _dlOk(t.src)) {
+    const fn = _dlFilename(t.src).replace(/^(\w+)/, `$1_${idx+1}`);
+    pvDlGallery.href = _dlHref(t.src, fn);
+    pvDlGallery.download = fn;
   }
 });
 

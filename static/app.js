@@ -432,7 +432,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('click', e => {
   if (_navFromTouch) { _navFromTouch = false; return; }
   const a = e.target.closest('a[data-nav], a[href]');
-  if (!a || a.getAttribute('target') === '_blank') return;
+  if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
 }, true);
 
@@ -440,7 +440,7 @@ document.addEventListener('click', e => {
 document.addEventListener('auxclick', e => {
   if (e.button !== 1) return;
   const a = e.target.closest('a[data-nav], a[href]');
-  if (!a || a.getAttribute('target') === '_blank') return;
+  if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
 }, true);
 
