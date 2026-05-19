@@ -363,65 +363,30 @@ def download_media():
 
 # ── Reddit video+audio merge download ────────────────────────────────────────
 
-VREDDDIT_HOST_RE = re.compile(r'^https://v\.redd\.it/[^/?]+/')
-
 @app.route("/api/download/reddit-video")
 def download_reddit_video():
-    video_url = request.args.get('video', '').strip()
-    audio_url = request.args.get('audio', '').strip()
-    filename  = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'video.mp4'))[:128]
+    hls_url  = request.args.get('hls', '').strip()
+    filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'video.mp4'))[:128]
 
-    for url in (video_url, audio_url):
-        if not url:
-            continue
-        try:
-            parsed = urlparse(url)
-        except Exception:
-            return jsonify({'error': 'Invalid URL'}), 400
-        if parsed.scheme not in ('http', 'https') or parsed.netloc != 'v.redd.it':
-            return jsonify({'error': 'URL not allowed'}), 400
+    try:
+        parsed = urlparse(hls_url)
+    except Exception:
+        return jsonify({'error': 'Invalid URL'}), 400
+    if parsed.scheme not in ('http', 'https') or parsed.netloc != 'v.redd.it':
+        return jsonify({'error': 'URL not allowed'}), 400
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            video_path = os.path.join(tmpdir, 'video.mp4')
-            audio_path = os.path.join(tmpdir, 'audio.mp4')
-            out_path   = os.path.join(tmpdir, 'merged.mp4')
-
-            def _fetch(url, dest):
-                r = SESSION.get(url, stream=True, timeout=30)
-                r.raise_for_status()
-                with open(dest, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=STREAM_CHUNK_SIZE):
-                        f.write(chunk)
-
-            _fetch(video_url, video_path)
-
-            has_audio = bool(audio_url)
-            if has_audio:
-                try:
-                    _fetch(audio_url, audio_path)
-                except Exception:
-                    has_audio = False
-
-            if has_audio:
-                cmd = [
-                    'ffmpeg', '-y',
-                    '-i', video_path,
-                    '-i', audio_path,
-                    '-c:v', 'copy', '-c:a', 'aac',
-                    '-movflags', '+faststart',
-                    out_path,
-                ]
-            else:
-                cmd = [
-                    'ffmpeg', '-y',
-                    '-i', video_path,
-                    '-c', 'copy',
-                    '-movflags', '+faststart',
-                    out_path,
-                ]
-
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            out_path = os.path.join(tmpdir, 'merged.mp4')
+            cmd = [
+                'ffmpeg', '-y',
+                '-user_agent', HEADERS['User-Agent'],
+                '-i', hls_url,
+                '-c', 'copy',
+                '-movflags', '+faststart',
+                out_path,
+            ]
+            result = subprocess.run(cmd, capture_output=True, timeout=180)
             if result.returncode != 0:
                 return jsonify({'error': 'ffmpeg failed'}), 502
 
