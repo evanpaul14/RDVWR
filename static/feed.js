@@ -23,7 +23,9 @@ function buildDownloadBtn(p) {
   if (p.gallery?.length) {
     const first = p.gallery[0].url;
     if (!_pvDlOk(first)) return '';
-    const fname = `${p.id}_1.${_pvDlExt(first)}`;
+    const base = first.split('?')[0].split('/').pop() || 'image';
+    const dot = base.lastIndexOf('.');
+    const fname = dot > 0 ? `${base.slice(0, dot)}-1${base.slice(dot)}` : `${base}-1`;
     return `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
   }
   // Imgur album: placeholder replaced by initImgurAlbums once images are loaded

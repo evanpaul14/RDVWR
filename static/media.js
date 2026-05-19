@@ -13,6 +13,11 @@ function _dlFilename(url) {
   try { return new URL(url).pathname.split('/').filter(Boolean).pop() || 'media'; }
   catch { return 'media'; }
 }
+function _dlFilenamePos(url, pos) {
+  const name = _dlFilename(url);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? `${name.slice(0, dot)}-${pos}${name.slice(dot)}` : `${name}-${pos}`;
+}
 const _DL_ICON = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 export function syncAudio(videoEl, audioSrc) {
@@ -102,7 +107,7 @@ export async function initImgurAlbums(container) {
       const placeholder = document.querySelector(`[data-imgur-dl="${CSS.escape(id)}"]`);
       if (placeholder) {
         if (_dlOk(imgs[0].url)) {
-          const fname = _dlFilename(imgs[0].url);
+          const fname = imgs.length === 1 ? _dlFilename(imgs[0].url) : _dlFilenamePos(imgs[0].url, 1);
           const a = document.createElement('a');
           a.className = imgs.length === 1 ? 'share-btn' : 'share-btn pv-dl-gallery';
           a.href = _dlHref(imgs[0].url, fname);
@@ -223,7 +228,7 @@ document.addEventListener('click', e => {
   // Update pv-meta gallery download button if present
   const pvDlGallery = document.querySelector('.pv-dl-gallery');
   if (pvDlGallery && _dlOk(t.src)) {
-    const fn = _dlFilename(t.src).replace(/^(\w+)/, `$1_${idx+1}`);
+    const fn = _dlFilenamePos(t.src, idx + 1);
     pvDlGallery.href = _dlHref(t.src, fn);
     pvDlGallery.download = fn;
   }
