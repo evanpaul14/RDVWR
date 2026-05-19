@@ -80,6 +80,7 @@ function buildTimeFilterHtml(selected) {
 
 // ── Feed utilities ────────────────────────────────────────────────────────────
 function showSkeletons() {
+  state.selectedPostIdx = -1;
   feed.innerHTML = Array.from({length:SKELETON_COUNT}, ()=>`
     <div class="skeleton-post">
       <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
