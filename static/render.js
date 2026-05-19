@@ -129,7 +129,7 @@ export function renderPost(p, idx, showSub=false) {
       </div>`;
 
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
-  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
+  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
     const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
     const thumbContent = imgSrc
