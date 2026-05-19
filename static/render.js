@@ -246,11 +246,13 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
 // ── User / community / user cards ────────────────────────────────────────────
 export function renderUserCommentCard(c, idx) {
   const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
-  return `<div class="user-comment-card" style="animation-delay:${delay}ms">
+  const postPath = `/r/${escHtml(c.subreddit)}/comments/${escHtml(c.link_id)}`;
+  const commentPath = `${postPath}/_/${escHtml(c.id)}`;
+  return `<div class="user-comment-card" tabindex="0" role="button" data-nav="${commentPath}" style="animation-delay:${delay}ms">
     <div class="ucc-context">
       <span>in <a href="javascript:;" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
       <span>·</span>
-      <a href="${escHtml(c.link_permalink)}" target="_blank" rel="noopener" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.link_title)}</a>
+      <a href="javascript:;" data-nav="${postPath}" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.link_title)}</a>
     </div>
     <div class="ucc-body md">${renderMd(c.body)}</div>
     <div class="ucc-footer">

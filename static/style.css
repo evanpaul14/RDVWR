@@ -359,9 +359,10 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 /* ── Profile comment card ────────────────────────────────────────────────── */
 .user-comment-card {
   background:var(--bg2); border:1px solid var(--b); border-radius:8px; overflow:hidden;
-  padding:14px 16px;
+  padding:14px 16px; cursor:pointer;
   opacity:0; transform:translateY(8px); animation:fadeUp .3s ease forwards;
 }
+.user-comment-card:hover { border-color:var(--ac); }
 .ucc-context {
   font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em;
   margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;

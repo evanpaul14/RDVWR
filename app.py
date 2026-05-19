@@ -974,7 +974,7 @@ def get_user_comments_api(username):
                 "created_utc":    d.get("created_utc", 0),
                 "subreddit":      d.get("subreddit", ""),
                 "link_title":     d.get("link_title", ""),
-                "link_permalink": f"https://www.reddit.com{d.get('link_permalink', '')}",
+                "link_permalink": d.get("link_permalink", "") if d.get("link_permalink", "").startswith("http") else f"https://www.reddit.com{d.get('link_permalink', '')}",
                 "link_id":        d.get("link_id", "").replace("t3_", ""),
             })
         return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
@@ -1019,7 +1019,7 @@ def get_user_overview_api(username):
                     "created_utc":    d.get("created_utc", 0),
                     "subreddit":      d.get("subreddit", ""),
                     "link_title":     d.get("link_title", ""),
-                    "link_permalink": f"https://www.reddit.com{d.get('link_permalink', '')}",
+                    "link_permalink": d.get("link_permalink", "") if d.get("link_permalink", "").startswith("http") else f"https://www.reddit.com{d.get('link_permalink', '')}",
                     "link_id":        d.get("link_id", "").replace("t3_", ""),
                 }})
         return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
