@@ -98,9 +98,26 @@ export async function initImgurAlbums(container) {
         : renderGallery(imgs);
       wrap.insertAdjacentHTML('afterend', newHtml);
       wrap.remove();
+      // Activate pv-meta placeholder if present
+      const placeholder = document.querySelector(`[data-imgur-dl="${CSS.escape(id)}"]`);
+      if (placeholder) {
+        if (_dlOk(imgs[0].url)) {
+          const fname = _dlFilename(imgs[0].url);
+          const a = document.createElement('a');
+          a.className = imgs.length === 1 ? 'share-btn' : 'share-btn pv-dl-gallery';
+          a.href = _dlHref(imgs[0].url, fname);
+          a.download = fname;
+          a.title = imgs.length === 1 ? 'Download image' : 'Download current image';
+          a.innerHTML = `${_DL_ICON} download`;
+          placeholder.replaceWith(a);
+        } else {
+          placeholder.remove();
+        }
+      }
     } catch {
       wrap.insertAdjacentHTML('afterend', `<div class="${escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video')}"><iframe src="https://imgur.com/a/${escHtml(id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`);
       wrap.remove();
+      document.querySelector(`[data-imgur-dl="${CSS.escape(id)}"]`)?.remove();
     }
   }));
 }
