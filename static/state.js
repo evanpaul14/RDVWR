@@ -53,6 +53,9 @@ export const state = {
   _pvCommentId: '',
   _pvData: null,
 
+  // Keyboard navigation
+  selectedPostIdx: -1,
+
   // Live thread
   liveMode: false,
   liveThreadId: '',

@@ -491,10 +491,66 @@ function closeLightbox() {
 }
 lightbox.addEventListener('click', closeLightbox);
 lightboxImg.addEventListener('click', e => e.stopPropagation());
+// Keyboard shortcuts
+function _isTyping() {
+  const tag = document.activeElement?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable;
+}
+function _getPostEls() {
+  return [...feed.querySelectorAll('.post, .post-compact')];
+}
+function _selectPost(idx) {
+  const posts = _getPostEls();
+  if (!posts.length) return;
+  idx = Math.max(0, Math.min(idx, posts.length - 1));
+  posts.forEach((p, i) => p.classList.toggle('keyboard-selected', i === idx));
+  state.selectedPostIdx = idx;
+  posts[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (lightbox.classList.contains('open')) { closeLightbox(); return; }
     if (postView.classList.contains('open') && state._pvSub) { navigate(`/r/${state._pvSub}`); return; }
+    return;
+  }
+  if (_isTyping()) return;
+  if (e.key === 'j' || e.key === 'J') {
+    e.preventDefault();
+    _selectPost(state.selectedPostIdx + 1);
+  } else if (e.key === 'k' || e.key === 'K') {
+    e.preventDefault();
+    _selectPost(Math.max(0, state.selectedPostIdx - 1));
+  } else if ((e.key === 'o' || e.key === 'Enter') && state.selectedPostIdx >= 0) {
+    const posts = _getPostEls();
+    const post = posts[state.selectedPostIdx];
+    if (post) {
+      const link = post.querySelector('a[data-nav]');
+      if (link) navigate(link.dataset.nav);
+    }
+  } else if (e.key === '/') {
+    e.preventDefault();
+    subInput.focus();
+    subInput.select();
+  } else if (e.key === '?') {
+    e.preventDefault();
+    const existing = document.getElementById('kbd-help-overlay');
+    if (existing) { existing.remove(); return; }
+    const overlay = document.createElement('div');
+    overlay.id = 'kbd-help-overlay';
+    overlay.innerHTML = `<div class="kbd-help-box">
+      <div class="kbd-help-title">Keyboard shortcuts</div>
+      <div class="kbd-help-grid">
+        <kbd>j</kbd><span>Next post</span>
+        <kbd>k</kbd><span>Previous post</span>
+        <kbd>o</kbd><span>Open selected post</span>
+        <kbd>/</kbd><span>Focus search</span>
+        <kbd>Esc</kbd><span>Close panel / lightbox</span>
+        <kbd>?</kbd><span>Toggle this help</span>
+      </div>
+    </div>`;
+    overlay.addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
   }
 });
 document.addEventListener('click', e => {

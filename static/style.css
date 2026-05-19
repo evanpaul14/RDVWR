@@ -141,6 +141,30 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   transition:border-color .18s, box-shadow .18s;
 }
 .post:hover { border-color:var(--b2); box-shadow:0 4px 24px rgba(0,0,0,.4); }
+.post.keyboard-selected { border-color:var(--ac); box-shadow:0 0 0 1px var(--ac); }
+
+/* Keyboard help overlay */
+#kbd-help-overlay {
+  position:fixed; inset:0; z-index:1100; background:rgba(0,0,0,.55);
+  display:flex; align-items:center; justify-content:center;
+}
+.kbd-help-box {
+  background:var(--bg2); border:1px solid var(--b2); border-radius:10px;
+  padding:24px 32px; min-width:280px;
+}
+.kbd-help-title {
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--tx3); margin-bottom:16px;
+}
+.kbd-help-grid {
+  display:grid; grid-template-columns:auto 1fr; gap:8px 16px; align-items:center;
+}
+.kbd-help-grid kbd {
+  font-family:var(--mono); font-size:11px; background:var(--bg3);
+  border:1px solid var(--b2); border-radius:4px; padding:2px 7px; color:var(--tx2);
+  justify-self:start;
+}
+.kbd-help-grid span { font-family:var(--sans); font-size:13px; color:var(--tx2); }
 
 .post-header { padding:14px 16px 10px; }
 .post-meta-top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:7px; }
