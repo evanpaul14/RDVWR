@@ -31,6 +31,7 @@ IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 STREAMABLE_RE       = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
+LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -457,6 +458,7 @@ def subreddit_search():
 @app.route("/r/<subreddit>/duplicates/<post_id>")
 @app.route("/r/<subreddit>/wiki")
 @app.route("/r/<subreddit>/wiki/<path:page>")
+@app.route("/live/<path:path>")
 def spa(**kwargs):
     resp = render_template("index.html")
     return resp, 200, {'Cache-Control': 'no-store'}
@@ -950,6 +952,81 @@ def get_multireddit(username, multiname):
         listing = resp.json()["data"]
         display = meta_data.get("display_name") or meta_data.get("name") or multiname
         return cached_json({"posts": extract_posts(listing), "after": listing.get("after"), "title": display}, CACHE_TTL_FEED)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Live threads ──────────────────────────────────────────────────────────────
+
+def _parse_live_updates(children):
+    out = []
+    for c in children:
+        if c.get("kind") != "LiveUpdate":
+            continue
+        d = c["data"]
+        out.append({
+            "id":          d.get("id", ""),
+            "body":        d.get("body", ""),
+            "author":      d.get("author", "[deleted]"),
+            "created_utc": d.get("created_utc", 0),
+            "stricken":    d.get("stricken", False),
+        })
+    return out
+
+
+@app.route("/api/live/<thread_id>")
+def get_live_thread(thread_id):
+    if not LIVE_ID_RE.match(thread_id):
+        return jsonify({"error": "Invalid thread ID"}), 400
+    try:
+        info_resp = SESSION.get(
+            f"https://www.reddit.com/live/{thread_id}.json",
+            params={"raw_json": 1}, timeout=10)
+        if info_resp.status_code == 404:
+            return jsonify({"error": "Live thread not found"}), 404
+        if info_resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {info_resp.status_code}"}), info_resp.status_code
+        upd_resp = SESSION.get(
+            f"https://www.reddit.com/live/{thread_id}/updates.json",
+            params={"raw_json": 1, "limit": 25}, timeout=10)
+        d = info_resp.json()["data"]
+        updates, after = [], None
+        if upd_resp.status_code == 200:
+            listing = upd_resp.json()["data"]
+            updates = _parse_live_updates(listing.get("children", []))
+            after   = listing.get("after")
+        return cached_json({
+            "title":        d.get("title", ""),
+            "description":  d.get("description", ""),
+            "state":        d.get("state", "complete"),
+            "viewer_count": d.get("viewer_count", 0),
+            "updates":      updates,
+            "after":        after,
+        }, 30)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/live/<thread_id>/updates")
+def get_live_updates(thread_id):
+    if not LIVE_ID_RE.match(thread_id):
+        return jsonify({"error": "Invalid thread ID"}), 400
+    before = request.args.get("before", "")
+    after  = request.args.get("after",  "")
+    try:
+        params = {"raw_json": 1, "limit": 25}
+        if before: params["before"] = before
+        if after:  params["after"]  = after
+        resp = SESSION.get(
+            f"https://www.reddit.com/live/{thread_id}/updates.json",
+            params=params, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()["data"]
+        return cached_json({
+            "updates": _parse_live_updates(listing.get("children", [])),
+            "after":   listing.get("after"),
+        }, 15)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

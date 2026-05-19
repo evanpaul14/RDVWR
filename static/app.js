@@ -7,6 +7,7 @@ import {
   loadProfile, loadProfileTab,
   loadSearch, loadSearchResults, loadCommunityResults, loadUserResults,
   loadDuplicatesPage, loadWikiPage,
+  loadLiveThread, loadMoreLiveUpdates, cancelLivePoll,
   loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments,
   closeSidebar, toggleSidebar,
   retryFeedLoad, errState,
@@ -47,6 +48,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   }
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
+  if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
     case 'home':
       navigate('/r/popular/hot', { replace: true });
@@ -93,6 +95,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       state.profileMode = false;
       await loadWikiPage(route.sub, route.page);
       break;
+    case 'live':
+      closePostView();
+      closeSidebar();
+      state.searchMode = false;
+      state.profileMode = false;
+      await loadLiveThread(route.threadId);
+      break;
   }
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
 }
@@ -128,6 +137,8 @@ function interceptNavLink(a, e) {
   if (!href || href.startsWith('#') || href.startsWith('javascript:') ||
       href.startsWith('mailto:') || href.startsWith('tel:')) return false;
 
+  const redditLive = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/live\/([A-Za-z0-9_-]+)/);
+  if (redditLive) { e.preventDefault(); navigateOrOpen(`/live/${redditLive[1]}`, e); return true; }
   const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
   if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
   const redditWiki = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
@@ -186,10 +197,13 @@ feed.addEventListener('click', e => {
   if (retryBtn) { retryFeedLoad(); return; }
   const commBtn = e.target.closest('.comments-link[data-id]');
   const userBtn = e.target.closest('.post-author[data-user]');
+  const liveAuthor = e.target.closest('.live-update-author[data-user]');
   if (commBtn) {
     navigateOrOpen(`/r/${commBtn.dataset.sub}/comments/${commBtn.dataset.id}`, e);
   } else if (userBtn) {
     navigateOrOpen(`/user/${userBtn.dataset.user}`, e);
+  } else if (liveAuthor) {
+    navigateOrOpen(`/user/${liveAuthor.dataset.user}`, e);
   }
 });
 
@@ -341,6 +355,8 @@ function loadMore() {
     if (state.profileAfter) loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime, state.profileAfter, true);
   } else if (state.multiMode) {
     if (state.afterToken) loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime, state.afterToken, true);
+  } else if (state.liveMode) {
+    if (state.liveAfter) loadMoreLiveUpdates(state.liveThreadId, state.liveAfter);
   } else {
     if (state.afterToken) loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, true);
   }
