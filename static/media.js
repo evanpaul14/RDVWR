@@ -38,8 +38,8 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
     videoEl.src = hlsUrl;
   } else if (fallback) {
     videoEl.src = fallback;
-    if (audioSrc) syncAudio(videoEl, audioSrc);
   }
+  if (audioSrc) syncAudio(videoEl, audioSrc);
 }
 
 export function initVideos(container) {
