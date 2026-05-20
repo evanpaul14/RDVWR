@@ -133,7 +133,7 @@ export function renderPost(p, idx, showSub=false) {
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
           <button class="post-author" data-user="${author}">u/${author}</button>
-          <span class="meta-item">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
+          <span class="meta-item" title="${fmtDate(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
           ${renderAwards(p.awards)}
         </div>
         <div class="footer-right">
@@ -236,7 +236,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
         ${isStickied ? '<span class="badge badge-sticky">📌 stickied</span>' : ''}
         ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
-        <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
+        <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}" title="${fmtDate(c.created_utc)}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
         ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
@@ -259,7 +259,7 @@ export function renderUserCommentCard(c, idx) {
     <div class="ucc-body md">${renderMd(c.body)}</div>
     <div class="ucc-footer">
       <span class="ucc-score">▲ ${fmtNum(c.score)}</span>
-      <span>${timeAgo(c.created_utc)}</span>
+      <span title="${fmtDate(c.created_utc)}">${timeAgo(c.created_utc)}</span>
     </div>
   </div>`;
 }
