@@ -152,6 +152,10 @@ export function spoilerWrap(html) {
   return `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
 }
 
+export function nsfwWrap(html) {
+  return `<div class="nsfw-media-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="nsfw-veil-label">nsfw — click to reveal</span></div><div class="nsfw-content">${html}</div></div>`;
+}
+
 export function mediaHtmlCard(p) {
   if (p.poll) return renderPoll(p.poll);
   let html = '';
@@ -172,7 +176,9 @@ export function mediaHtmlCard(p) {
     else if (!p.is_self && p.domain && !p.domain.includes('reddit.com') && !p.domain.startsWith('self.')) return `<div class="post-media link-thumb"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
   }
   if (!html) return '';
-  return p.is_spoiler ? spoilerWrap(html) : html;
+  if (p.is_spoiler) html = spoilerWrap(html);
+  if (p.over_18)   html = nsfwWrap(html);
+  return html;
 }
 
 export function mediaHtmlFull(p) {
@@ -191,7 +197,9 @@ export function mediaHtmlFull(p) {
   else if (p.gallery?.length) html = renderGallery(p.gallery);
   else if (p.preview_img && !p.is_self) html = `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
   if (!html) return '';
-  return p.is_spoiler ? spoilerWrap(html) : html;
+  if (p.is_spoiler) html = spoilerWrap(html);
+  if (p.over_18)   html = nsfwWrap(html);
+  return html;
 }
 
 // ── Gallery event delegation ─────────────────────────────────────────────────
