@@ -148,9 +148,11 @@ export function renderPost(p, idx, showSub=false) {
         </div>
       </div>`;
 
+  const nsfwAttr = p.over_18 ? ' data-nsfw="1"' : '';
+
   if (p.crosspost_from) {
     return `
-    <div class="post" style="animation-delay:${delay}ms">
+    <div class="post"${nsfwAttr} style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
@@ -168,7 +170,7 @@ export function renderPost(p, idx, showSub=false) {
       ? `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.style.display='none'">`
       : `<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `
-    <div class="post post-compact" style="animation-delay:${delay}ms">
+    <div class="post post-compact"${nsfwAttr} style="animation-delay:${delay}ms">
       <div class="post-compact-left">
         <div class="post-header">
           ${metaTop}
@@ -182,7 +184,7 @@ export function renderPost(p, idx, showSub=false) {
 
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
   return `
-    <div class="post" style="animation-delay:${delay}ms">
+    <div class="post"${nsfwAttr} style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}

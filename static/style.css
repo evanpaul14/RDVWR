@@ -993,6 +993,107 @@ a.comment-time:hover { color:var(--ac); }
 @keyframes liveNew { from { background:rgba(74,158,255,.08); } to { background:transparent; } }
 .live-update-new { animation:liveNew 2s ease forwards; }
 
+/* ── Settings button ─────────────────────────────────────────────────────── */
+.settings-btn {
+  background:none; border:none; cursor:pointer;
+  color:var(--tx3); padding:6px; border-radius:4px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .15s,background .15s;
+}
+.settings-btn:hover { color:var(--tx2); background:var(--bg3); }
+
+/* ── Settings panel ──────────────────────────────────────────────────────── */
+.settings-overlay {
+  position:fixed; inset:0; z-index:190;
+  background:rgba(0,0,0,.5);
+  opacity:0; pointer-events:none;
+  transition:opacity .2s;
+}
+.settings-overlay.open { opacity:1; pointer-events:auto; }
+
+.settings-panel {
+  position:fixed; top:0; right:0; bottom:0; z-index:200;
+  width:300px; max-width:100vw;
+  background:var(--bg2); border-left:1px solid var(--b);
+  display:flex; flex-direction:column;
+  transform:translateX(100%); transition:transform .25s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+}
+.settings-panel.open { transform:translateX(0); }
+
+.settings-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:1px solid var(--b); flex-shrink:0;
+}
+.settings-title {
+  font-family:var(--mono); font-size:11px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--tx2);
+}
+.settings-close {
+  background:none; border:none; cursor:pointer;
+  color:var(--tx3); font-size:15px; line-height:1;
+  padding:4px 6px; transition:color .15s; border-radius:4px;
+}
+.settings-close:hover { color:var(--tx); background:var(--bg3); }
+
+.settings-body { flex:1; overflow-y:auto; padding:4px 0; }
+
+.settings-section {
+  padding:16px 20px; border-bottom:1px solid var(--b);
+}
+.settings-section:last-child { border-bottom:none; }
+.settings-section-title {
+  font-family:var(--mono); font-size:9px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--tx3);
+  margin-bottom:12px;
+}
+
+.settings-row {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,.03);
+}
+.settings-row:last-child { border-bottom:none; }
+.settings-label { font-size:13px; color:var(--tx2); flex:1; }
+
+.settings-select {
+  background:var(--bg3); border:1px solid var(--b2); border-radius:4px;
+  color:var(--tx); font-family:var(--mono); font-size:11px;
+  padding:5px 8px; cursor:pointer; outline:none;
+  transition:border-color .15s; max-width:140px;
+}
+.settings-select:focus { border-color:var(--ac); }
+
+.settings-input {
+  background:var(--bg3); border:1px solid var(--b2); border-radius:4px;
+  color:var(--tx); font-family:var(--mono); font-size:11px;
+  padding:5px 8px; outline:none; width:110px;
+  transition:border-color .15s;
+}
+.settings-input:focus { border-color:var(--ac); }
+
+.settings-toggle {
+  appearance:none; -webkit-appearance:none;
+  width:34px; height:19px; border-radius:10px;
+  background:var(--bg3); border:1px solid var(--b2);
+  cursor:pointer; position:relative; flex-shrink:0;
+  transition:background .2s,border-color .2s;
+}
+.settings-toggle::after {
+  content:''; position:absolute;
+  width:13px; height:13px; border-radius:50%;
+  background:var(--tx3); top:2px; left:2px;
+  transition:transform .2s,background .2s;
+}
+.settings-toggle:checked { background:var(--acd); border-color:var(--ac); }
+.settings-toggle:checked::after { transform:translateX(15px); background:var(--ac); }
+
+/* ── NSFW feed filtering ─────────────────────────────────────────────────── */
+body.nsfw-hide [data-nsfw="1"] { display:none !important; }
+body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-media { filter:blur(24px); overflow:hidden; }
+body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-compact-thumb { filter:blur(24px); overflow:hidden; }
+body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-media video { pointer-events:none; }
+
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .post, .user-comment-card, .community-card, .user-card {
