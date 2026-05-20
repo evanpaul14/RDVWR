@@ -576,9 +576,9 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 #lightbox-close {
   position:absolute; top:16px; right:20px;
   background:rgba(255,255,255,.12); border:none; border-radius:50%;
-  color:#fff; font-size:20px; width:36px; height:36px; padding:0;
+  color:#fff; width:36px; height:36px; padding:0;
   display:flex; align-items:center; justify-content:center;
-  cursor:pointer; transition:background .15s; line-height:36px;
+  cursor:pointer; transition:background .15s;
 }
 #lightbox-close:hover { background:rgba(255,255,255,.25); }
 .post-media img, .pv-media img, .md img, .gallery-main-img { cursor:zoom-in; }
