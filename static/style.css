@@ -1087,12 +1087,18 @@ a.comment-time:hover { color:var(--ac); }
 }
 .settings-toggle:checked { background:var(--acd); border-color:var(--ac); }
 .settings-toggle:checked::after { transform:translateX(15px); background:var(--ac); }
+.settings-reset-btn {
+  width:100%; background:none; border:1px solid var(--b2); border-radius:4px;
+  color:var(--tx3); font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+  padding:8px; cursor:pointer; transition:color .15s,border-color .15s;
+}
+.settings-reset-btn:hover { color:var(--tx2); border-color:var(--tx3); }
 
 /* ── NSFW feed filtering ─────────────────────────────────────────────────── */
 body.nsfw-hide [data-nsfw="1"] { display:none !important; }
-body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-media { filter:blur(24px); overflow:hidden; }
-body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-compact-thumb { filter:blur(24px); overflow:hidden; }
-body.nsfw-blur:not(.nsfw-hide) [data-nsfw="1"] .post-media video { pointer-events:none; }
+body.nsfw-blur [data-nsfw="1"] .post-media img,
+body.nsfw-blur [data-nsfw="1"] .post-media video,
+body.nsfw-blur [data-nsfw="1"] .post-compact-thumb img { filter:blur(20px); transform:scale(1.08); }
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
