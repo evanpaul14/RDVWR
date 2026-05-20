@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, timeAgo, setActiveButton, renderFlair, renderAwards, SKELETON_COUNT } from './utils.js';
+import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, SKELETON_COUNT } from './utils.js';
 import { initVideos, initRedgifs, initImgurAlbums, mediaHtmlFull } from './media.js';
 import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate, renderCrosspostFull } from './render.js';
 
@@ -808,7 +808,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <span class="up">▲ ${fmtNum(p.score)}</span>
         <span>${p.upvote_ratio}% upvoted</span>
         <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
-        <span title="${fmtDate(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
+        <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.crosspost_from ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
         ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
