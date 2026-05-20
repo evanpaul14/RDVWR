@@ -537,7 +537,7 @@ document.addEventListener('keydown', e => {
     if (kbdHelp) { kbdHelp.remove(); return; }
     if (settingsPanel.classList.contains('open')) { closeSettingsPanel(); return; }
     if (lightbox.classList.contains('open')) { closeLightbox(); return; }
-    if (postView.classList.contains('open') && state._pvSub) { navigate(`/r/${state._pvSub}`); return; }
+    if (postView.classList.contains('open') && state._pvSub) { history.back(); return; }
     return;
   }
   if (_isTyping()) return;
