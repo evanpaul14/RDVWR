@@ -533,6 +533,8 @@ function _selectPost(idx) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    const kbdHelp = document.getElementById('kbd-help-overlay');
+    if (kbdHelp) { kbdHelp.remove(); return; }
     if (settingsPanel.classList.contains('open')) { closeSettingsPanel(); return; }
     if (lightbox.classList.contains('open')) { closeLightbox(); return; }
     if (postView.classList.contains('open') && state._pvSub) { navigate(`/r/${state._pvSub}`); return; }
