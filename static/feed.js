@@ -815,7 +815,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
       </div>
-      ${buildCommentSortBar('confidence')}
+      ${buildCommentSortBar(state.currentCommentSort)}
       <div class="pv-comments-area">
         ${buildCommentsHtml(data, commentId)}
       </div>`;

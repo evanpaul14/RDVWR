@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { settings, saveSettings, applySettings } from './settings.js';
+import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
 import { escHtml, setActiveButton, AUTOCOMPLETE_DEBOUNCE, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import {
@@ -684,6 +684,9 @@ function _settingsHtml() {
     <div class="settings-section-title">Content</div>
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
+  </div>
+  <div class="settings-section">
+    <button class="settings-reset-btn" id="s-reset">Reset to defaults</button>
   </div>`;
 }
 
@@ -692,7 +695,10 @@ function openSettingsPanel() {
   settingsPanel.classList.add('open');
   settingsOverlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+  bindSettingEvents();
+}
 
+function bindSettingEvents() {
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-home-sub').addEventListener('change', e => {
@@ -707,6 +713,13 @@ function openSettingsPanel() {
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-reset').addEventListener('click', () => {
+    Object.assign(settings, DEFAULTS);
+    state.currentCommentSort = DEFAULTS.commentSort;
+    saveSettings();
+    settingsBody.innerHTML = _settingsHtml();
+    bindSettingEvents();
+  });
 }
 
 function closeSettingsPanel() {

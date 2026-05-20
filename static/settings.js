@@ -2,7 +2,7 @@ const KEY = 'rdvwr_settings';
 
 export const DEFAULTS = {
   subSort: 'hot',
-  subTime: 'all',
+  subTime: 'day',
   commentSort: 'confidence',
   nsfwBlur: false,
   nsfwHide: false,
