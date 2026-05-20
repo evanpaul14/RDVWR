@@ -838,6 +838,9 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   /* ── Header ── */
   .header-inner { gap:10px; padding:0 12px; }
   #subreddit-input, #pv-subreddit-input { padding:12px 4px; }
+  /* Hide the reddit link in the main header — it's in the post view header too,
+     and removing it gives the settings button room to stay on-screen. */
+  #main-open { display:none; }
 
   /* ── Feed ── */
   #feed { padding:12px 12px 80px; gap:10px; }
