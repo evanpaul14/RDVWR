@@ -758,7 +758,7 @@ export async function changeCommentSort(sort) {
 export async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
   state._pvSub = sub; state._pvPostId = postId; state._pvCommentId = commentId;
   state.currentCommentSort = settings.commentSort;
-  pvContent.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
+  pvContent.innerHTML = '<div class="pv-loader"></div>';
   pvScroll.scrollTop = 0;
   openPostView();
 
