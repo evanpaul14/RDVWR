@@ -164,7 +164,7 @@ function interceptNavLink(a, e) {
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 // pv-home button
-document.getElementById('pv-home').addEventListener('click', () => { navigate('/r/popular/hot'); });
+document.getElementById('pv-home').addEventListener('click', () => { navigate(`/r/${settings.homeSub || 'popular'}/${settings.subSort}`); });
 
 // Comment collapse
 document.getElementById('post-view').addEventListener('click', e => {
@@ -324,7 +324,7 @@ function handleSearchInput(e) {
   if (mMultiInput) { navigate(`/user/${mMultiInput[1]}/m/${mMultiInput[2]}`); return; }
   if (val.startsWith('r/')) {
     const sub = val.slice(2).replace(/^\//, '');
-    if (sub) navigate(`/r/${sub}/top`);
+    if (sub) navigate(`/r/${sub}/${settings.subSort}`);
   } else {
     const sub = state.searchMode ? state.searchSub : (state.currentSub || '');
     let url = `/search?q=${encodeURIComponent(val)}`;
