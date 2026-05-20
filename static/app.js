@@ -373,6 +373,21 @@ new IntersectionObserver(entries => {
   if (entries[0].isIntersecting) loadMore();
 }, { rootMargin: '300px' }).observe(sentinel);
 
+// Spoiler reveal — delegated so it works in feed excerpts, post view body, and comments
+document.addEventListener('click', e => {
+  const spoiler = e.target.closest('.spoiler');
+  if (!spoiler) return;
+  e.stopPropagation();
+  spoiler.classList.toggle('revealed');
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const spoiler = e.target.closest('.spoiler');
+  if (!spoiler) return;
+  e.preventDefault();
+  spoiler.classList.toggle('revealed');
+});
+
 // Flair / community / user card clicks
 feed.addEventListener('click', e => {
   const flairEl = e.target.closest('.flair.flair-clickable[data-flair]');

@@ -43,8 +43,8 @@ export async function xlateText(text) {
 export function renderMd(text) {
   if (!text) return '';
   const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
-    `<span class="spoiler" role="button" tabindex="0" onclick="this.classList.toggle('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.classList.toggle('revealed');event.preventDefault()}">${inner}</span>`);
-  return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['onclick', 'onkeydown', 'class', 'tabindex', 'role'] });
+    `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
+  return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
 export async function translatePost(p, container) {
