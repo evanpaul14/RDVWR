@@ -12,7 +12,7 @@ export function parseRoute(path=location.pathname) {
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
   if (mSub) {
-    const sort = SORTS.has(mSub[2]) ? mSub[2] : settings.subSort;
+    const sort = SORTS.has(mSub[2]) ? mSub[2] : (mSub[1].toLowerCase() === 'popular' ? 'hot' : settings.subSort);
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
     const time = new URLSearchParams(qs).get('t') || settings.subTime;
     return { type:'sub', sub:mSub[1], sort, time };
