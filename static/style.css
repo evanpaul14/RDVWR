@@ -1096,9 +1096,14 @@ a.comment-time:hover { color:var(--ac); }
 
 /* ── NSFW feed filtering ─────────────────────────────────────────────────── */
 body.nsfw-hide [data-nsfw="1"] { display:none !important; }
-body.nsfw-blur [data-nsfw="1"] .post-media img,
-body.nsfw-blur [data-nsfw="1"] .post-media video,
-body.nsfw-blur [data-nsfw="1"] .post-compact-thumb img { filter:blur(20px); transform:scale(1.08); }
+body.nsfw-blur [data-nsfw="1"] .post-video,
+body.nsfw-blur [data-nsfw="1"] .gallery-stage { overflow:hidden; }
+body.nsfw-blur [data-nsfw="1"] .post-media > img,
+body.nsfw-blur [data-nsfw="1"] .post-video > video,
+body.nsfw-blur [data-nsfw="1"] .post-video > iframe,
+body.nsfw-blur [data-nsfw="1"] .gallery-stage > img,
+body.nsfw-blur [data-nsfw="1"] .gallery-thumbs img,
+body.nsfw-blur [data-nsfw="1"] .post-compact-thumb > img { filter:blur(20px); transform:scale(1.15); }
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

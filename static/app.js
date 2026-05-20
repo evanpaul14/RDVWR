@@ -52,10 +52,11 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
     case 'home': {
-      const sort = settings.subSort;
+      const sub = settings.homeSub || 'popular';
+      const sort = sub.toLowerCase() === 'popular' ? 'hot' : settings.subSort;
       const time = (sort === 'top' || sort === 'controversial') && settings.subTime !== 'all'
         ? `?t=${settings.subTime}` : '';
-      navigate(`/r/${settings.homeSub || 'popular'}/${sort}${time}`, { replace: true });
+      navigate(`/r/${sub}/${sort}${time}`, { replace: true });
       return;
     }
     case 'sub':
