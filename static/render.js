@@ -97,8 +97,8 @@ function renderCrosspostEmbed(orig, full=false) {
   const excerptHtml = orig.selftext?.trim()
     ? `<div class="xp-excerpt md">${renderMd(orig.selftext)}</div>` : '';
   return `<div class="crosspost-embed">
-    <div class="crosspost-embed-header">↪ crossposted from <a href="javascript:;" data-nav="/r/${sub}">r/${sub}</a></div>
-    <a class="crosspost-embed-title" href="javascript:;" data-nav="${escHtml(nav)}">${escHtml(orig.title || '')}</a>
+    <div class="crosspost-embed-header">↪ crossposted from <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a></div>
+    <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${escHtml(orig.title || '')}</a>
     ${mediaHtml}${excerptHtml}
   </div>`;
 }
@@ -120,9 +120,9 @@ export function renderPost(p, idx, showSub=false) {
   tags += renderFlair(p, true);
   const titleClass = 'post-title'+(p.is_self?' is-italic':'');
   const domainHtml = !p.is_self && p.domain && !p.domain.endsWith('redd.it') ? `<a class="ext-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : '';
-  const subHtml = showSub ? `<a class="post-sub-link" href="javascript:;" data-nav="/r/${sub}">r/${sub}</a>` : '';
+  const subHtml = showSub ? `<a class="post-sub-link" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>` : '';
   const metaTop = (subHtml || tags) ? `<div class="post-meta-top">${subHtml}${tags}</div>` : '';
-  const titleLink = `<a class="${titleClass}" href="javascript:;" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
+  const titleLink = `<a class="${titleClass}" href="/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
   const editedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
   const footer = `
       <div class="post-footer">
@@ -220,7 +220,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     if (c.replies?.length) {
       if (depth >= THREAD_MAX_DEPTH) {
         const href = `/r/${escHtml(sub)}/comments/${escHtml(postId)}/_/${escHtml(c.id)}`;
-        repliesHtml = `<div class="comment-replies"><a class="continue-thread" href="javascript:;" data-nav="${href}">Continue thread →</a></div>`;
+        repliesHtml = `<div class="comment-replies"><a class="continue-thread" href="${href}" data-nav="${href}">Continue thread →</a></div>`;
       } else {
         repliesHtml = `<div class="comment-replies">${renderCommentTree(c.replies, depth+1, sub, postId, postAuthor)}</div>`;
       }
@@ -236,7 +236,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
         ${isStickied ? '<span class="badge badge-sticky">📌 stickied</span>' : ''}
         ${renderAuthorFlair(c)}
         <span class="comment-score">▲ ${fmtNum(c.score)}</span>
-        <a class="comment-time" href="javascript:;" data-nav="${permalinkHref}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
+        <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
         ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
@@ -252,9 +252,9 @@ export function renderUserCommentCard(c, idx) {
   const commentPath = `${postPath}/_/${escHtml(c.id)}`;
   return `<div class="user-comment-card" tabindex="0" role="button" data-nav="${commentPath}" style="animation-delay:${delay}ms">
     <div class="ucc-context">
-      <span>in <a href="javascript:;" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
+      <span>in <a href="/r/${escHtml(c.subreddit)}" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
       <span>·</span>
-      <a href="javascript:;" data-nav="${postPath}" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.link_title)}</a>
+      <a href="${postPath}" data-nav="${postPath}" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.link_title)}</a>
     </div>
     <div class="ucc-body md">${renderMd(c.body)}</div>
     <div class="ucc-footer">

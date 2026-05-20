@@ -95,7 +95,7 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';
   const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
-  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="javascript:;" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
+  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="/r/${escHtml(sub)}/wiki" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
 
@@ -517,7 +517,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
         document.getElementById('ctx-icon-wrap').innerHTML = '';
         document.getElementById('ctx-title').textContent = p.title;
         document.getElementById('ctx-stats').innerHTML =
-          `<a class="ctx-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
+          `<a class="ctx-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
         ctxInfo.classList.add('visible');
       } else {
         document.title = `Duplicates — RDVWR`;
@@ -525,7 +525,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
       const backSub  = escHtml(sub);
       const backId   = escHtml(postId);
       feed.innerHTML = `<div class="dupes-header">
-        <a class="dupes-back" href="javascript:;" data-nav="/r/${backSub}/comments/${backId}">← back to post</a>
+        <a class="dupes-back" href="/r/${backSub}/comments/${backId}" data-nav="/r/${backSub}/comments/${backId}">← back to post</a>
         <span class="dupes-count">${data.posts.length} other post${data.posts.length !== 1 ? 's' : ''} linking to this URL</span>
       </div>`;
       if (!data.posts.length) {
@@ -553,7 +553,7 @@ export async function loadWikiPage(sub, page) {
   state.wikiMode = true; state.afterToken = null;
   setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
-  sortBar.innerHTML = `<a class="sort-btn" href="javascript:;" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
+  sortBar.innerHTML = `<a class="sort-btn" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
   document.title = `${page} — ${sub} wiki — RDVWR`;
   try {
     const res = await fetch(`/api/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
@@ -565,7 +565,7 @@ export async function loadWikiPage(sub, page) {
     feed.innerHTML = `
       <div class="wiki-page">
         <div class="wiki-header">
-          <span class="wiki-sub"><a href="javascript:;" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a></span>
+          <span class="wiki-sub"><a href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a></span>
           <span class="wiki-sep">/</span>
           <span class="wiki-title">wiki/${escHtml(page)}</span>
         </div>
@@ -762,7 +762,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
   pvScroll.scrollTop = 0;
   openPostView();
 
-  pvBreadcrumb.innerHTML = `<a href="javascript:;" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`;
+  pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`;
   pvOpen.href = '#';
 
   try {
@@ -774,7 +774,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
 
     const p = data.post;
     pvOpen.href = p.permalink;
-    pvBreadcrumb.innerHTML = `<a href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
+    pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
     document.title = p.title + ' — RDVWR';
 
     const titleClass = 'pv-title'+(p.is_self?' is-italic':'');
@@ -791,7 +791,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
     const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : '';
 
     pvContent.innerHTML = `
-      <a class="pv-sub-link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
+      <a class="pv-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
       ${pvBadges ? `<div class="post-meta-top" style="margin-bottom:10px">${pvBadges}</div>` : ''}
       <h1 class="${titleClass}">${escHtml(p.title)}</h1>
       <div class="pv-meta">
@@ -801,7 +801,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <span>${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.crosspost_from ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
-        ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="javascript:;" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
+        ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
         <button class="share-btn" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           share
