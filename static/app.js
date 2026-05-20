@@ -549,7 +549,7 @@ document.addEventListener('keydown', e => {
     const posts = _getPostEls();
     const post = posts[state.selectedPostIdx];
     if (post) {
-      const link = post.querySelector('a[data-nav]');
+      const link = post.querySelector('a.post-title[data-nav], a.is-italic[data-nav]');
       if (link) navigate(link.dataset.nav);
     }
   } else if (e.key === '/') {
