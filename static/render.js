@@ -210,7 +210,10 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     const isDeleted = !c.body || c.body==='[deleted]' || c.body==='[removed]';
     const isAutoMod = c.author === 'AutoModerator';
     const isStickied = c.stickied;
-    const startCollapsed = isAutoMod;
+    // Match 'bot' at end of name, at start, or adjacent to separators/_/digits.
+    // Avoids false positives like "Robotics" (bot mid-word after alpha) — Scunthorpe problem.
+    const isBotUser = c.author && /(?:^|[_\-\d])bot(?:[_\-\d]|$)|bot$/i.test(c.author);
+    const startCollapsed = isAutoMod || isBotUser;
     const isOP    = postAuthor && postAuthor !== '[deleted]' && !isDeleted && c.author === postAuthor;
     const isMod   = c.distinguished === 'moderator';
     const isAdmin = c.distinguished === 'admin';
