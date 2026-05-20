@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { settings, saveSettings, applySettings } from './settings.js';
 import { escHtml, setActiveButton, AUTOCOMPLETE_DEBOUNCE, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import {
@@ -50,9 +51,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
-    case 'home':
-      navigate('/r/popular/hot', { replace: true });
+    case 'home': {
+      const sort = settings.subSort;
+      const time = (sort === 'top' || sort === 'controversial') && settings.subTime !== 'all'
+        ? `?t=${settings.subTime}` : '';
+      navigate(`/r/${settings.homeSub || 'popular'}/${sort}${time}`, { replace: true });
       return;
+    }
     case 'sub':
       closePostView();
       closeSidebar();
@@ -523,6 +528,7 @@ function _selectPost(idx) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (settingsPanel.classList.contains('open')) { closeSettingsPanel(); return; }
     if (lightbox.classList.contains('open')) { closeLightbox(); return; }
     if (postView.classList.contains('open') && state._pvSub) { navigate(`/r/${state._pvSub}`); return; }
     return;
@@ -650,5 +656,70 @@ function setupAutocomplete(inputEl, dropdownEl) {
 setupAutocomplete(subInput,   document.getElementById('autocomplete-dropdown'));
 setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown'));
 
+// ── Settings panel ────────────────────────────────────────────────────────────
+const settingsPanel   = document.getElementById('settings-panel');
+const settingsOverlay = document.getElementById('settings-overlay');
+const settingsBody    = document.getElementById('settings-body');
+
+function _settingsHtml() {
+  const subSortOpts = [['hot','Hot'],['new','New'],['top','Top'],['rising','Rising'],['controversial','Controversial']];
+  const timeOpts    = [['all','All time'],['year','Past year'],['month','Past month'],['week','Past week'],['day','Past day'],['hour','Past hour']];
+  const csortOpts   = [['confidence','Best'],['top','Top'],['new','New'],['controversial','Controversial'],['old','Old'],['qa','Q&A']];
+  const sel = (id, opts, val) =>
+    `<select class="settings-select" id="${id}">${opts.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('')}</select>`;
+  const chk = (id, checked) =>
+    `<input type="checkbox" class="settings-toggle" id="${id}"${checked?' checked':''}>`;
+  return `
+  <div class="settings-section">
+    <div class="settings-section-title">Feed</div>
+    <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
+    <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
+    <label class="settings-row"><span class="settings-label">Home subreddit</span><input class="settings-input" id="s-home-sub" type="text" value="${escHtml(settings.homeSub || 'popular')}" placeholder="popular"></label>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">Comments</div>
+    <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">Content</div>
+    <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
+    <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
+  </div>`;
+}
+
+function openSettingsPanel() {
+  settingsBody.innerHTML = _settingsHtml();
+  settingsPanel.classList.add('open');
+  settingsOverlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
+  settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
+  settingsBody.querySelector('#s-home-sub').addEventListener('change', e => {
+    settings.homeSub = e.target.value.trim().replace(/^r\//,'') || 'popular';
+    e.target.value = settings.homeSub;
+    saveSettings();
+  });
+  settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
+    settings.commentSort = e.target.value;
+    state.currentCommentSort = e.target.value;
+    saveSettings();
+  });
+  settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
+}
+
+function closeSettingsPanel() {
+  settingsPanel.classList.remove('open');
+  settingsOverlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettingsPanel);
+document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
+settingsOverlay.addEventListener('click', closeSettingsPanel);
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
+applySettings();
+state.currentCommentSort = settings.commentSort;
 renderRoute(parseRoute());
