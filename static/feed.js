@@ -131,12 +131,22 @@ function buildTimeFilterHtml(selected) {
 // ── Feed utilities ────────────────────────────────────────────────────────────
 function showSkeletons() {
   state.selectedPostIdx = -1;
-  feed.innerHTML = Array.from({length:SKELETON_COUNT}, ()=>`
+  feed.innerHTML = Array.from({length:SKELETON_COUNT}, (_, i) => {
+    if (i % 3 === 1) return `
+    <div class="skeleton-post skel-compact">
+      <div class="skel-compact-left">
+        <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
+        <div class="skel skel-footer"></div>
+      </div>
+      <div class="skel skel-compact-thumb"></div>
+    </div>`;
+    return `
     <div class="skeleton-post">
       <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
       <div class="skel skel-banner"></div>
       <div class="skel skel-footer"></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   sentinel.classList.remove('active', 'loading');
 }
 
@@ -798,7 +808,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <span class="up">▲ ${fmtNum(p.score)}</span>
         <span>${p.upvote_ratio}% upvoted</span>
         <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
-        <span>${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
+        <span title="${fmtDate(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.crosspost_from ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
         ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}

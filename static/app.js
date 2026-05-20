@@ -514,6 +514,7 @@ function closeLightbox() {
 }
 lightbox.addEventListener('click', closeLightbox);
 lightboxImg.addEventListener('click', e => e.stopPropagation());
+document.getElementById('lightbox-close').addEventListener('click', e => { e.stopPropagation(); closeLightbox(); });
 // Keyboard shortcuts
 function _isTyping() {
   const tag = document.activeElement?.tagName;
