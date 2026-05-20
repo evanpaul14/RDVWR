@@ -25,6 +25,9 @@ export function escHtml(s) {
 export function fmtDate(utc) {
   return new Date(utc*1000).toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
 }
+export function fmtDateTime(utc) {
+  return new Date(utc*1000).toLocaleString(undefined, {year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+}
 export function setActiveButton(container, dataAttr, activeVal) {
   container.querySelectorAll(`[data-${dataAttr}]`).forEach(b =>
     b.classList.toggle('active', b.dataset[dataAttr] === activeVal)
