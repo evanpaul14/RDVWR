@@ -1,5 +1,5 @@
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
-import { mediaHtmlCard, mediaHtmlFull } from './media.js';
+import { mediaHtmlCard, mediaHtmlFull, nsfwWrap } from './media.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -166,9 +166,12 @@ export function renderPost(p, idx, showSub=false) {
   const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
     const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
-    const thumbContent = imgSrc
+    const thumbInner = imgSrc
       ? `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.style.display='none'">`
       : `<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const thumbContent = p.over_18
+      ? `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbInner}</div></div>`
+      : thumbInner;
     return `
     <div class="post post-compact"${nsfwAttr} style="animation-delay:${delay}ms">
       <div class="post-compact-left">
