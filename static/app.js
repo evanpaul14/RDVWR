@@ -165,7 +165,11 @@ function interceptNavLink(a, e) {
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 // pv-home button
-document.getElementById('pv-home').addEventListener('click', () => { navigate(`/r/${settings.homeSub || 'popular'}/${settings.subSort}`); });
+document.getElementById('pv-home').addEventListener('click', () => {
+  const sub = settings.homeSub || 'popular';
+  const sort = sub.toLowerCase() === 'popular' ? 'hot' : settings.subSort;
+  navigate(`/r/${sub}/${sort}`);
+});
 
 // Comment collapse
 document.getElementById('post-view').addEventListener('click', e => {
