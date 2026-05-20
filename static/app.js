@@ -337,19 +337,17 @@ function handleSearchInput(e) {
     navigate(url);
   }
 }
+const _acCancellers = [];
 function hideAllAutocomplete() {
-  document.querySelectorAll('.autocomplete-dropdown').forEach(el => {
-    el.classList.remove('open');
-    el.innerHTML = '';
-  });
+  _acCancellers.forEach(fn => fn());
 }
 document.getElementById('search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') handleSearchInput();
+  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(); }
 });
 document.getElementById('pv-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') handleSearchInput(e);
+  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
 });
 
 // Infinite scroll
@@ -592,12 +590,18 @@ function setupAutocomplete(inputEl, dropdownEl) {
   let acTimer = null;
   let acIdx = -1;
   let preAcVal = '';
+  let acAbort = null;
 
   function hide() {
     dropdownEl.classList.remove('open');
     dropdownEl.innerHTML = '';
     acIdx = -1;
     inputEl.setAttribute('aria-expanded', 'false');
+  }
+  function cancel() {
+    clearTimeout(acTimer);
+    if (acAbort) { acAbort.abort(); acAbort = null; }
+    hide();
   }
   function show(names) {
     if (!names.length) { hide(); return; }
@@ -611,15 +615,21 @@ function setupAutocomplete(inputEl, dropdownEl) {
 
   inputEl.addEventListener('input', () => {
     clearTimeout(acTimer);
+    if (acAbort) { acAbort.abort(); acAbort = null; }
     const val = inputEl.value.trim();
     const query = val.startsWith('r/') ? val.slice(2) : val;
     if (query.length < 2) { hide(); return; }
     acTimer = setTimeout(async () => {
+      const ctrl = new AbortController();
+      acAbort = ctrl;
       try {
-        const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`);
+        const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
         const data = await res.json();
+        acAbort = null;
         show(data.names || []);
-      } catch {}
+      } catch (err) {
+        if (err.name !== 'AbortError') hide();
+      }
     }, AUTOCOMPLETE_DEBOUNCE);
   });
 
@@ -638,7 +648,7 @@ function setupAutocomplete(inputEl, dropdownEl) {
       items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
       inputEl.value = acIdx >= 0 ? items[acIdx].dataset.sub : preAcVal;
     } else if (e.key === 'Enter') {
-      hide();
+      cancel();
       if (acIdx >= 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -647,22 +657,23 @@ function setupAutocomplete(inputEl, dropdownEl) {
       }
     } else if (e.key === 'Escape') {
       e.stopImmediatePropagation();
-      hide();
+      cancel();
     }
   }, true);
 
-  inputEl.addEventListener('blur', () => { setTimeout(hide, 150); });
+  inputEl.addEventListener('blur', () => { setTimeout(cancel, 150); });
   dropdownEl.addEventListener('mousedown', e => e.preventDefault());
   dropdownEl.addEventListener('click', e => {
     const item = e.target.closest('.autocomplete-item');
     if (!item) return;
-    hide();
+    cancel();
     navigate(`/r/${item.dataset.sub}`);
   });
+  return cancel;
 }
 
-setupAutocomplete(subInput,   document.getElementById('autocomplete-dropdown'));
-setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown'));
+_acCancellers.push(setupAutocomplete(subInput,   document.getElementById('autocomplete-dropdown')));
+_acCancellers.push(setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown')));
 
 // ── Settings panel ────────────────────────────────────────────────────────────
 const settingsPanel   = document.getElementById('settings-panel');
