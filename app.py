@@ -15,14 +15,6 @@ CACHE_TTL_SUBREDDIT  = 600
 REDGIFS_TOKEN_TTL    = 23 * 3600
 SELFTEXT_MAX_LEN     = 600
 FEED_LIMIT           = 25
-
-def _trim_selftext(text):
-    text = text[:SELFTEXT_MAX_LEN]
-    # Drop any incomplete spoiler marker cut off by the length limit
-    last_open = text.rfind('>!')
-    if last_open >= 0 and text.find('!<', last_open) < 0:
-        text = text[:last_open]
-    return text.rstrip()
 COMMENTS_LIMIT       = 200
 STREAM_CHUNK_SIZE    = 65536
 
@@ -239,7 +231,7 @@ def process_post(p):
         "url":            p.get("url", ""),
         "permalink":      f"https://www.reddit.com{p.get('permalink', '')}",
         "is_self":        p.get("is_self", False),
-        "selftext":       _trim_selftext(p.get("selftext", "")) if p.get("is_self") else "",
+        "selftext":       p.get("selftext", "")[:SELFTEXT_MAX_LEN] if p.get("is_self") else "",
         "preview_img":    preview_img,
         "gallery":        gallery,
         "is_video":       is_video,

@@ -42,7 +42,7 @@ export async function xlateText(text) {
 
 export function renderMd(text) {
   if (!text) return '';
-  const processed = linkifyReddit(text).replace(/>!([\s\S]*?)!</g, (_, inner) =>
+  const processed = linkifyReddit(text).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
     `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
