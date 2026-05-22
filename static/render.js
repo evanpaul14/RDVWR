@@ -21,9 +21,9 @@ marked.use({ renderer: mdRenderer, breaks: true, gfm: true });
 
 export function linkifyReddit(text) {
   return text
-    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<!\w)(\/?)r\/([A-Za-z0-9_]+)/g,
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)r\/([A-Za-z0-9_]+)/g,
       (m, skip, slash, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
-    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<!\w)(\/?)u\/([A-Za-z0-9_-]+)/g,
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)u\/([A-Za-z0-9_-]+)/g,
       (m, skip, slash, user) => skip ? skip : `[u/${user}](/user/${user})`);
 }
 
