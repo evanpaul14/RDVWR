@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, SKELETON_COUNT } from './utils.js';
-import { initVideos, initRedgifs, initImgurAlbums, mediaHtmlFull } from './media.js';
+import { initVideos, initGifVideos, initRedgifs, initImgurAlbums, mediaHtmlFull } from './media.js';
 import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate, renderCrosspostFull } from './render.js';
 
 // ── Download helper ───────────────────────────────────────────────────────────
@@ -224,6 +224,7 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join('');
     initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
     while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+    initGifVideos(feed);
     state.afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -283,6 +284,7 @@ export async function loadMultiFeed(username, multiname, sort, time, after=null,
     tmp.innerHTML = data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
     initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
     while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+    initGifVideos(feed);
     state.afterToken = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -350,6 +352,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
       ).join('');
       initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
       while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+      initGifVideos(feed);
     } else {
       const items = tab === 'posts' ? data.posts : data.comments;
       if (!items?.length && !append) {
@@ -362,6 +365,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
         tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
         initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp);
         while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+        initGifVideos(feed);
       } else {
         feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
       }
@@ -432,6 +436,7 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
     initVideos(feed);
     initRedgifs(feed);
     initImgurAlbums(feed);
+    initGifVideos(feed);
     state.searchAfter = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
@@ -548,6 +553,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
     initVideos(feed);
     initRedgifs(feed);
     initImgurAlbums(feed);
+    initGifVideos(feed);
     state.duplicatesAfter = data.after;
     sentinel.classList.remove('loading');
   } catch {
@@ -833,6 +839,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
     initVideos(pvContent);
     initRedgifs(pvContent);
     initImgurAlbums(pvContent);
+    initGifVideos(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
   } catch {

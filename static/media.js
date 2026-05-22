@@ -42,6 +42,25 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
   if (audioSrc) syncAudio(videoEl, audioSrc);
 }
 
+const _gifObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const v = entry.target;
+    if (entry.isIntersecting) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  });
+}, { threshold: 0.1 });
+
+export function initGifVideos(container) {
+  container.querySelectorAll('video[autoplay]:not([data-gif-obs])').forEach(v => {
+    v.dataset.gifObs = '1';
+    v.removeAttribute('autoplay');
+    _gifObserver.observe(v);
+  });
+}
+
 export function initVideos(container) {
   container.querySelectorAll('[data-hls]:not([data-hls-init])').forEach(wrap => {
     const v = wrap.querySelector('video');
