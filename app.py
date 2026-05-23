@@ -336,6 +336,21 @@ DOWNLOAD_ALLOWED_HOSTS = frozenset({
     'i.imgur.com',
 })
 
+@app.route("/api/resolve")
+def resolve_url():
+    url = request.args.get('url', '').strip()
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return jsonify({'error': 'Invalid URL'}), 400
+    if parsed.scheme not in ('http', 'https') or 'reddit.com' not in parsed.netloc:
+        return jsonify({'error': 'Only reddit.com URLs supported'}), 400
+    try:
+        r = requests.head(url, allow_redirects=True, timeout=5, headers=HEADERS)
+        return jsonify({'url': r.url})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
 @app.route("/api/download")
 def download_media():
     url = request.args.get('url', '').strip()
