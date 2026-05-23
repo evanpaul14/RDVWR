@@ -7,6 +7,7 @@ export const DEFAULTS = {
   nsfwBlur: false,
   nsfwHide: false,
   homeSub: 'popular',
+  theme: 'dark',
 };
 
 function _load() {
@@ -24,4 +25,6 @@ export function saveSettings() {
 export function applySettings() {
   document.body.classList.toggle('nsfw-blur', settings.nsfwBlur);
   document.body.classList.toggle('nsfw-hide', settings.nsfwHide);
+  document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
+  document.body.classList.add(`theme-${settings.theme || 'dark'}`);
 }

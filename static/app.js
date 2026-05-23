@@ -703,7 +703,12 @@ function _settingsHtml() {
     `<select class="settings-select" id="${id}">${opts.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('')}</select>`;
   const chk = (id, checked) =>
     `<input type="checkbox" class="settings-toggle" id="${id}"${checked?' checked':''}>`;
+  const themeOpts = [['dark','Dark'],['light','Light'],['system','System default']];
   return `
+  <div class="settings-section">
+    <div class="settings-section-title">Appearance</div>
+    <label class="settings-row"><span class="settings-label">Theme</span>${sel('s-theme', themeOpts, settings.theme || 'dark')}</label>
+  </div>
   <div class="settings-section">
     <div class="settings-section-title">Feed</div>
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
@@ -733,6 +738,7 @@ function openSettingsPanel() {
 }
 
 function bindSettingEvents() {
+  settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-home-sub').addEventListener('change', e => {
