@@ -155,6 +155,18 @@ function interceptNavLink(a, e) {
     if (!extra || /^\/(hot|new|top|rising|controversial|best|gilded)?\/?$/.test(extra)) {
       e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true;
     }
+    // Unrecognized path (e.g. share link /s/token) — resolve the redirect then navigate
+    e.preventDefault();
+    fetch(`/api/resolve?url=${encodeURIComponent(href)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.url) return;
+        const post = data.url.match(/\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
+        if (post) navigate(`/r/${post[1]}/comments/${post[2]}`);
+        else window.open(data.url, '_blank');
+      })
+      .catch(() => window.open(href, '_blank'));
+    return true;
   }
   const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
   if (redditUser) { e.preventDefault(); navigateOrOpen(`/user/${redditUser[1]}`, e); return true; }
