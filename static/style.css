@@ -6,6 +6,7 @@
   --ac:   #4a9eff; --acd: #1a3a66;
   --up:   #ff6b35;
   --hdr-bg: rgba(12,12,12,.92); --pvhdr-bg: rgba(12,12,12,.95);
+  --shadow-card: 0 4px 24px rgba(0,0,0,.4); --shadow-dropdown: 0 8px 24px rgba(0,0,0,.5);
   --serif:'Instrument Serif', Georgia, serif;
   --mono: 'JetBrains Mono', monospace;
   --sans: 'DM Sans', system-ui, sans-serif;
@@ -13,23 +14,25 @@
 
 /* ── Light theme vars ────────────────────────────────────────────────────── */
 body.theme-light {
-  --bg:   #f4f4f4; --bg2: #ffffff; --bg3: #ebebeb;
-  --b:    #dedede; --b2:  #cccccc;
-  --tx:   #1a1a1a; --tx2: #555555; --tx3: #888888;
-  --ac:   #1a6fd4; --acd: #cce0f7;
+  --bg:   #f2f2f2; --bg2: #ffffff; --bg3: #e6e6e6;
+  --b:    #c4c4c4; --b2:  #ababab;
+  --tx:   #111111; --tx2: #3a3a3a; --tx3: #5e5e5e;
+  --ac:   #1260c0; --acd: #d0e4f7;
   --up:   #c94d00;
-  --hdr-bg: rgba(244,244,244,.92); --pvhdr-bg: rgba(244,244,244,.95);
+  --hdr-bg: rgba(242,242,242,.92); --pvhdr-bg: rgba(242,242,242,.95);
+  --shadow-card: 0 2px 10px rgba(0,0,0,.1); --shadow-dropdown: 0 6px 18px rgba(0,0,0,.14);
 }
 
 /* ── System default: honour OS preference ────────────────────────────────── */
 @media (prefers-color-scheme: light) {
   body.theme-system {
-    --bg:   #f4f4f4; --bg2: #ffffff; --bg3: #ebebeb;
-    --b:    #dedede; --b2:  #cccccc;
-    --tx:   #1a1a1a; --tx2: #555555; --tx3: #888888;
-    --ac:   #1a6fd4; --acd: #cce0f7;
+    --bg:   #f2f2f2; --bg2: #ffffff; --bg3: #e6e6e6;
+    --b:    #c4c4c4; --b2:  #ababab;
+    --tx:   #111111; --tx2: #3a3a3a; --tx3: #5e5e5e;
+    --ac:   #1260c0; --acd: #d0e4f7;
     --up:   #c94d00;
-    --hdr-bg: rgba(244,244,244,.92); --pvhdr-bg: rgba(244,244,244,.95);
+    --hdr-bg: rgba(242,242,242,.92); --pvhdr-bg: rgba(242,242,242,.95);
+    --shadow-card: 0 2px 10px rgba(0,0,0,.1); --shadow-dropdown: 0 6px 18px rgba(0,0,0,.14);
   }
 }
 html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-height:100vh; }
@@ -56,7 +59,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .autocomplete-dropdown {
   position:absolute; top:calc(100% + 3px); left:0; right:0; z-index:200;
   background:var(--bg2); border:1px solid var(--b2); border-radius:6px;
-  overflow:hidden; display:none; box-shadow:0 8px 24px rgba(0,0,0,.5);
+  overflow:hidden; display:none; box-shadow:var(--shadow-dropdown);
 }
 .autocomplete-dropdown.open { display:block; }
 .autocomplete-item {
@@ -163,7 +166,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   opacity:0; transform:translateY(8px); animation:fadeUp .3s ease forwards;
   transition:border-color .18s, box-shadow .18s;
 }
-.post:hover { border-color:var(--b2); box-shadow:0 4px 24px rgba(0,0,0,.4); }
+.post:hover { border-color:var(--b2); box-shadow:var(--shadow-card); }
 .post.keyboard-selected { border-color:var(--ac); box-shadow:0 0 0 1px var(--ac); }
 
 /* Keyboard help overlay */
