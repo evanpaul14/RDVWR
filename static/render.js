@@ -15,13 +15,17 @@ mdRenderer.image = (href, title, text) => {
 mdRenderer.link = (href, title, text) => {
   if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href))
     return `<a href="${href}" target="_blank" rel="noopener"><img src="${href}" alt="${text||''}" loading="lazy"></a>`;
-  return (_link(href, title, text)||'').replace('<a ', '<a target="_blank" rel="noopener" ');
+  const base = _link(href, title, text) || '';
+  // Relative links and reddit.com links are intercepted by the SPA router — no _blank
+  if (!href || !/^https?:\/\//i.test(href) || /reddit\.com\//i.test(href))
+    return base;
+  return base.replace('<a ', '<a target="_blank" rel="noopener" ');
 };
 marked.use({ renderer: mdRenderer, breaks: true, gfm: true });
 
 export function linkifyReddit(text) {
   return text
-    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)r\/([A-Za-z0-9_]+)/g,
+    .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)r\/([A-Za-z0-9_]+(?:\/comments\/[A-Za-z0-9_]+)?)/g,
       (m, skip, slash, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
     .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)u\/([A-Za-z0-9_-]+)/g,
       (m, skip, slash, user) => skip ? skip : `[u/${user}](/user/${user})`);
