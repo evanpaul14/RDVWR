@@ -149,8 +149,13 @@ function interceptNavLink(a, e) {
   if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
   const redditWiki = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
   if (redditWiki) { e.preventDefault(); navigateOrOpen(`/r/${redditWiki[1]}/wiki/${redditWiki[2]||'index'}`, e); return true; }
-  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)/);
-  if (redditSub)  { e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true; }
+  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)(\/[^?\s#]*)?/);
+  if (redditSub) {
+    const extra = redditSub[2] || '';
+    if (!extra || /^\/(hot|new|top|rising|controversial|best|gilded)?\/?$/.test(extra)) {
+      e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true;
+    }
+  }
   const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
   if (redditUser) { e.preventDefault(); navigateOrOpen(`/user/${redditUser[1]}`, e); return true; }
   try {
