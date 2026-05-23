@@ -680,11 +680,12 @@ function setupAutocomplete(inputEl, dropdownEl) {
       items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
       inputEl.value = acIdx >= 0 ? items[acIdx].dataset.sub : preAcVal;
     } else if (e.key === 'Enter') {
+      const selectedIdx = acIdx;
       cancel();
-      if (acIdx >= 0) {
+      if (selectedIdx >= 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const sub = items[acIdx]?.dataset.sub;
+        const sub = items[selectedIdx]?.dataset.sub;
         if (sub) navigate(`/r/${sub}`);
       }
     } else if (e.key === 'Escape') {
