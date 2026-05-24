@@ -118,15 +118,11 @@ window.addEventListener('popstate', (e) => {
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
   const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode) {
-    state.currentSort = route.sort;
-    state.currentTime = route.time || 'all';
+  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
-  if (route.type === 'multi' && hasFeedPosts && route.username === state.multiUsername && route.multiname === state.multiName && state.multiMode) {
-    state.currentSort = route.sort;
-    state.currentTime = route.time || 'all';
+  if (route.type === 'multi' && hasFeedPosts && route.username === state.multiUsername && route.multiname === state.multiName && state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
