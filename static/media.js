@@ -192,7 +192,6 @@ export function mediaHtmlCard(p) {
   else {
     const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
     if (imgSrc) html = `<div class="post-media">\n    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">\n  </div>`;
-    else if (!p.is_self && p.domain && !p.domain.includes('reddit.com') && !p.domain.startsWith('self.')) return `<div class="post-media link-thumb"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
   }
   if (!html) return '';
   if (p.is_spoiler) html = spoilerWrap(html);
