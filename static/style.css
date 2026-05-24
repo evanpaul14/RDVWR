@@ -528,6 +528,14 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .pv-media iframe { width:100%; aspect-ratio:16/9; border:none; border-radius:6px; display:block; }
 .pv-media.tiktok-wrap { display:flex; justify-content:center; background:#000; border-radius:6px; overflow:hidden; }
 .pv-media.tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; }
+.pv-article-link {
+  display:inline-flex; align-items:center; gap:7px; margin-bottom:16px;
+  padding:9px 14px; background:var(--bg2); border:1px solid var(--b2);
+  border-radius:6px; color:var(--ac); text-decoration:none;
+  font-family:var(--mono); font-size:12px; letter-spacing:.04em; transition:background .15s, border-color .15s;
+}
+.pv-article-link:hover { background:var(--bg3); border-color:var(--ac); }
+.pv-article-link svg { flex-shrink:0; opacity:.8; }
 .pv-body { margin-bottom:24px; font-size:14px; line-height:1.7; color:var(--tx); }
 .pv-body .md img { max-height:500px; }
 

@@ -6,7 +6,7 @@ import time
 import tempfile
 import subprocess
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote as url_quote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 
 CACHE_TTL_STATIC     = 604800   # 1 week
@@ -106,6 +106,12 @@ def process_post(p):
                     })
     if not preview_img and gallery:
         preview_img = gallery[0]["url"]
+
+    # Proxy preview.redd.it / external-preview.redd.it images through backend so they load reliably
+    if preview_img:
+        _ph = urlparse(preview_img).hostname or ''
+        if _ph in ('preview.redd.it', 'external-preview.redd.it'):
+            preview_img = f"/api/img?url={url_quote(preview_img, safe='')}"
 
     # RedGifs: extract ID from post URL early so we skip Reddit's video-only preview
     redgifs_id = extract_redgifs_id(p.get("url", ""))
@@ -335,6 +341,29 @@ DOWNLOAD_ALLOWED_HOSTS = frozenset({
     'external-preview.redd.it',
     'i.imgur.com',
 })
+
+IMG_PROXY_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
+
+@app.route("/api/img")
+def proxy_img():
+    url = request.args.get('url', '').strip()
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return ('', 400)
+    if parsed.scheme not in ('http', 'https') or parsed.hostname not in IMG_PROXY_HOSTS:
+        return ('', 403)
+    try:
+        upstream = SESSION.get(url, headers={'Referer': 'https://www.reddit.com/'}, stream=True, timeout=20)
+        if not upstream.ok:
+            return ('', upstream.status_code)
+        content_type = upstream.headers.get('Content-Type', 'image/jpeg')
+        resp = Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), content_type=content_type)
+        resp.headers['Cache-Control'] = 'public, max-age=3600'
+        return resp
+    except Exception:
+        return ('', 502)
+
 
 @app.route("/api/resolve")
 def resolve_url():
