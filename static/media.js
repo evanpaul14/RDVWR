@@ -146,6 +146,23 @@ export async function initImgurAlbums(container) {
   }));
 }
 
+export function initOgImages(container) {
+  container.querySelectorAll('.og-placeholder[data-og-url]:not([data-og-init])').forEach(wrap => {
+    wrap.dataset.ogInit = '1';
+    const url = wrap.dataset.ogUrl;
+    fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.url) {
+          const cls = wrap.classList.contains('pv-media') ? 'pv-media' : 'post-media';
+          wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`);
+          wrap.remove();
+        }
+      })
+      .catch(() => {});
+  });
+}
+
 export function renderGallery(images) {
   if (!images?.length) return '';
   const thumbsHtml = images.map((img,i) =>
@@ -192,6 +209,7 @@ export function mediaHtmlCard(p) {
   else {
     const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
     if (imgSrc) html = `<div class="post-media">\n    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">\n  </div>`;
+    else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) html = `<div class="og-placeholder post-media" data-og-url="${escHtml(p.url)}"></div>`;
   }
   if (!html) return '';
   if (p.is_spoiler) html = spoilerWrap(html);
@@ -214,6 +232,7 @@ export function mediaHtmlFull(p) {
     : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
   else if (p.gallery?.length) html = renderGallery(p.gallery);
   else if (p.preview_img && !p.is_self) html = `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
+  else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) html = `<div class="og-placeholder pv-media" data-og-url="${escHtml(p.url)}"></div>`;
   if (!html) return '';
   if (p.is_spoiler) html = spoilerWrap(html);
   if (p.over_18)   html = nsfwWrap(html);

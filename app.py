@@ -35,6 +35,8 @@ IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jp
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 STREAMABLE_RE       = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
+OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
+_og_cache: dict = {}
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -106,12 +108,6 @@ def process_post(p):
                     })
     if not preview_img and gallery:
         preview_img = gallery[0]["url"]
-
-    # Fallback: Reddit's thumbnail field is populated for link posts even when preview is absent
-    if not preview_img:
-        thumb = p.get("thumbnail", "")
-        if thumb and thumb not in ("self", "default", "nsfw", "spoiler", ""):
-            preview_img = clean_url(thumb)
 
     # Proxy preview.redd.it / external-preview.redd.it images through backend so they load reliably
     if preview_img:
@@ -1213,6 +1209,28 @@ def get_live_updates(thread_id):
         }, 15)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/og-image")
+def get_og_image():
+    url = request.args.get("url", "").strip()
+    if not url or not url.startswith(("http://", "https://")):
+        return jsonify({"error": "Invalid URL"}), 400
+    if url in _og_cache:
+        return cached_json({"url": _og_cache[url]}, 3600)
+    try:
+        r = SESSION.get(url, timeout=8, stream=True, headers={**HEADERS, "Accept": "text/html"})
+        # Read only the first 32 KB — enough for <head> tags
+        chunk = next(r.iter_content(32768), b"")
+        r.close()
+        text = chunk.decode("utf-8", errors="ignore")
+        m = OG_IMAGE_RE.search(text)
+        img_url = (m.group(1) or m.group(2)).strip() if m else None
+        _og_cache[url] = img_url
+        return cached_json({"url": img_url}, 3600)
+    except Exception:
+        _og_cache[url] = None
+        return cached_json({"url": None}, 60)
 
 
 if __name__ == "__main__":
