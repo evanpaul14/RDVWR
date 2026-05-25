@@ -18,8 +18,12 @@ mdRenderer.image = (href, title, text) => {
   return _img(href, title, text);
 };
 mdRenderer.link = (href, title, text) => {
-  if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && (!text || text === href))
-    return `<a href="${href}" target="_blank" rel="noopener"><img src="${href}" alt="" loading="lazy"></a>`;
+  const decodedText = text ? text.replace(/&amp;/g, '&') : text;
+  if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && (!decodedText || decodedText === href)) {
+    const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
+      ? `/api/img?url=${encodeURIComponent(href)}` : href;
+    return `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
+  }
   const base = _link(href, title, text) || '';
   // Relative links and reddit.com links are intercepted by the SPA router — no _blank
   if (!href || !/^https?:\/\//i.test(href) || /reddit\.com\//i.test(href))
