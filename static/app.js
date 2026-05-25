@@ -258,7 +258,7 @@ sortBar.addEventListener('click', e => {
     toggleSidebar(state.currentSub);
     return;
   }
-  if (e.target.closest('#nsfw-toggle') && state.searchMode) {
+  if (e.target.closest('#nsfw-toggle') && state.searchMode && !settings.nsfwHide) {
     state.searchNsfw = !state.searchNsfw;
     navigate(buildSearchUrl(), { replace:true });
     return;
