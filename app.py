@@ -8,6 +8,7 @@ import subprocess
 import requests
 from urllib.parse import urlparse, quote as url_quote
 from flask import Flask, render_template, jsonify, request, Response, make_response
+from flask_compress import Compress
 
 CACHE_TTL_STATIC     = 604800   # 1 week
 CACHE_TTL_FEED       = 300
@@ -20,6 +21,7 @@ STREAM_CHUNK_SIZE    = 65536
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
+Compress(app)
 HEADERS    = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"}
 YOUTUBE_RE = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
@@ -37,6 +39,7 @@ STREAMABLE_RE       = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
 OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
 _og_cache: dict = {}
+OG_CACHE_MAX = 1000
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
@@ -300,6 +303,37 @@ def get_redgifs(gif_id):
             fname = url.rsplit("/", 1)[-1]
             return f"/api/redgifs/media/{fname}"
         return cached_json({"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}, 3600)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/redgifs/batch")
+def get_redgifs_batch():
+    raw = request.args.get('ids', '')
+    ids = [i for i in raw.split(',') if i and REDGIFS_ID_VALID_RE.match(i)][:50]
+    if not ids:
+        return jsonify({}), 200
+    try:
+        token = get_redgifs_token()
+        resp = SESSION.get(
+            f"https://api.redgifs.com/v2/gifs?ids={','.join(ids)}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
+        gifs = resp.json().get("gifs") or []
+        result = {}
+        for gif in gifs:
+            gid = gif.get("id")
+            if not gid:
+                continue
+            urls = gif.get("urls", {})
+            def proxied(url):
+                if not url: return None
+                fname = url.rsplit("/", 1)[-1]
+                return f"/api/redgifs/media/{fname}"
+            result[gid] = {"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}
+        return cached_json(result, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1226,6 +1260,9 @@ def get_og_image():
         text = chunk.decode("utf-8", errors="ignore")
         m = OG_IMAGE_RE.search(text)
         img_url = (m.group(1) or m.group(2)).strip() if m else None
+        if len(_og_cache) >= OG_CACHE_MAX:
+            for k in list(_og_cache)[:OG_CACHE_MAX // 5]:
+                del _og_cache[k]
         _og_cache[url] = img_url
         return cached_json({"url": img_url}, 3600)
     except Exception:

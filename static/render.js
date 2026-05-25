@@ -41,6 +41,7 @@ export function linkifyReddit(text) {
 }
 
 const _xlateCache = new Map();
+const XLATE_CACHE_MAX = 500;
 export async function xlateText(text) {
   if (!text?.trim()) return null;
   const key = text.trim().slice(0, 1000);
@@ -49,6 +50,7 @@ export async function xlateText(text) {
   const d = await r.json();
   const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
   const result = { detected, translated: d.responseData?.translatedText || '' };
+  if (_xlateCache.size >= XLATE_CACHE_MAX) _xlateCache.delete(_xlateCache.keys().next().value);
   _xlateCache.set(key, result);
   return result;
 }
