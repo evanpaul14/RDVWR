@@ -90,6 +90,20 @@ export function renderAuthorFlair(c) {
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
 
+export function errState(msg, retryTarget) {
+  return `<div class="state"><div class="state-icon">⚠</div><div class="state-title">${msg}</div><button class="state-retry-btn" data-retry="${retryTarget}">Try again</button></div>`;
+}
+
+export function buildTimeFilterHtml(selected) {
+  return `<div class="time-filter-wrap"><select class="time-filter" id="time-filter">
+    <option value="all"${selected==='all'?' selected':''}>All time</option>
+    <option value="year"${selected==='year'?' selected':''}>Past year</option>
+    <option value="month"${selected==='month'?' selected':''}>Past month</option>
+    <option value="week"${selected==='week'?' selected':''}>Past week</option>
+    <option value="day"${selected==='day'?' selected':''}>Today</option>
+  </select></div>`;
+}
+
 export function renderPoll(poll) {
   if (!poll?.options?.length) return '';
   const total = poll.total_votes || 0;
