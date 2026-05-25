@@ -107,6 +107,12 @@ def process_post(p):
     if not preview_img and gallery:
         preview_img = gallery[0]["url"]
 
+    # Fallback: Reddit's thumbnail field is populated for link posts even when preview is absent
+    if not preview_img:
+        thumb = p.get("thumbnail", "")
+        if thumb and thumb not in ("self", "default", "nsfw", "spoiler", ""):
+            preview_img = clean_url(thumb)
+
     # Proxy preview.redd.it / external-preview.redd.it images through backend so they load reliably
     if preview_img:
         _ph = urlparse(preview_img).hostname or ''
