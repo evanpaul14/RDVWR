@@ -5,20 +5,18 @@ import { parseRoute } from './router.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
-  loadProfile, loadProfileTab,
-  loadSearch, loadSearchResults, loadCommunityResults, loadUserResults,
-  loadDuplicatesPage, loadWikiPage,
-  loadLiveThread, loadMoreLiveUpdates, cancelLivePoll,
-  loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments,
-  closeSidebar, toggleSidebar,
-  retryFeedLoad, errState,
-  buildSubSortHtml, buildProfileSortHtml, SEARCH_SORT_BTN_HTML,
-  searchTypeBar,
+  loadDuplicatesPage,
+  sortBar, setMainOpen, buildSubSortHtml,
 } from './feed.js';
+import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js';
+import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, searchTypeBar, SEARCH_SORT_BTN_HTML } from './search.js';
+import { loadWikiPage } from './wiki.js';
+import { loadLiveThread, loadMoreLiveUpdates, cancelLivePoll } from './live.js';
+import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments } from './postview.js';
+import { closeSidebar, toggleSidebar } from './sidebar.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed       = document.getElementById('feed');
-const sortBar    = document.getElementById('sort-bar');
 const sentinel   = document.getElementById('scroll-sentinel');
 const subInput   = document.getElementById('subreddit-input');
 const pvSubInput = document.getElementById('pv-subreddit-input');
@@ -173,6 +171,29 @@ function interceptNavLink(a, e) {
     navigateOrOpen(url.pathname + url.search, e);
     return true;
   } catch { return false; }
+}
+
+// ── Retry feed load ───────────────────────────────────────────────────────────
+function retryFeedLoad() {
+  if (state._wikiSub && state.wikiMode) {
+    loadWikiPage(state._wikiSub, state._wikiPage);
+    return;
+  }
+  if (state.liveMode) {
+    loadLiveThread(state.liveThreadId);
+  } else if (state.duplicatesMode) {
+    loadDuplicatesPage(state.duplicatesSub, state.duplicatesPostId);
+  } else if (state.searchMode) {
+    if (state.searchType === 'communities') loadCommunityResults(state.searchQuery);
+    else if (state.searchType === 'users')  loadUserResults(state.searchQuery);
+    else loadSearchResults(state.searchQuery, state.searchSort, state.searchTime);
+  } else if (state.profileMode) {
+    loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
+  } else if (state.multiMode) {
+    loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime);
+  } else {
+    loadSubFeed(state.currentSub, state.currentSort, state.currentTime);
+  }
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
