@@ -10,6 +10,11 @@ const _link = mdRenderer.link.bind(mdRenderer);
 mdRenderer.image = (href, title, text) => {
   if (href?.startsWith('giphy|'))   return `<img src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
   if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
+  try {
+    const h = new URL(href).hostname;
+    if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
+      href = `/api/img?url=${encodeURIComponent(href)}`;
+  } catch (_) {}
   return _img(href, title, text);
 };
 mdRenderer.link = (href, title, text) => {
