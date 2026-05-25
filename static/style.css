@@ -168,6 +168,9 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 .post:hover { border-color:var(--b2); box-shadow:var(--shadow-card); }
 .post.keyboard-selected { border-color:var(--ac); box-shadow:0 0 0 1px var(--ac); }
+.post.post-visited .post-title { color:var(--tx3); }
+.post.post-visited .post-title:hover { color:var(--ac); }
+.post.post-read-hidden { display:none !important; }
 
 /* Keyboard help overlay */
 #kbd-help-overlay {
@@ -1153,6 +1156,13 @@ a.comment-time:hover { color:var(--ac); }
   padding:8px; cursor:pointer; transition:color .15s,border-color .15s;
 }
 .settings-reset-btn:hover { color:var(--tx2); border-color:var(--tx3); }
+.settings-row-action { justify-content:space-between; }
+.settings-action-btn {
+  background:none; border:1px solid var(--b2); border-radius:4px;
+  color:var(--tx3); font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+  padding:4px 10px; cursor:pointer; transition:color .15s,border-color .15s;
+}
+.settings-action-btn:hover { color:var(--tx2); border-color:var(--tx3); }
 
 /* ── NSFW feed filtering ─────────────────────────────────────────────────── */
 body.nsfw-hide [data-nsfw="1"] { display:none !important; }
