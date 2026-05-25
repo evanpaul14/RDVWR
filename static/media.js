@@ -153,7 +153,20 @@ export function initOgImages(container) {
     fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
       .then(r => r.json())
       .then(d => {
-        if (d.url) {
+        if (!d.url) return;
+        if (wrap.classList.contains('post-compact-thumb')) {
+          const img = document.createElement('img');
+          img.src = d.url;
+          img.loading = 'lazy';
+          img.alt = '';
+          img.onerror = () => wrap.remove();
+          if (wrap.dataset.ogNsfw) {
+            wrap.innerHTML = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content"></div></div>`;
+            wrap.querySelector('.nsfw-content').appendChild(img);
+          } else {
+            wrap.appendChild(img);
+          }
+        } else {
           const cls = wrap.classList.contains('pv-media') ? 'pv-media' : 'post-media';
           wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`);
           wrap.remove();
