@@ -79,32 +79,51 @@ export function initVideos(container) {
 
 export async function initRedgifs(container) {
   const wraps = [...container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')];
+  if (!wraps.length) return;
+  wraps.forEach(w => { w.dataset.rgInit = '1'; });
+  const ids = wraps.map(w => w.dataset.rgid);
+  let batchData = {};
+  try {
+    const res = await fetch(`/api/redgifs/batch?ids=${ids.join(',')}`);
+    if (res.ok) batchData = await res.json();
+  } catch {}
   await Promise.all(wraps.map(async wrap => {
-    wrap.dataset.rgInit = '1';
     const id = wrap.dataset.rgid;
-    try {
-      const res = await fetch(`/api/redgifs/${id}`);
-      const data = await res.json();
-      if (!res.ok || (!data.hd && !data.sd)) throw new Error(data.error || 'no url');
-      const videoSrc = data.hd || data.sd;
-      const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
-      wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
-      if (!state.userPrefersMuted) { const v = wrap.querySelector('video'); if (v) v.muted = false; }
-      // Activate the pv-meta placeholder if present
-      const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
-      if (placeholder) {
-        const a = document.createElement('a');
-        a.className = 'share-btn';
-        a.href = videoSrc;
-        a.download = rgFname;
-        a.title = 'Download video';
-        a.innerHTML = `${_DL_ICON} download`;
-        placeholder.replaceWith(a);
-      }
-    } catch {
+    let data = batchData[id];
+    if (!data) {
+      try {
+        const res = await fetch(`/api/redgifs/${id}`);
+        data = await res.json();
+        if (!res.ok) data = null;
+      } catch { data = null; }
+    }
+    if (!data || (!data.hd && !data.sd)) {
       wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
+      return;
+    }
+    const videoSrc = data.hd || data.sd;
+    const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
+    wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
+    if (!state.userPrefersMuted) { const v = wrap.querySelector('video'); if (v) v.muted = false; }
+    // Activate the pv-meta placeholder if present
+    const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
+    if (placeholder) {
+      const a = document.createElement('a');
+      a.className = 'share-btn';
+      a.href = videoSrc;
+      a.download = rgFname;
+      a.title = 'Download video';
+      a.innerHTML = `${_DL_ICON} download`;
+      placeholder.replaceWith(a);
     }
   }));
+}
+
+export function initMedia(container) {
+  initVideos(container);
+  initRedgifs(container);
+  initImgurAlbums(container);
+  initOgImages(container);
 }
 
 export async function initImgurAlbums(container) {

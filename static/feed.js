@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, SKELETON_COUNT } from './utils.js';
-import { initVideos, initGifVideos, initRedgifs, initImgurAlbums, initOgImages, mediaHtmlFull } from './media.js';
+import { initMedia, initGifVideos, mediaHtmlFull } from './media.js';
 import { renderPost, renderCommentTree, renderUserCommentCard, renderCommunityCard, renderUserCard, renderMd, translatePost, renderLiveUpdate, renderCrosspostFull } from './render.js';
 
 // ── Download helper ───────────────────────────────────────────────────────────
@@ -225,7 +225,7 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     const multiSub = state.currentSub === 'popular' || state.currentSub === 'all';
     const tmp = document.createElement('div');
     tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join('');
-    initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp); initOgImages(tmp);
+    initMedia(tmp);
     while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     initGifVideos(feed);
     state.afterToken = data.after;
@@ -285,7 +285,7 @@ export async function loadMultiFeed(username, multiname, sort, time, after=null,
     const startIdx = append ? feed.children.length : 0;
     const tmp = document.createElement('div');
     tmp.innerHTML = data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
-    initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp); initOgImages(tmp);
+    initMedia(tmp);
     while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     initGifVideos(feed);
     state.afterToken = data.after;
@@ -353,7 +353,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
           ? renderPost(item.data, startIdx + i, true)
           : renderUserCommentCard(item.data, startIdx + i)
       ).join('');
-      initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp); initOgImages(tmp);
+      initMedia(tmp);
       while (tmp.firstChild) feed.appendChild(tmp.firstChild);
       initGifVideos(feed);
     } else {
@@ -366,7 +366,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
       if (tab === 'posts') {
         const tmp = document.createElement('div');
         tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
-        initVideos(tmp); initRedgifs(tmp); initImgurAlbums(tmp); initOgImages(tmp);
+        initMedia(tmp);
         while (tmp.firstChild) feed.appendChild(tmp.firstChild);
         initGifVideos(feed);
       } else {
@@ -436,10 +436,7 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
     }
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
     feed.insertAdjacentHTML('beforeend', data.posts.map((p,i)=>renderPost(p,startIdx+i,true)).join(''));
-    initVideos(feed);
-    initRedgifs(feed);
-    initImgurAlbums(feed);
-    initOgImages(feed);
+    initMedia(feed);
     initGifVideos(feed);
     state.searchAfter = data.after;
     sentinel.classList.remove('loading');
@@ -554,10 +551,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
     }
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
     feed.insertAdjacentHTML('beforeend', data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
-    initVideos(feed);
-    initRedgifs(feed);
-    initImgurAlbums(feed);
-    initOgImages(feed);
+    initMedia(feed);
     initGifVideos(feed);
     state.duplicatesAfter = data.after;
     sentinel.classList.remove('loading');
@@ -841,10 +835,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         ${buildCommentsHtml(data, commentId)}
       </div>`;
 
-    initVideos(pvContent);
-    initRedgifs(pvContent);
-    initImgurAlbums(pvContent);
-    initOgImages(pvContent);
+    initMedia(pvContent);
     initGifVideos(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
@@ -977,9 +968,7 @@ export async function loadMoreComments(btn) {
     if (!data.comments?.length) { wrap.remove(); return; }
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
-    initVideos(wrap.parentElement);
-    initRedgifs(wrap.parentElement);
-    initImgurAlbums(wrap.parentElement);
+    initMedia(wrap.parentElement);
     wrap.remove();
   } catch {
     btn.textContent = 'Failed to load';
