@@ -153,7 +153,7 @@ export function initOgImages(container) {
     fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
       .then(r => r.json())
       .then(d => {
-        if (!d.url) return;
+        if (!d.url) { wrap.remove(); return; }
         if (wrap.classList.contains('post-compact-thumb')) {
           const img = document.createElement('img');
           img.src = d.url;
@@ -172,7 +172,7 @@ export function initOgImages(container) {
           wrap.remove();
         }
       })
-      .catch(() => {});
+      .catch(() => { wrap.remove(); });
   });
 }
 
