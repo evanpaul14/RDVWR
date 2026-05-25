@@ -819,7 +819,6 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
-        ${!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.crosspost_from ? `<a class="meta-item link" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.domain)} ↗</a>` : ''}
         ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
         <button class="share-btn" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -830,7 +829,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       </div>
       ${crosspostHtml}
       ${p.crosspost_from ? '' : mediaHtmlFull(p)}
-      ${!p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') ? `<a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : ''}
+      ${!p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') ? `<a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a>` : ''}
       ${bodyHtml}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
