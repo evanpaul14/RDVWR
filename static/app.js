@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
+import { markVisited, isVisited, clearVisited } from './visited.js';
 import { escHtml, setActiveButton, AUTOCOMPLETE_DEBOUNCE, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import {
@@ -72,6 +73,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       break;
     case 'post':
       if (!feed.querySelector('.post')) await loadSubreddit(route.sub, state.currentSort);
+      _markPostVisited(route.postId);
       await loadPostView(route.sub, route.postId, route.commentId||'', restorePvScroll);
       break;
     case 'user':
@@ -482,6 +484,7 @@ document.addEventListener('touchend', e => {
   const dx = Math.abs(e.changedTouches[0].clientX - _touchStartX);
   const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
   if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) return;
+  if (e.target.tagName === 'IMG' && e.target.closest('.md, .pv-media, .post-media')) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
   if (interceptNavLink(a, e)) _navFromTouch = true;
@@ -490,6 +493,7 @@ document.addEventListener('touchend', e => {
 // Capture-phase click handler
 document.addEventListener('click', e => {
   if (_navFromTouch) { _navFromTouch = false; return; }
+  if (e.target.tagName === 'IMG' && e.target.closest('.md, .pv-media, .post-media')) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
@@ -562,6 +566,62 @@ function closeLightbox() {
 lightbox.addEventListener('click', closeLightbox);
 lightboxImg.addEventListener('click', e => e.stopPropagation());
 document.getElementById('lightbox-close').addEventListener('click', e => { e.stopPropagation(); closeLightbox(); });
+
+// ── Visited post tracking ─────────────────────────────────────────────────────
+function _shouldHideReadPosts() {
+  if (state.profileMode || state.searchMode || state.duplicatesMode || state.multiMode || state.liveMode) return false;
+  const homeSub = (settings.homeSub || 'popular').toLowerCase();
+  const cur = (state.currentSub || '').toLowerCase();
+  const isHome = cur === homeSub || cur === 'popular' || cur === 'all';
+  return isHome ? settings.hideReadHome : settings.hideReadSub;
+}
+
+function _applyVisitedEl(el) {
+  el.classList.add('post-visited');
+  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
+}
+
+function _markPostVisited(id) {
+  if (!id) return;
+  markVisited(id);
+  const el = feed.querySelector(`[data-post-id="${CSS.escape(id)}"]`);
+  if (el) _applyVisitedEl(el);
+}
+
+function applyVisitedHiding() {
+  const hide = _shouldHideReadPosts();
+  feed.querySelectorAll('[data-post-id]').forEach(el => {
+    if (isVisited(el.dataset.postId)) {
+      el.classList.add('post-visited');
+      el.classList.toggle('post-read-hidden', hide);
+    } else {
+      el.classList.remove('post-read-hidden');
+    }
+  });
+}
+
+// Scroll-past observer — marks a post as read when it fully exits at the top
+const _scrollReadObserver = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting && entry.boundingClientRect.bottom < 0) {
+      const el = entry.target;
+      const id = el.dataset.postId;
+      if (id && markVisited(id)) _applyVisitedEl(el);
+    }
+  }
+}, { threshold: 0 });
+
+// Watch for new posts added to the feed
+new MutationObserver(mutations => {
+  for (const m of mutations) {
+    for (const node of m.addedNodes) {
+      if (node.nodeType !== 1 || !node.dataset?.postId) continue;
+      _scrollReadObserver.observe(node);
+      if (isVisited(node.dataset.postId)) _applyVisitedEl(node);
+    }
+  }
+}).observe(feed, { childList: true });
+
 // Keyboard shortcuts
 function _isTyping() {
   const tag = document.activeElement?.tagName;
@@ -630,6 +690,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   const img = e.target.closest('.post-media img, .pv-media img, .md img, .gallery-main-img');
   if (!img) return;
+  e.preventDefault();
   e.stopPropagation();
   openLightbox(img.src);
 });
@@ -758,6 +819,9 @@ function _settingsHtml() {
     <div class="settings-section-title">Content</div>
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
+    <label class="settings-row"><span class="settings-label">Hide read posts (home feed)</span>${chk('s-hide-read-home', settings.hideReadHome)}</label>
+    <label class="settings-row"><span class="settings-label">Hide read posts (subreddits)</span>${chk('s-hide-read-sub', settings.hideReadSub)}</label>
+    <div class="settings-row settings-row-action"><span class="settings-label">Read history</span><button class="settings-action-btn" id="s-clear-visited">Clear</button></div>
   </div>
   <div class="settings-section">
     <button class="settings-reset-btn" id="s-reset">Reset to defaults</button>
@@ -788,6 +852,12 @@ function bindSettingEvents() {
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-hide-read-home').addEventListener('change', e => { settings.hideReadHome = e.target.checked; saveSettings(); applyVisitedHiding(); });
+  settingsBody.querySelector('#s-hide-read-sub').addEventListener('change', e => { settings.hideReadSub = e.target.checked; saveSettings(); applyVisitedHiding(); });
+  settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
+    clearVisited();
+    feed.querySelectorAll('.post-visited, .post-read-hidden').forEach(el => el.classList.remove('post-visited', 'post-read-hidden'));
+  });
   settingsBody.querySelector('#s-reset').addEventListener('click', () => {
     Object.assign(settings, DEFAULTS);
     state.currentCommentSort = DEFAULTS.commentSort;

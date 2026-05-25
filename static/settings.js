@@ -6,6 +6,8 @@ export const DEFAULTS = {
   commentSort: 'confidence',
   nsfwBlur: false,
   nsfwHide: false,
+  hideReadHome: false,
+  hideReadSub: false,
   homeSub: 'popular',
   theme: 'dark',
 };

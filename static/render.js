@@ -1,5 +1,6 @@
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, nsfwWrap } from './media.js';
+import { isVisited } from './visited.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -164,10 +165,11 @@ export function renderPost(p, idx, showSub=false) {
       </div>`;
 
   const nsfwAttr = p.over_18 ? ' data-nsfw="1"' : '';
+  const visitedClass = isVisited(p.id) ? ' post-visited' : '';
 
   if (p.crosspost_from) {
     return `
-    <div class="post"${nsfwAttr} style="animation-delay:${delay}ms">
+    <div class="post${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
@@ -192,7 +194,7 @@ export function renderPost(p, idx, showSub=false) {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
     }
     return `
-    <div class="post post-compact"${nsfwAttr} style="animation-delay:${delay}ms">
+    <div class="post post-compact${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-compact-left">
         <div class="post-header">
           ${metaTop}
@@ -206,7 +208,7 @@ export function renderPost(p, idx, showSub=false) {
 
   const excerptHtml = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
   return `
-    <div class="post"${nsfwAttr} style="animation-delay:${delay}ms">
+    <div class="post${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
