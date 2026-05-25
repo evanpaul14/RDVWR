@@ -300,7 +300,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .ratio-fill   { height:100%; background:var(--up); border-radius:1px; }
 .meta-item    { font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em; white-space:nowrap; }
 .meta-item .ac { color:var(--ac); }
-.meta-item.link { text-decoration:none; cursor:pointer; transition:color .15s; background:none; border:none; padding:0; font:inherit; color:inherit; }
+.meta-item.link { display:inline-flex; align-items:center; gap:4px; text-decoration:none; cursor:pointer; transition:color .15s; background:none; border:none; padding:0; font:inherit; color:inherit; }
 .meta-item.link:hover { color:var(--ac); }
 .footer-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .comments-link {
@@ -533,7 +533,9 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   padding:9px 14px; background:var(--bg2); border:1px solid var(--b2);
   border-radius:6px; color:var(--ac); text-decoration:none;
   font-family:var(--mono); font-size:12px; letter-spacing:.04em; transition:background .15s, border-color .15s;
+  max-width:100%; overflow:hidden;
 }
+.pv-article-link span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pv-article-link:hover { background:var(--bg3); border-color:var(--ac); }
 .pv-article-link svg { flex-shrink:0; opacity:.8; }
 .pv-body { margin-bottom:24px; font-size:14px; line-height:1.7; color:var(--tx); }
