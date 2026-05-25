@@ -578,7 +578,6 @@ function _shouldHideReadPosts() {
 
 function _applyVisitedEl(el) {
   el.classList.add('post-visited');
-  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
 }
 
 function _markPostVisited(id) {
@@ -589,15 +588,10 @@ function _markPostVisited(id) {
 }
 
 function applyVisitedHiding() {
-  const hide = _shouldHideReadPosts();
-  feed.querySelectorAll('[data-post-id]').forEach(el => {
-    if (isVisited(el.dataset.postId)) {
-      el.classList.add('post-visited');
-      el.classList.toggle('post-read-hidden', hide);
-    } else {
-      el.classList.remove('post-read-hidden');
-    }
-  });
+  // Only un-hide when the setting is turned off; hiding waits for next feed load
+  if (!_shouldHideReadPosts()) {
+    feed.querySelectorAll('.post-read-hidden').forEach(el => el.classList.remove('post-read-hidden'));
+  }
 }
 
 // Scroll-past observer — marks a post as read when it fully exits at the top
@@ -611,13 +605,16 @@ const _scrollReadObserver = new IntersectionObserver(entries => {
   }
 }, { threshold: 0 });
 
-// Watch for new posts added to the feed
+// Watch for new posts added to the feed — apply visited state at render time
 new MutationObserver(mutations => {
   for (const m of mutations) {
     for (const node of m.addedNodes) {
       if (node.nodeType !== 1 || !node.dataset?.postId) continue;
       _scrollReadObserver.observe(node);
-      if (isVisited(node.dataset.postId)) _applyVisitedEl(node);
+      if (isVisited(node.dataset.postId)) {
+        node.classList.add('post-visited');
+        if (_shouldHideReadPosts()) node.classList.add('post-read-hidden');
+      }
     }
   }
 }).observe(feed, { childList: true });
