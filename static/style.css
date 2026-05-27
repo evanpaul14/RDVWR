@@ -532,11 +532,11 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .pv-media.tiktok-wrap { display:flex; justify-content:center; background:#000; border-radius:6px; overflow:hidden; }
 .pv-media.tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; }
 .pv-article-link {
-  display:inline-flex; align-items:center; gap:7px; margin-bottom:16px;
+  display:flex; align-items:center; gap:7px; margin-bottom:16px;
   padding:9px 14px; background:var(--bg2); border:1px solid var(--b2);
   border-radius:6px; color:var(--ac); text-decoration:none;
   font-family:var(--mono); font-size:12px; letter-spacing:.04em; transition:background .15s, border-color .15s;
-  max-width:100%; overflow:hidden;
+  width:100%; box-sizing:border-box; overflow:hidden;
 }
 .pv-article-link span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pv-article-link:hover { background:var(--bg3); border-color:var(--ac); }
