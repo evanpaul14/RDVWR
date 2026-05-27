@@ -578,6 +578,7 @@ function _shouldHideReadPosts() {
 
 function _applyVisitedEl(el) {
   el.classList.add('post-visited');
+  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
 }
 
 function _markPostVisited(id) {
@@ -588,8 +589,9 @@ function _markPostVisited(id) {
 }
 
 function applyVisitedHiding() {
-  // Only un-hide when the setting is turned off; hiding waits for next feed load
-  if (!_shouldHideReadPosts()) {
+  if (_shouldHideReadPosts()) {
+    feed.querySelectorAll('.post-visited').forEach(el => el.classList.add('post-read-hidden'));
+  } else {
     feed.querySelectorAll('.post-read-hidden').forEach(el => el.classList.remove('post-read-hidden'));
   }
 }
