@@ -588,7 +588,6 @@ function _applyVisitedEl(el) {
 function _markScrolledPast(el, id) {
   el.classList.add('post-visited');
   _hideSet.add(id);
-  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
 }
 
 function _markPostVisited(id) {
