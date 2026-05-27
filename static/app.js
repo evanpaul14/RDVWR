@@ -578,7 +578,6 @@ function _shouldHideReadPosts() {
 
 function _applyVisitedEl(el) {
   el.classList.add('post-visited');
-  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
 }
 
 function _markPostVisited(id) {
