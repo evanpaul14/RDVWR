@@ -614,7 +614,7 @@ const _scrollReadObserver = new IntersectionObserver(entries => {
     if (!entry.isIntersecting && entry.boundingClientRect.bottom < 0) {
       const el = entry.target;
       const id = el.dataset.postId;
-      if (id && markVisited(id)) _markScrolledPast(el, id);
+      if (id) { markVisited(id); _markScrolledPast(el, id); }
     }
   }
 }, { threshold: 0 });
