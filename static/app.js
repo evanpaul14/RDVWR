@@ -568,6 +568,11 @@ lightboxImg.addEventListener('click', e => e.stopPropagation());
 document.getElementById('lightbox-close').addEventListener('click', e => { e.stopPropagation(); closeLightbox(); });
 
 // ── Visited post tracking ─────────────────────────────────────────────────────
+// _hideSet: in-memory only (not persisted). Posts enter this set when they
+// scroll past the top of the viewport in the current page session. This
+// drives post-read-hidden so that a fresh page load never hides everything.
+const _hideSet = new Set();
+
 function _shouldHideReadPosts() {
   if (state.profileMode || state.searchMode || state.duplicatesMode || state.multiMode || state.liveMode) return false;
   const homeSub = (settings.homeSub || 'popular').toLowerCase();
@@ -580,6 +585,12 @@ function _applyVisitedEl(el) {
   el.classList.add('post-visited');
 }
 
+function _markScrolledPast(el, id) {
+  el.classList.add('post-visited');
+  _hideSet.add(id);
+  if (_shouldHideReadPosts()) el.classList.add('post-read-hidden');
+}
+
 function _markPostVisited(id) {
   if (!id) return;
   markVisited(id);
@@ -589,7 +600,9 @@ function _markPostVisited(id) {
 
 function applyVisitedHiding() {
   if (_shouldHideReadPosts()) {
-    feed.querySelectorAll('.post-visited').forEach(el => el.classList.add('post-read-hidden'));
+    feed.querySelectorAll('.post-visited').forEach(el => {
+      if (_hideSet.has(el.dataset.postId)) el.classList.add('post-read-hidden');
+    });
   } else {
     feed.querySelectorAll('.post-read-hidden').forEach(el => el.classList.remove('post-read-hidden'));
   }
@@ -601,7 +614,7 @@ const _scrollReadObserver = new IntersectionObserver(entries => {
     if (!entry.isIntersecting && entry.boundingClientRect.bottom < 0) {
       const el = entry.target;
       const id = el.dataset.postId;
-      if (id && markVisited(id)) _applyVisitedEl(el);
+      if (id && markVisited(id)) _markScrolledPast(el, id);
     }
   }
 }, { threshold: 0 });
@@ -612,10 +625,9 @@ new MutationObserver(mutations => {
     for (const node of m.addedNodes) {
       if (node.nodeType !== 1 || !node.dataset?.postId) continue;
       _scrollReadObserver.observe(node);
-      if (isVisited(node.dataset.postId)) {
-        node.classList.add('post-visited');
-        if (_shouldHideReadPosts()) node.classList.add('post-read-hidden');
-      }
+      const id = node.dataset.postId;
+      if (isVisited(id)) node.classList.add('post-visited');
+      if (_hideSet.has(id) && _shouldHideReadPosts()) node.classList.add('post-read-hidden');
     }
   }
 }).observe(feed, { childList: true });
@@ -854,6 +866,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-hide-read-sub').addEventListener('change', e => { settings.hideReadSub = e.target.checked; saveSettings(); applyVisitedHiding(); });
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();
+    _hideSet.clear();
     feed.querySelectorAll('.post-visited, .post-read-hidden').forEach(el => el.classList.remove('post-visited', 'post-read-hidden'));
   });
   settingsBody.querySelector('#s-reset').addEventListener('click', () => {
