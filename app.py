@@ -125,10 +125,21 @@ def _refresh_device(device: _OAuthDevice):
             continue
 
 
+def _cffi_post(url, device, **kwargs):
+    """POST via curl_cffi, falling back to requests on TLS errors."""
+    try:
+        return cffi_requests.post(url, impersonate=device.impersonate, **kwargs)
+    except Exception:
+        # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
+        kwargs.pop("impersonate", None)
+        return SESSION.post(url, **kwargs)
+
+
 def _fetch_android_token(device: _OAuthDevice):
     auth = base64.b64encode(f"{_REDDIT_ANDROID_CLIENT_ID}:".encode()).decode()
-    resp = cffi_requests.post(
+    resp = _cffi_post(
         "https://www.reddit.com/auth/v2/oauth/access-token/loid",
+        device,
         headers={
             "User-Agent":            device.user_agent,
             "Authorization":         f"Basic {auth}",
@@ -141,7 +152,6 @@ def _fetch_android_token(device: _OAuthDevice):
             "Content-Type":          "application/json; charset=UTF-8",
         },
         json={"scopes": ["*", "email", "pii"]},
-        impersonate=device.impersonate,
         timeout=10,
     )
     resp.raise_for_status()
@@ -155,8 +165,9 @@ def _fetch_android_token(device: _OAuthDevice):
 
 
 def _fetch_web_token(device: _OAuthDevice):
-    resp = cffi_requests.post(
+    resp = _cffi_post(
         "https://www.reddit.com/api/v1/access_token",
+        device,
         headers={
             "Authorization":   f"Basic {_REDDIT_WEB_CLIENT_AUTH}",
             "User-Agent":      device.user_agent,
@@ -165,7 +176,6 @@ def _fetch_web_token(device: _OAuthDevice):
             "Accept-Language": "en-US,en;q=0.5",
         },
         content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device.device_id}",
-        impersonate=device.impersonate,
         timeout=10,
     )
     resp.raise_for_status()
@@ -207,7 +217,11 @@ def reddit_get(url, **kwargs):
         device = _get_device()
         device.drift_qos()
         headers = {**device.api_headers(), **extra_headers}
-        resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
+        try:
+            resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
+        except Exception:
+            # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
+            return SESSION.get(url, headers=headers, **kwargs)
         if resp.status_code == 429:
             time.sleep(min(int(resp.headers.get("Retry-After", 5)), 30))
             continue
