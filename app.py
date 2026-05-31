@@ -60,113 +60,162 @@ _ANDROID_APP_VERSIONS = [
 ]
 _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
 _REDDIT_WEB_CLIENT_AUTH   = "M1hmQkpXbGlIdnFBQ25YcmZJWWxMdzo="
-_CFFI_IMPERSONATE         = "chrome120"
-
-_oauth_token        = None
-_oauth_token_exp    = 0.0
-_oauth_user_agent   = HEADERS["User-Agent"]
-_oauth_extra_headers: dict = {}
-_oauth_lock         = threading.Lock()
+_CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131", "firefox133"]
+_TOKEN_POOL_SIZE          = 3
+_TOKEN_ROTATE_SECS        = 1800  # rotate device identity every 30 min
 
 
-def _fetch_android_token():
-    device_id = str(_uuid_mod.uuid4())
-    app_ver   = random.choice(_ANDROID_APP_VERSIONS)
-    android_v = random.randint(9, 14)
-    ua        = f"Reddit/{app_ver}/Android {android_v}"
-    qos       = f"{random.uniform(1.0, 100.0):.3f}"
-    auth      = base64.b64encode(f"{_REDDIT_ANDROID_CLIENT_ID}:".encode()).decode()
-    headers   = {
-        "User-Agent":           ua,
-        "Authorization":        f"Basic {auth}",
-        "x-reddit-retry":       "algo=no-retries",
-        "x-reddit-compression": "1",
-        "x-reddit-qos":         qos,
-        "x-reddit-media-codecs": "available-codecs=video/avc, video/hevc",
-        "client-vendor-id":     device_id,
-        "X-Reddit-Device-Id":   device_id,
-        "Content-Type":         "application/json; charset=UTF-8",
-    }
-    resp = cffi_requests.post(
-        "https://www.reddit.com/auth/v2/oauth/access-token/loid",
-        headers=headers,
-        json={"scopes": ["*", "email", "pii"]},
-        impersonate=_CFFI_IMPERSONATE,
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data  = resp.json()
-    extra = {}
-    if "x-reddit-loid" in resp.headers:
-        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
-    if "x-reddit-session" in resp.headers:
-        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
-    return data["access_token"], data["expires_in"], ua, extra
+class _OAuthDevice:
+    def __init__(self):
+        self.lock        = threading.Lock()
+        self.token       = None
+        self.expires_at  = 0.0
+        self.acquired_at = 0.0
+        self.device_id   = str(_uuid_mod.uuid4())
+        self.impersonate = random.choice(_CFFI_PROFILES)
+        self.qos         = random.uniform(1.0, 100.0)
+        app_ver          = random.choice(_ANDROID_APP_VERSIONS)
+        android_v        = random.randint(9, 14)
+        self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
+        self.extra        = {}  # loid, session headers from auth response
+
+    def needs_refresh(self):
+        now = time.time()
+        return (not self.token
+                or now >= self.expires_at
+                or now - self.acquired_at >= _TOKEN_ROTATE_SECS)
+
+    def api_headers(self):
+        h = {
+            "User-Agent":            self.user_agent,
+            "Authorization":         f"Bearer {self.token}" if self.token else "",
+            "x-reddit-retry":        "algo=no-retries",
+            "x-reddit-compression":  "1",
+            "x-reddit-qos":          f"{self.qos:.3f}",
+            "x-reddit-media-codecs": "available-codecs=video/avc, video/hevc",
+            "client-vendor-id":      self.device_id,
+            "X-Reddit-Device-Id":    self.device_id,
+        }
+        h.update(self.extra)
+        return h
+
+    def drift_qos(self):
+        self.qos = max(1.0, min(100.0, self.qos + random.gauss(0, 3)))
+
+    def reset_identity(self):
+        self.device_id   = str(_uuid_mod.uuid4())
+        self.impersonate = random.choice(_CFFI_PROFILES)
+        self.qos         = random.uniform(1.0, 100.0)
+        app_ver          = random.choice(_ANDROID_APP_VERSIONS)
+        android_v        = random.randint(9, 14)
+        self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
 
 
-def _fetch_web_token():
-    device_id = str(_uuid_mod.uuid4())
-    resp = cffi_requests.post(
-        "https://www.reddit.com/api/v1/access_token",
-        headers={
-            "Authorization":   f"Basic {_REDDIT_WEB_CLIENT_AUTH}",
-            "User-Agent":      HEADERS["User-Agent"],
-            "Content-Type":    "application/x-www-form-urlencoded",
-            "Accept":          "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-        },
-        content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device_id}",
-        impersonate=_CFFI_IMPERSONATE,
-        timeout=10,
-    )
-    resp.raise_for_status()
-    data  = resp.json()
-    extra = {}
-    if "x-reddit-loid" in resp.headers:
-        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
-    if "x-reddit-session" in resp.headers:
-        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
-    return data["access_token"], data["expires_in"], HEADERS["User-Agent"], extra
-
-
-def _refresh_oauth_token():
-    global _oauth_token, _oauth_token_exp, _oauth_user_agent, _oauth_extra_headers
+def _refresh_device(device: _OAuthDevice):
+    device.reset_identity()
     for fetch in (_fetch_android_token, _fetch_web_token):
         try:
-            token, expires_in, ua, extra = fetch()
-            _oauth_token         = token
-            _oauth_token_exp     = time.time() + expires_in - 120
-            _oauth_user_agent    = ua
-            _oauth_extra_headers = extra
+            token, expires_in, extra = fetch(device)
+            device.token       = token
+            device.expires_at  = time.time() + expires_in - 120
+            device.acquired_at = time.time()
+            device.extra       = extra
             return
         except Exception:
             continue
 
 
-def _get_oauth_token():
-    global _oauth_token, _oauth_token_exp
-    if _oauth_token and time.time() < _oauth_token_exp:
-        return _oauth_token
-    with _oauth_lock:
-        if _oauth_token and time.time() < _oauth_token_exp:
-            return _oauth_token
-        _refresh_oauth_token()
-        return _oauth_token
+def _fetch_android_token(device: _OAuthDevice):
+    auth = base64.b64encode(f"{_REDDIT_ANDROID_CLIENT_ID}:".encode()).decode()
+    resp = cffi_requests.post(
+        "https://www.reddit.com/auth/v2/oauth/access-token/loid",
+        headers={
+            "User-Agent":            device.user_agent,
+            "Authorization":         f"Basic {auth}",
+            "x-reddit-retry":        "algo=no-retries",
+            "x-reddit-compression":  "1",
+            "x-reddit-qos":          f"{device.qos:.3f}",
+            "x-reddit-media-codecs": "available-codecs=video/avc, video/hevc",
+            "client-vendor-id":      device.device_id,
+            "X-Reddit-Device-Id":    device.device_id,
+            "Content-Type":          "application/json; charset=UTF-8",
+        },
+        json={"scopes": ["*", "email", "pii"]},
+        impersonate=device.impersonate,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data  = resp.json()
+    extra = {}
+    if "x-reddit-loid" in resp.headers:
+        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
+    if "x-reddit-session" in resp.headers:
+        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
+    return data["access_token"], data["expires_in"], extra
+
+
+def _fetch_web_token(device: _OAuthDevice):
+    resp = cffi_requests.post(
+        "https://www.reddit.com/api/v1/access_token",
+        headers={
+            "Authorization":   f"Basic {_REDDIT_WEB_CLIENT_AUTH}",
+            "User-Agent":      device.user_agent,
+            "Content-Type":    "application/x-www-form-urlencoded",
+            "Accept":          "*/*",
+            "Accept-Language": "en-US,en;q=0.5",
+        },
+        content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device.device_id}",
+        impersonate=device.impersonate,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data  = resp.json()
+    extra = {}
+    if "x-reddit-loid" in resp.headers:
+        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
+    if "x-reddit-session" in resp.headers:
+        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
+    return data["access_token"], data["expires_in"], extra
+
+
+_device_pool   = [_OAuthDevice() for _ in range(_TOKEN_POOL_SIZE)]
+_pool_counter  = 0
+_pool_lock     = threading.Lock()
+
+
+def _get_device() -> _OAuthDevice:
+    global _pool_counter
+    with _pool_lock:
+        idx = _pool_counter % _TOKEN_POOL_SIZE
+        _pool_counter += 1
+    device = _device_pool[idx]
+    if device.needs_refresh():
+        with device.lock:
+            if device.needs_refresh():
+                _refresh_device(device)
+    return device
 
 
 def reddit_get(url, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation."""
     if not REDDIT_OAUTH:
         return SESSION.get(url, **kwargs)
-    token = _get_oauth_token()
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
-    headers = dict(kwargs.pop("headers", {}))
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-        headers.setdefault("User-Agent", _oauth_user_agent)
-        headers.update(_oauth_extra_headers)
-    return cffi_requests.get(url, headers=headers, impersonate=_CFFI_IMPERSONATE, **kwargs)
+    extra_headers = kwargs.pop("headers", {})
+    for attempt in range(3):
+        device = _get_device()
+        device.drift_qos()
+        headers = {**device.api_headers(), **extra_headers}
+        resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
+        if resp.status_code == 429:
+            time.sleep(min(int(resp.headers.get("Retry-After", 5)), 30))
+            continue
+        if resp.status_code == 401 and attempt < 2:
+            device.expires_at = 0.0  # force this device to re-auth next use
+            continue
+        return resp
+    return resp
 
 def cached_json(data, seconds):
     resp = make_response(jsonify(data))
