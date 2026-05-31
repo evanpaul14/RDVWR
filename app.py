@@ -31,6 +31,7 @@ HEADERS    = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) App
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
+REDDIT_OAUTH        = os.environ.get('REDDIT_OAUTH', '1').strip().lower() not in ('0', 'false', 'no', 'off')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -154,7 +155,9 @@ def _get_oauth_token():
 
 
 def reddit_get(url, **kwargs):
-    """GET a Reddit API URL via oauth.reddit.com with browser TLS impersonation."""
+    """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation."""
+    if not REDDIT_OAUTH:
+        return SESSION.get(url, **kwargs)
     token = _get_oauth_token()
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
