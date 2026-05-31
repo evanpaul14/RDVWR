@@ -5,7 +5,12 @@ import html as html_lib
 import time
 import tempfile
 import subprocess
+import random
+import threading
+import uuid as _uuid_mod
+import base64
 import requests
+from curl_cffi import requests as cffi_requests
 from urllib.parse import urlparse, quote as url_quote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
@@ -38,6 +43,127 @@ SESSION.headers.update(HEADERS)
 
 _rg_token     = None
 _rg_token_exp = 0.0
+
+# ── Reddit OAuth spoofing ─────────────────────────────────────────────────────
+
+_ANDROID_APP_VERSIONS = [
+    "Version 2025.16.0/Build 1250000",
+    "Version 2025.15.0/Build 1240000",
+    "Version 2025.14.0/Build 1230000",
+    "Version 2024.41.1/Build 1947805",
+    "Version 2024.40.0/Build 1928580",
+    "Version 2024.39.0/Build 1916713",
+    "Version 2024.38.0/Build 1902791",
+    "Version 2024.37.0/Build 1888053",
+    "Version 2024.36.0/Build 1875012",
+]
+_REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
+_REDDIT_WEB_CLIENT_AUTH   = "M1hmQkpXbGlIdnFBQ25YcmZJWWxMdzo="
+_CFFI_IMPERSONATE         = "chrome120"
+
+_oauth_token        = None
+_oauth_token_exp    = 0.0
+_oauth_user_agent   = HEADERS["User-Agent"]
+_oauth_extra_headers: dict = {}
+_oauth_lock         = threading.Lock()
+
+
+def _fetch_android_token():
+    device_id = str(_uuid_mod.uuid4())
+    app_ver   = random.choice(_ANDROID_APP_VERSIONS)
+    android_v = random.randint(9, 14)
+    ua        = f"Reddit/{app_ver}/Android {android_v}"
+    qos       = f"{random.uniform(1.0, 100.0):.3f}"
+    auth      = base64.b64encode(f"{_REDDIT_ANDROID_CLIENT_ID}:".encode()).decode()
+    headers   = {
+        "User-Agent":           ua,
+        "Authorization":        f"Basic {auth}",
+        "x-reddit-retry":       "algo=no-retries",
+        "x-reddit-compression": "1",
+        "x-reddit-qos":         qos,
+        "x-reddit-media-codecs": "available-codecs=video/avc, video/hevc",
+        "client-vendor-id":     device_id,
+        "X-Reddit-Device-Id":   device_id,
+        "Content-Type":         "application/json; charset=UTF-8",
+    }
+    resp = cffi_requests.post(
+        "https://www.reddit.com/auth/v2/oauth/access-token/loid",
+        headers=headers,
+        json={"scopes": ["*", "email", "pii"]},
+        impersonate=_CFFI_IMPERSONATE,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data  = resp.json()
+    extra = {}
+    if "x-reddit-loid" in resp.headers:
+        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
+    if "x-reddit-session" in resp.headers:
+        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
+    return data["access_token"], data["expires_in"], ua, extra
+
+
+def _fetch_web_token():
+    device_id = str(_uuid_mod.uuid4())
+    resp = cffi_requests.post(
+        "https://www.reddit.com/api/v1/access_token",
+        headers={
+            "Authorization":   f"Basic {_REDDIT_WEB_CLIENT_AUTH}",
+            "User-Agent":      HEADERS["User-Agent"],
+            "Content-Type":    "application/x-www-form-urlencoded",
+            "Accept":          "*/*",
+            "Accept-Language": "en-US,en;q=0.5",
+        },
+        content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device_id}",
+        impersonate=_CFFI_IMPERSONATE,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data  = resp.json()
+    extra = {}
+    if "x-reddit-loid" in resp.headers:
+        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
+    if "x-reddit-session" in resp.headers:
+        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
+    return data["access_token"], data["expires_in"], HEADERS["User-Agent"], extra
+
+
+def _refresh_oauth_token():
+    global _oauth_token, _oauth_token_exp, _oauth_user_agent, _oauth_extra_headers
+    for fetch in (_fetch_android_token, _fetch_web_token):
+        try:
+            token, expires_in, ua, extra = fetch()
+            _oauth_token         = token
+            _oauth_token_exp     = time.time() + expires_in - 120
+            _oauth_user_agent    = ua
+            _oauth_extra_headers = extra
+            return
+        except Exception:
+            continue
+
+
+def _get_oauth_token():
+    global _oauth_token, _oauth_token_exp
+    if _oauth_token and time.time() < _oauth_token_exp:
+        return _oauth_token
+    with _oauth_lock:
+        if _oauth_token and time.time() < _oauth_token_exp:
+            return _oauth_token
+        _refresh_oauth_token()
+        return _oauth_token
+
+
+def reddit_get(url, **kwargs):
+    """GET a Reddit API URL via oauth.reddit.com with browser TLS impersonation."""
+    token = _get_oauth_token()
+    url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
+    url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
+    headers = dict(kwargs.pop("headers", {}))
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+        headers.setdefault("User-Agent", _oauth_user_agent)
+        headers.update(_oauth_extra_headers)
+    return cffi_requests.get(url, headers=headers, impersonate=_CFFI_IMPERSONATE, **kwargs)
 
 def cached_json(data, seconds):
     resp = make_response(jsonify(data))
@@ -402,7 +528,7 @@ def subreddit_search():
     if len(q) < 2:
         return jsonify({"names": []})
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             "https://www.reddit.com/api/search_reddit_names.json",
             params={"query": q, "include_over_18": 0, "exact": 0},
             timeout=5)
@@ -454,7 +580,7 @@ def search_posts():
     if after:
         params["after"] = after
     try:
-        resp = SESSION.get(url, params=params, timeout=10)
+        resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "Not found"}), 404
         if resp.status_code != 200:
@@ -482,7 +608,7 @@ def get_posts(subreddit):
     if after:
         params["after"] = after
     try:
-        resp = SESSION.get(url, params=params, timeout=10)
+        resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code == 404:
             return jsonify({"error": "Subreddit not found"}), 404
         if resp.status_code == 403:
@@ -501,7 +627,7 @@ def get_posts(subreddit):
 @app.route("/api/r/<subreddit>/about")
 def get_about(subreddit):
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/about.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
@@ -524,7 +650,7 @@ def get_about(subreddit):
 @app.route("/api/r/<subreddit>/rules")
 def get_rules(subreddit):
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/about/rules.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
@@ -545,7 +671,7 @@ def search_communities():
         params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "sr"}
         if after:
             params["after"] = after
-        resp = SESSION.get("https://www.reddit.com/search.json",
+        resp = reddit_get("https://www.reddit.com/search.json",
                            params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"communities": [], "after": None})
@@ -579,7 +705,7 @@ def search_users():
         params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "user"}
         if after:
             params["after"] = after
-        resp = SESSION.get("https://www.reddit.com/search.json",
+        resp = reddit_get("https://www.reddit.com/search.json",
                            params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"users": [], "after": None})
@@ -609,7 +735,7 @@ def get_duplicates(subreddit, post_id):
         params = {"raw_json": 1, "limit": 25}
         if after:
             params["after"] = after
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://old.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
             params=params, timeout=10)
         if resp.status_code != 200:
@@ -639,7 +765,7 @@ def get_comments(subreddit, post_id):
         if comment_id:
             params["comment"] = comment_id
             params["context"] = 8
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
             params=params, timeout=12)
         if resp.status_code != 200:
@@ -685,7 +811,7 @@ def get_morechildren(subreddit, post_id):
     if not children:
         return cached_json({"comments": []}, CACHE_TTL_FEED)
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             "https://www.reddit.com/api/morechildren.json",
             params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
                     "api_type": "json", "raw_json": 1},
@@ -722,7 +848,7 @@ def get_morechildren(subreddit, post_id):
 @app.route("/api/user/<username>/about")
 def get_user_about(username):
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/user/{username}/about.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code == 404:
@@ -754,7 +880,7 @@ def get_user_posts_api(username):
     if after:
         params["after"] = after
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/user/{username}/submitted.json",
             params=params, timeout=10)
         if resp.status_code == 404:
@@ -779,7 +905,7 @@ def get_user_comments_api(username):
     if after:
         params["after"] = after
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/user/{username}/comments.json",
             params=params, timeout=10)
         if resp.status_code == 404:
@@ -819,7 +945,7 @@ def get_user_overview_api(username):
     if after:
         params["after"] = after
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/user/{username}/overview.json",
             params=params, timeout=10)
         if resp.status_code == 404:
@@ -861,7 +987,7 @@ def get_wiki(subreddit, page='index'):
     if not WIKI_PAGE_RE.match(page):
         return jsonify({"error": "Invalid page name"}), 400
     try:
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/wiki/{page}.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code == 404:
@@ -892,7 +1018,7 @@ def get_multireddit(username, multiname):
     if after:
         params["after"] = after
     try:
-        meta = SESSION.get(
+        meta = reddit_get(
             f"https://www.reddit.com/api/multi/user/{username}/m/{multiname}.json",
             params={"raw_json": 1}, timeout=10)
         if meta.status_code == 404:
@@ -904,7 +1030,7 @@ def get_multireddit(username, multiname):
         if not subs:
             return cached_json({"posts": [], "after": None, "title": multiname}, CACHE_TTL_FEED)
         combined = "+".join(subs[:100])
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/r/{combined}/{sort}.json",
             params=params, timeout=10)
         if resp.status_code != 200:
@@ -939,14 +1065,14 @@ def get_live_thread(thread_id):
     if not LIVE_ID_RE.match(thread_id):
         return jsonify({"error": "Invalid thread ID"}), 400
     try:
-        info_resp = SESSION.get(
+        info_resp = reddit_get(
             f"https://www.reddit.com/live/{thread_id}.json",
             params={"raw_json": 1}, timeout=10)
         if info_resp.status_code == 404:
             return jsonify({"error": "Live thread not found"}), 404
         if info_resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {info_resp.status_code}"}), info_resp.status_code
-        upd_resp = SESSION.get(
+        upd_resp = reddit_get(
             f"https://www.reddit.com/live/{thread_id}/updates.json",
             params={"raw_json": 1, "limit": 25}, timeout=10)
         d = info_resp.json()["data"]
@@ -977,7 +1103,7 @@ def get_live_updates(thread_id):
         params = {"raw_json": 1, "limit": 25}
         if before: params["before"] = before
         if after:  params["after"]  = after
-        resp = SESSION.get(
+        resp = reddit_get(
             f"https://www.reddit.com/live/{thread_id}/updates.json",
             params=params, timeout=10)
         if resp.status_code != 200:

@@ -1,4 +1,5 @@
 flask>=3.0
 flask-compress>=1.15
 requests>=2.31
+curl-cffi>=0.7
 pytest>=8.0
