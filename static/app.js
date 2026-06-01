@@ -731,6 +731,21 @@ function _selectPost(idx) {
   posts[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// Comment keyboard navigation (active when post view is open)
+let _selectedCommentIdx = -1;
+document.addEventListener('pv-load', () => { _selectedCommentIdx = -1; });
+function _getTopCommentEls() {
+  return [...pvContent.querySelectorAll('.comment[data-depth="0"]')];
+}
+function _selectComment(idx) {
+  const comments = _getTopCommentEls();
+  if (!comments.length) return;
+  idx = Math.max(0, Math.min(idx, comments.length - 1));
+  comments.forEach((c, i) => c.classList.toggle('keyboard-selected', i === idx));
+  _selectedCommentIdx = idx;
+  comments[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     const kbdHelp = document.getElementById('kbd-help-overlay');
@@ -741,6 +756,12 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (_isTyping()) return;
+  // When post view is open, j/k navigate top-level comments
+  if (postView.classList.contains('open')) {
+    if (e.key === 'j' || e.key === 'J') { e.preventDefault(); _selectComment(_selectedCommentIdx + 1); }
+    else if (e.key === 'k' || e.key === 'K') { e.preventDefault(); _selectComment(Math.max(0, _selectedCommentIdx - 1)); }
+    return;
+  }
   if (e.key === 'j' || e.key === 'J') {
     e.preventDefault();
     _selectPost(state.selectedPostIdx + 1);
@@ -767,8 +788,8 @@ document.addEventListener('keydown', e => {
     overlay.innerHTML = `<div class="kbd-help-box">
       <div class="kbd-help-title">Keyboard shortcuts</div>
       <div class="kbd-help-grid">
-        <kbd>j</kbd><span>Next post</span>
-        <kbd>k</kbd><span>Previous post</span>
+        <kbd>j</kbd><span>Next post / comment</span>
+        <kbd>k</kbd><span>Previous post / comment</span>
         <kbd>o</kbd><span>Open selected post</span>
         <kbd>/</kbd><span>Focus search</span>
         <kbd>Esc</kbd><span>Close panel / lightbox</span>

@@ -579,6 +579,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .comment {
   border-bottom:1px solid var(--b); padding:10px 16px;
 }
+.comment.keyboard-selected { outline:1px solid var(--ac); outline-offset:-1px; background:rgba(74,158,255,.04); }
 .comment-header {
   display:flex; align-items:center; gap:8px; margin-bottom:5px;
   flex-wrap:wrap; cursor:pointer; user-select:none;
