@@ -255,6 +255,28 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .post-video iframe { width:100%; aspect-ratio:16/9; display:block; border:none; }
 .tiktok-wrap { display:flex; justify-content:center; background:#000; }
 .tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; border:none; }
+[data-hls] { position:relative; }
+.hls-quality-btn {
+  position:absolute; top:8px; right:8px; z-index:10;
+  background:rgba(0,0,0,.65); color:#e0e0e0; border:none; border-radius:4px;
+  padding:3px 8px; font-size:11px; font-family:var(--mono); cursor:pointer;
+  opacity:0; transition:opacity .2s; line-height:1.6;
+}
+[data-hls]:hover .hls-quality-btn,
+[data-hls]:focus-within .hls-quality-btn { opacity:1; }
+.hls-quality-menu {
+  display:none; flex-direction:column; position:absolute; top:34px; right:8px; z-index:11;
+  background:rgba(18,18,18,.95); border:1px solid var(--b); border-radius:6px;
+  overflow:hidden; min-width:80px; box-shadow:0 4px 12px rgba(0,0,0,.5);
+}
+.hls-quality-menu.open { display:flex; }
+.hls-ql {
+  background:none; border:none; color:var(--tx2); padding:7px 14px;
+  text-align:left; cursor:pointer; font-size:12px; font-family:var(--mono);
+  white-space:nowrap;
+}
+.hls-ql:hover { background:var(--bg3); color:var(--tx); }
+.hls-ql.active { color:var(--ac); }
 
 /* Poll widget */
 .poll-widget {

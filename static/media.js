@@ -34,6 +34,38 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
     const hls = new Hls({ autoStartLoad: false });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
     videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
+    hls.on(Hls.Events.MANIFEST_PARSED, (_ev, data) => {
+      if (data.levels.length < 2) return;
+      const wrap = videoEl.closest('[data-hls]');
+      if (!wrap) return;
+      const levels = data.levels.map((l, i) => ({
+        idx: i,
+        label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)}k`,
+      }));
+      const btn = document.createElement('button');
+      btn.className = 'hls-quality-btn';
+      btn.textContent = 'auto';
+      btn.title = 'Video quality';
+      const menu = document.createElement('div');
+      menu.className = 'hls-quality-menu';
+      menu.innerHTML = `<button class="hls-ql active" data-level="-1">Auto</button>` +
+        levels.map(l => `<button class="hls-ql" data-level="${l.idx}">${l.label}</button>`).join('');
+      wrap.append(btn, menu);
+      btn.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
+      document.addEventListener('click', () => menu.classList.remove('open'), { passive: true });
+      menu.addEventListener('click', e => {
+        const ql = e.target.closest('.hls-ql');
+        if (!ql) return;
+        const lvl = parseInt(ql.dataset.level, 10);
+        hls.currentLevel = lvl;
+        menu.querySelectorAll('.hls-ql').forEach(b => b.classList.toggle('active', b === ql));
+        btn.textContent = lvl === -1 ? 'auto' : (levels[lvl]?.label ?? 'auto');
+        menu.classList.remove('open');
+      });
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_ev2, d) => {
+        if (hls.autoLevelEnabled) btn.textContent = `auto (${levels[d.level]?.label ?? ''})`;
+      });
+    });
   } else if (hlsUrl && videoEl.canPlayType('application/vnd.apple.mpegurl')) {
     videoEl.src = hlsUrl;
   } else if (fallback) {
