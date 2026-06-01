@@ -140,6 +140,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
   state._pvSub = sub; state._pvPostId = postId; state._pvCommentId = commentId;
   state.currentCommentSort = settings.commentSort;
   pvContent.innerHTML = '<div class="pv-loader"></div>';
+  document.dispatchEvent(new CustomEvent('pv-load'));
   pvScroll.scrollTop = 0;
   openPostView();
 
