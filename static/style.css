@@ -611,12 +611,13 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 #lightbox {
   display:none; position:fixed; inset:0; z-index:500;
   background:rgba(0,0,0,.92); align-items:center; justify-content:center;
-  cursor:zoom-out;
+  cursor:pointer;
 }
 #lightbox.open { display:flex; }
 #lightbox-img {
   max-width:94vw; max-height:94vh; object-fit:contain;
-  border-radius:4px; cursor:default; user-select:none;
+  border-radius:4px; cursor:zoom-in; user-select:none;
+  transform-origin:center center;
 }
 #lightbox-close {
   position:absolute; top:16px; right:20px;
