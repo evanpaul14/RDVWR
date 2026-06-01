@@ -9,6 +9,7 @@ import random
 import threading
 import uuid as _uuid_mod
 import base64
+import logging
 import requests
 from curl_cffi import requests as cffi_requests
 from urllib.parse import urlparse, quote as url_quote
@@ -27,6 +28,8 @@ STREAM_CHUNK_SIZE    = 65536
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 Compress(app)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
 HEADERS    = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"}
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
@@ -258,6 +261,7 @@ class _OAuthDevice:
 
 def _refresh_device(device: _OAuthDevice):
     device.reset_identity()
+    log.info("token refresh: device_id=%s ua=%s", device.device_id, device.user_agent)
     for fetch in (_fetch_android_token, _fetch_web_token):
         try:
             token, expires_in, extra = fetch(device)
@@ -265,8 +269,10 @@ def _refresh_device(device: _OAuthDevice):
             device.expires_at  = time.time() + expires_in - 120
             device.acquired_at = time.time()
             device.extra       = extra
+            log.info("token refresh ok: method=%s expires_in=%s", fetch.__name__, expires_in)
             return
-        except Exception:
+        except Exception as e:
+            log.warning("token refresh failed: method=%s error=%s", fetch.__name__, e)
             continue
 
 
@@ -299,6 +305,8 @@ def _fetch_android_token(device: _OAuthDevice):
         json={"scopes": ["*", "email", "pii"]},
         timeout=10,
     )
+    if not resp.ok:
+        log.warning("android token HTTP %s: %s", resp.status_code, resp.text[:200])
     resp.raise_for_status()
     data  = resp.json()
     extra = {}
@@ -323,6 +331,8 @@ def _fetch_web_token(device: _OAuthDevice):
         content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device.device_id}",
         timeout=10,
     )
+    if not resp.ok:
+        log.warning("web token HTTP %s: %s", resp.status_code, resp.text[:200])
     resp.raise_for_status()
     data  = resp.json()
     extra = {}
@@ -385,10 +395,14 @@ def get_redgifs_token():
     global _rg_token, _rg_token_exp
     if _rg_token and time.time() < _rg_token_exp:
         return _rg_token
+    log.info("refreshing redgifs token")
     r = SESSION.get("https://api.redgifs.com/v2/auth/temporary", timeout=10)
+    if not r.ok:
+        log.warning("redgifs token HTTP %s: %s", r.status_code, r.text[:200])
     r.raise_for_status()
     _rg_token     = r.json()["token"]
     _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
+    log.info("redgifs token refreshed, expires in %ss", REDGIFS_TOKEN_TTL)
     return _rg_token
 
 
