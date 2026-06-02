@@ -5,6 +5,7 @@ export const state = {
   currentSub: '',
   currentSort: 'top',
   currentTime: 'all',
+  flairFilter: '',
   afterToken: null,
   loading: false,
   feedGen: 0,

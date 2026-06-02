@@ -15,14 +15,15 @@ const mainOpen    = document.getElementById('main-open');
 export function setMainOpen(href) { mainOpen.href = href || '#'; }
 
 // ── Sort bar builders ─────────────────────────────────────────────────────────
-export function buildSubSortHtml(sort='top', time='all', sub='') {
+export function buildSubSortHtml(sort='top', time='all', sub='', flair='') {
   const btns = ['hot','new','top','rising','controversial'].map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';
   const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
   const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="/r/${escHtml(sub)}/wiki" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
-  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
+  const flairBadge = flair ? `<span class="flair-filter-badge">${escHtml(flair)} <button class="flair-clear-btn" data-clear-flair title="Clear flair filter">×</button></span>` : '';
+  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn + flairBadge;
 }
 
 // ── Feed utilities ────────────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ async function fetchPosts(sub, sort, time, after) {
   let url = `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
   if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${after}`;
+  if (state.flairFilter) url += `&f=${encodeURIComponent(state.flairFilter)}`;
   return fetch(url);
 }
 
@@ -102,18 +104,19 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadSubreddit(sub, sort='top', time='all') {
+export async function loadSubreddit(sub, sort='top', time='all', flair='') {
   state.profileMode = false;
   state.multiMode   = false;
   state.currentSub  = sub.trim();
   state.currentSort = sort;
   state.currentTime = time;
+  state.flairFilter = flair || '';
   state.afterToken  = null;
   document.title = `r/${state.currentSub} — RDVWR`;
   subInput.value = state.currentSub;
   pvSubInput.value = state.currentSub;
   setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
-  sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
+  sortBar.innerHTML = buildSubSortHtml(sort, time, sub, state.flairFilter);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
   loadAbout(state.currentSub);

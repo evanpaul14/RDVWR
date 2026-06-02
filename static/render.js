@@ -133,6 +133,7 @@ export function renderPost(p, idx, showSub=false) {
   if (p.is_spoiler)  tags += `<span class="badge badge-spoiler">spoiler</span>`;
   if (p.locked)      tags += `<span class="badge badge-locked">locked</span>`;
   if (p.is_oc)       tags += `<span class="badge badge-oc">oc</span>`;
+  if (p.poll)        tags += `<span class="badge badge-poll">poll</span>`;
   tags += renderFlair(p, true);
   const titleClass = 'post-title'+(p.is_self?' is-italic':'');
   const domainHtml = !p.is_self && p.domain && !p.domain.endsWith('redd.it') ? `<a class="ext-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : '';
