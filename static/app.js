@@ -1,9 +1,10 @@
 import { state } from './state.js';
 import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
 import { markVisited, isVisited, clearVisited } from './visited.js';
-import { escHtml, setActiveButton, AUTOCOMPLETE_DEBOUNCE, TOUCH_MOVE_THRESHOLD } from './utils.js';
+import { escHtml, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
+import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
@@ -371,10 +372,6 @@ function handleSearchInput(e) {
     navigate(url);
   }
 }
-const _acCancellers = [];
-function hideAllAutocomplete() {
-  _acCancellers.forEach(fn => fn());
-}
 document.getElementById('search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('subreddit-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(); }
@@ -708,97 +705,6 @@ document.addEventListener('click', e => {
   openLightbox(img.src);
 });
 
-// Subreddit autocomplete
-function setupAutocomplete(inputEl, dropdownEl) {
-  let acTimer = null;
-  let acIdx = -1;
-  let preAcVal = '';
-  let acAbort = null;
-
-  function hide() {
-    dropdownEl.classList.remove('open');
-    dropdownEl.innerHTML = '';
-    acIdx = -1;
-    inputEl.setAttribute('aria-expanded', 'false');
-  }
-  function cancel() {
-    clearTimeout(acTimer);
-    if (acAbort) { acAbort.abort(); acAbort = null; }
-    hide();
-  }
-  function show(names) {
-    if (!names.length) { hide(); return; }
-    acIdx = -1;
-    dropdownEl.innerHTML = names.map(n =>
-      `<div class="autocomplete-item" role="option" data-sub="${escHtml(n)}">${escHtml(n)}</div>`
-    ).join('');
-    dropdownEl.classList.add('open');
-    inputEl.setAttribute('aria-expanded', 'true');
-  }
-
-  inputEl.addEventListener('input', () => {
-    clearTimeout(acTimer);
-    if (acAbort) { acAbort.abort(); acAbort = null; }
-    const val = inputEl.value.trim();
-    const query = val.startsWith('r/') ? val.slice(2) : val;
-    if (query.length < 2) { hide(); return; }
-    acTimer = setTimeout(async () => {
-      const ctrl = new AbortController();
-      acAbort = ctrl;
-      try {
-        const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
-        const data = await res.json();
-        acAbort = null;
-        show(data.names || []);
-      } catch (err) {
-        if (err.name !== 'AbortError') hide();
-      }
-    }, AUTOCOMPLETE_DEBOUNCE);
-  });
-
-  inputEl.addEventListener('keydown', e => {
-    if (!dropdownEl.classList.contains('open')) return;
-    const items = [...dropdownEl.querySelectorAll('.autocomplete-item')];
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (acIdx === -1) preAcVal = inputEl.value;
-      acIdx = Math.min(acIdx + 1, items.length - 1);
-      items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
-      if (acIdx >= 0) inputEl.value = items[acIdx].dataset.sub;
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      acIdx = Math.max(acIdx - 1, -1);
-      items.forEach((item, i) => item.classList.toggle('focused', i === acIdx));
-      inputEl.value = acIdx >= 0 ? items[acIdx].dataset.sub : preAcVal;
-    } else if (e.key === 'Enter') {
-      const selectedIdx = acIdx;
-      cancel();
-      if (selectedIdx >= 0) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        const sub = items[selectedIdx]?.dataset.sub;
-        if (sub) navigate(`/r/${sub}`);
-      }
-    } else if (e.key === 'Escape') {
-      e.stopImmediatePropagation();
-      cancel();
-    }
-  }, true);
-
-  inputEl.addEventListener('blur', () => { setTimeout(cancel, 150); });
-  dropdownEl.addEventListener('mousedown', e => e.preventDefault());
-  dropdownEl.addEventListener('click', e => {
-    const item = e.target.closest('.autocomplete-item');
-    if (!item) return;
-    cancel();
-    navigate(`/r/${item.dataset.sub}`);
-  });
-  return cancel;
-}
-
-_acCancellers.push(setupAutocomplete(subInput,   document.getElementById('autocomplete-dropdown')));
-_acCancellers.push(setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown')));
-
 // ── Settings panel ────────────────────────────────────────────────────────────
 const settingsPanel   = document.getElementById('settings-panel');
 const settingsOverlay = document.getElementById('settings-overlay');
@@ -896,4 +802,5 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 // ── Boot ──────────────────────────────────────────────────────────────────────
 applySettings();
 state.currentCommentSort = settings.commentSort;
+initAutocomplete(subInput, pvSubInput, navigate);
 renderRoute(parseRoute());
