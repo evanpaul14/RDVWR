@@ -172,7 +172,6 @@ _ANDROID_APP_VERSIONS = [
     "Version 2022.20.0/Build 487703",
 ]
 _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
-_REDDIT_WEB_CLIENT_AUTH   = "M1hmQkpXbGlIdnFBQ25YcmZJWWxMdzo="
 _CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131", "firefox133"]
 _TOKEN_POOL_SIZE          = 3
 _TOKEN_ROTATE_SECS        = 1800  # rotate device identity every 30 min
@@ -231,18 +230,15 @@ class _OAuthDevice:
 def _refresh_device(device: _OAuthDevice):
     device.reset_identity()
     log.info("token refresh: device_id=%s ua=%s", device.device_id, device.user_agent)
-    for fetch in (_fetch_android_token, _fetch_web_token):
-        try:
-            token, expires_in, extra = fetch(device)
-            device.token       = token
-            device.expires_at  = time.time() + expires_in - 120
-            device.acquired_at = time.time()
-            device.extra       = extra
-            log.info("token refresh ok: method=%s expires_in=%s", fetch.__name__, expires_in)
-            return
-        except Exception as e:
-            log.warning("token refresh failed: method=%s error=%s", fetch.__name__, e)
-            continue
+    try:
+        token, expires_in, extra = _fetch_android_token(device)
+        device.token       = token
+        device.expires_at  = time.time() + expires_in - 120
+        device.acquired_at = time.time()
+        device.extra       = extra
+        log.info("token refresh ok: method=_fetch_android_token expires_in=%s", expires_in)
+    except Exception as e:
+        log.warning("token refresh failed: method=_fetch_android_token error=%s", e)
 
 
 def _cffi_post(url, device, **kwargs):
@@ -288,31 +284,6 @@ def _fetch_android_token(device: _OAuthDevice):
         extra["x-reddit-session"] = resp.headers["x-reddit-session"]
     return data["access_token"], data["expires_in"], extra
 
-
-def _fetch_web_token(device: _OAuthDevice):
-    resp = _cffi_post(
-        "https://www.reddit.com/api/v1/access_token",
-        device,
-        headers={
-            "Authorization":   f"Basic {_REDDIT_WEB_CLIENT_AUTH}",
-            "User-Agent":      device.user_agent,
-            "Content-Type":    "application/x-www-form-urlencoded",
-            "Accept":          "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-        },
-        content=f"grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id={device.device_id}",
-        timeout=10,
-    )
-    if not resp.ok:
-        log.warning("web token HTTP %s: %s", resp.status_code, resp.text[:200])
-    resp.raise_for_status()
-    data  = resp.json()
-    extra = {}
-    if "x-reddit-loid" in resp.headers:
-        extra["x-reddit-loid"]    = resp.headers["x-reddit-loid"]
-    if "x-reddit-session" in resp.headers:
-        extra["x-reddit-session"] = resp.headers["x-reddit-session"]
-    return data["access_token"], data["expires_in"], extra
 
 
 _device_pool   = [_OAuthDevice() for _ in range(_TOKEN_POOL_SIZE)]
