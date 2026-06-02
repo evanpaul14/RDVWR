@@ -604,7 +604,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Home subreddit</span><input class="settings-input" id="s-home-sub" type="text" value="${escHtml(settings.homeSub || 'popular')}" placeholder="popular"></label>
-    <label class="settings-row"><span class="settings-label">Pagination (Next button instead of infinite scroll)</span>${chk('s-pagination', settings.pagination)}</label>
+    <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
