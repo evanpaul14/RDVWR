@@ -476,20 +476,53 @@ def search_posts():
 
 # ── Subreddit API ─────────────────────────────────────────────────────────────
 
+FLAIR_SEARCH_SORTS = {"hot", "new", "top"}
+
 @app.route("/api/r/<subreddit>")
 def get_posts(subreddit):
     sort  = request.args.get("sort", "top")
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
     f     = request.args.get("f", "").strip()[:200]
+
+    if f:
+        # Reddit's listing API ignores ?f=; search endpoint is the only way to filter by flair
+        search_sort = sort if sort in FLAIR_SEARCH_SORTS else "new"
+        params = {
+            "q": f'flair:"{f}"',
+            "restrict_sr": 1,
+            "sort": search_sort,
+            "limit": FEED_LIMIT,
+            "raw_json": 1,
+            "include_over_18": 1,
+        }
+        if search_sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+            params["t"] = t
+        if after:
+            params["after"] = after
+        try:
+            resp = reddit_get(
+                f"https://www.reddit.com/r/{subreddit}/search.json",
+                params=params, timeout=10)
+            if resp.status_code == 404:
+                return jsonify({"error": "Subreddit not found"}), 404
+            if resp.status_code == 403:
+                return jsonify({"error": "Subreddit is private"}), 403
+            if resp.status_code != 200:
+                return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+            listing = resp.json()["data"]
+            return cached_json({"posts": extract_posts(listing), "after": listing.get("after")}, CACHE_TTL_FEED)
+        except requests.exceptions.Timeout:
+            return jsonify({"error": "Request timed out"}), 504
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
     if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
         params["after"] = after
-    if f:
-        params["f"] = f'flair:"{f}"'
     try:
         resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code == 404:
