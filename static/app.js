@@ -651,5 +651,5 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 applySettings();
 state.currentCommentSort = settings.commentSort;
 initAutocomplete(subInput, pvSubInput, navigate);
-initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox });
+initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
 renderRoute(parseRoute());

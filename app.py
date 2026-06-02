@@ -246,6 +246,49 @@ def download_media():
         return jsonify({'error': str(e)}), 502
 
 
+# ── Gallery zip download ──────────────────────────────────────────────────────
+
+GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
+
+@app.route("/api/download/gallery")
+def download_gallery():
+    import io, zipfile
+    urls_param = request.args.get('urls', '').strip()
+    name = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))[:64]
+    if not urls_param:
+        return jsonify({'error': 'No URLs provided'}), 400
+    urls = [u.strip() for u in urls_param.split(',') if u.strip()][:25]
+    for url in urls:
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return jsonify({'error': 'Invalid URL'}), 400
+        if parsed.scheme not in ('http', 'https') or parsed.netloc not in GALLERY_ALLOWED_HOSTS:
+            return jsonify({'error': 'URL not allowed'}), 400
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_STORED) as zf:
+        for i, url in enumerate(urls, 1):
+            try:
+                r = SESSION.get(url, stream=True, timeout=20,
+                                headers={'Referer': 'https://www.reddit.com/'})
+                if not r.ok:
+                    continue
+                path = urlparse(url).path
+                ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
+                if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
+                    ext = 'jpg'
+                zf.writestr(f'{name}-{i:02d}.{ext}', r.content)
+            except Exception:
+                continue
+    buf.seek(0)
+    data = buf.read()
+    return Response(data, status=200, headers={
+        'Content-Type': 'application/zip',
+        'Content-Disposition': f'attachment; filename="{name}-gallery.zip"',
+        'Content-Length': str(len(data)),
+    })
+
+
 # ── Reddit video+audio merge download ────────────────────────────────────────
 
 @app.route("/api/download/reddit-video")
