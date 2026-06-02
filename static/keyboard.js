@@ -1,6 +1,6 @@
 import { state } from './state.js';
 
-export function initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox }) {
+export function initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed }) {
   function _isTyping() {
     const tag = document.activeElement?.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable;
@@ -59,6 +59,31 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
         const link = post.querySelector('a.post-title[data-nav], a.is-italic[data-nav]');
         if (link) navigate(link.dataset.nav);
       }
+    } else if (e.key === 'c' && state.selectedPostIdx >= 0) {
+      e.preventDefault();
+      const posts = _getPostEls();
+      const post = posts[state.selectedPostIdx];
+      if (post) {
+        const link = post.querySelector('a.comments-link[data-nav]');
+        if (link) navigate(link.dataset.nav);
+      }
+    } else if (e.key === 'l' && state.selectedPostIdx >= 0) {
+      e.preventDefault();
+      const posts = _getPostEls();
+      const post = posts[state.selectedPostIdx];
+      if (post) {
+        const ext = post.querySelector('a.ext-link');
+        if (ext) window.open(ext.href, '_blank', 'noopener');
+      }
+    } else if (e.key === 'r') {
+      e.preventDefault();
+      if (refreshFeed) refreshFeed();
+    } else if (e.key === 'g') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (e.key === 'G') {
+      e.preventDefault();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     } else if (e.key === '/') {
       e.preventDefault();
       subInput.focus();
@@ -75,6 +100,11 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
           <kbd>j</kbd><span>Next post / comment</span>
           <kbd>k</kbd><span>Previous post / comment</span>
           <kbd>o</kbd><span>Open selected post</span>
+          <kbd>c</kbd><span>Go to comments</span>
+          <kbd>l</kbd><span>Open external link</span>
+          <kbd>r</kbd><span>Refresh feed</span>
+          <kbd>g</kbd><span>Scroll to top</span>
+          <kbd>G</kbd><span>Scroll to bottom</span>
           <kbd>/</kbd><span>Focus search</span>
           <kbd>Esc</kbd><span>Close panel / lightbox</span>
           <kbd>?</kbd><span>Toggle this help</span>

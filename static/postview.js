@@ -28,7 +28,12 @@ function buildDownloadBtn(p) {
     const base = first.split('?')[0].split('/').pop() || 'image';
     const dot = base.lastIndexOf('.');
     const fname = dot > 0 ? `${base.slice(0, dot)}-1${base.slice(dot)}` : `${base}-1`;
-    return `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
+    const singleBtn = `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
+    if (p.gallery.length < 2) return singleBtn;
+    const allUrls = p.gallery.map(g => g.url).filter(_pvDlOk).join(',');
+    const allHref = `/api/download/gallery?urls=${encodeURIComponent(allUrls)}&name=${encodeURIComponent(p.id)}`;
+    const allBtn = `<a class="share-btn" href="${escHtml(allHref)}" download title="Download all ${p.gallery.length} images as zip">${_DL_SVG} all (${p.gallery.length})</a>`;
+    return singleBtn + allBtn;
   }
   // Imgur album: placeholder replaced by initImgurAlbums once images are loaded
   if (p.imgur_album_id) {
