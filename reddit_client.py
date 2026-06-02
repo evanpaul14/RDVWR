@@ -253,6 +253,8 @@ def _cffi_post(url, device, **kwargs):
         # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
         log.debug("cffi POST TLS fallback url=%s: %s", url, e)
         kwargs.pop("impersonate", None)
+        if "content" in kwargs:
+            kwargs["data"] = kwargs.pop("content")
         return SESSION.post(url, **kwargs)
 
 
