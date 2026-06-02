@@ -258,23 +258,23 @@ function _showGalleryDlModal(gallery, postId) {
         <span class="gdl-title">Download images</span>
         <button class="gdl-close" aria-label="Close">×</button>
       </div>
-      <div class="gdl-actions">
-        <button class="gdl-sel-toggle">Unselect all</button>
-      </div>
       <div class="gdl-grid">${itemsHtml}</div>
       <div class="gdl-footer">
-        <button class="gdl-download-btn">Download (${eligible.length})</button>
+        <button class="gdl-sel-toggle">Unselect all</button>
+        <span class="gdl-count">${eligible.length} / ${eligible.length}</span>
+        <button class="gdl-download-btn">Download</button>
       </div>
     </div>`;
 
   const toggleBtn = modal.querySelector('.gdl-sel-toggle');
+  const countEl   = modal.querySelector('.gdl-count');
 
   function _updateState() {
     const checks = [...modal.querySelectorAll('.gdl-check')];
     const n = checks.filter(c => c.checked).length;
     const dlBtn = modal.querySelector('.gdl-download-btn');
-    dlBtn.textContent = `Download (${n})`;
     dlBtn.disabled = n === 0;
+    countEl.textContent = `${n} / ${checks.length}`;
     toggleBtn.textContent = n === checks.length ? 'Unselect all' : 'Select all';
   }
 
