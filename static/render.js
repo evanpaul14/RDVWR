@@ -47,7 +47,7 @@ export async function xlateText(text) {
   if (!text?.trim()) return null;
   const key = text.trim().slice(0, 1000);
   if (_xlateCache.has(key)) return _xlateCache.get(key);
-  const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(key)}&langpair=autodetect|en`);
+  const r = await fetch(`/api/translate?text=${encodeURIComponent(key)}`);
   const d = await r.json();
   const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
   const result = { detected, translated: d.responseData?.translatedText || '' };

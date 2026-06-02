@@ -866,3 +866,41 @@ class TestParseLiveUpdates:
         result = _parse_live_updates(children)
         assert len(result) == 1
         assert result[0]["id"] == "u1"
+
+
+# ── /api/translate ────────────────────────────────────────────────────────────
+
+class TestTranslate:
+    def test_missing_text_returns_400(self, client):
+        resp = client.get("/api/translate")
+        assert resp.status_code == 400
+
+    def test_empty_text_returns_400(self, client):
+        resp = client.get("/api/translate?text=")
+        assert resp.status_code == 400
+
+    @patch.object(app_module.SESSION, "get")
+    def test_happy_path(self, mock_get, client):
+        mock_get.return_value = _session_get({
+            "responseData": {"translatedText": "Hello world"},
+            "matches": [{"detected-language": "fr"}],
+        })
+        resp = client.get("/api/translate?text=Bonjour+monde")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["responseData"]["translatedText"] == "Hello world"
+
+    @patch.object(app_module.SESSION, "get")
+    def test_upstream_error_returns_502(self, mock_get, client):
+        mock_get.side_effect = Exception("network error")
+        resp = client.get("/api/translate?text=hello")
+        assert resp.status_code == 502
+
+    @patch.object(app_module.SESSION, "get")
+    def test_text_truncated_to_1000_chars(self, mock_get, client):
+        mock_get.return_value = _session_get({"responseData": {"translatedText": "x"}})
+        long_text = "a" * 2000
+        resp = client.get(f"/api/translate?text={long_text}")
+        assert resp.status_code == 200
+        called_params = mock_get.call_args[1].get("params", {})
+        assert len(called_params.get("q", "")) <= 1000

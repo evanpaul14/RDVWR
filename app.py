@@ -280,8 +280,9 @@ def _cffi_post(url, device, **kwargs):
     """POST via curl_cffi, falling back to requests on TLS errors."""
     try:
         return cffi_requests.post(url, impersonate=device.impersonate, **kwargs)
-    except Exception:
+    except Exception as e:
         # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
+        log.debug("cffi POST TLS fallback url=%s: %s", url, e)
         kwargs.pop("impersonate", None)
         return SESSION.post(url, **kwargs)
 
@@ -374,8 +375,9 @@ def reddit_get(url, **kwargs):
         headers = {**device.api_headers(), **extra_headers}
         try:
             resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
-        except Exception:
+        except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
+            log.debug("cffi GET TLS fallback url=%s: %s", url, e)
             return SESSION.get(url, headers=headers, **kwargs)
         if resp.status_code == 429:
             time.sleep(min(int(resp.headers.get("Retry-After", 5)), 30))
@@ -546,7 +548,8 @@ def proxy_img():
         resp = Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), content_type=content_type)
         resp.headers['Cache-Control'] = 'public, max-age=3600'
         return resp
-    except Exception:
+    except Exception as e:
+        log.warning("proxy_img fetch failed url=%s: %s", url, e)
         return ('', 502)
 
 
@@ -681,8 +684,8 @@ def _imgur_from_post_data_json(html_text):
             imgs = _imgur_items_to_images(data.get(key))
             if imgs:
                 return imgs
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("_imgur_from_post_data_json parse failed: %s", e)
     return None
 
 
@@ -708,8 +711,8 @@ def _scrape_imgur_album(album_id):
             imgs = _imgur_from_next_data(json.loads(m.group(1)))
             if imgs:
                 return imgs
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("_scrape_imgur_album next-data parse failed: %s", e)
 
     imgs = _imgur_from_post_data_json(html_text)
     if imgs:
@@ -733,15 +736,15 @@ def get_imgur_album(album_id):
                 imgs = _imgur_items_to_images(resp.json().get("data", []))
                 if imgs:
                     return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("imgur API fetch failed album=%s: %s", album_id, e)
     # Fall back to scraping the album page
     try:
         imgs = _scrape_imgur_album(album_id)
         if imgs:
             return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("imgur scrape failed album=%s: %s", album_id, e)
     return jsonify({"error": "no_images"}), 404
 
 
@@ -760,7 +763,8 @@ def subreddit_search():
         if resp.status_code != 200:
             return jsonify({"names": []})
         return jsonify({"names": resp.json().get("names", [])[:8]})
-    except Exception:
+    except Exception as e:
+        log.warning("subreddit_search failed q=%r: %s", q, e)
         return jsonify({"names": []})
 
 
@@ -883,6 +887,7 @@ def get_rules(subreddit):
         rules = resp.json().get("rules", [])
         return cached_json({"rules": [{"short_name": r.get("short_name",""), "description": r.get("description","")} for r in rules]}, CACHE_TTL_SUBREDDIT)
     except Exception as e:
+        log.warning("get_rules failed sub=%s: %s", subreddit, e)
         return jsonify({"rules": []})
 
 
@@ -1185,8 +1190,8 @@ def get_user_overview_api(username):
             if kind == "t3":
                 try:
                     items.append({"type": "post", "data": process_post(d)})
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
             elif kind == "t1":
                 items.append({"type": "comment", "data": {
                     "id":             d.get("id", ""),
@@ -1342,6 +1347,23 @@ def get_live_updates(thread_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/translate")
+def translate_text():
+    text = request.args.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "Missing text"}), 400
+    try:
+        r = SESSION.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": text[:1000], "langpair": "autodetect|en"},
+            timeout=8)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        log.warning("translate failed: %s", e)
+        return jsonify({"error": str(e)}), 502
+
+
 @app.route("/api/og-image")
 def get_og_image():
     url = request.args.get("url", "").strip()
@@ -1362,7 +1384,8 @@ def get_og_image():
                 del _og_cache[k]
         _og_cache[url] = img_url
         return cached_json({"url": img_url}, 3600)
-    except Exception:
+    except Exception as e:
+        log.warning("get_og_image failed url=%s: %s", url, e)
         _og_cache[url] = None
         return cached_json({"url": None}, 60)
 
