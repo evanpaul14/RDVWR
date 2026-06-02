@@ -1,6 +1,9 @@
 import re
 import time as _time
+import logging
 from urllib.parse import quote as url_quote, urlparse
+
+log = logging.getLogger(__name__)
 
 SELFTEXT_MAX_LEN = 600
 
@@ -169,7 +172,8 @@ def process_post(p):
         orig.pop("crosspost_parent_list", None)
         try:
             crosspost_from = process_post(orig)
-        except Exception:
+        except Exception as e:
+            log.debug("crosspost_from parse failed id=%s: %s", orig.get("id"), e)
             crosspost_from = {
                 "subreddit": orig.get("subreddit", ""),
                 "id":        orig.get("id", ""),
