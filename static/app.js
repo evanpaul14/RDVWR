@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
-import { markVisited, isVisited, clearVisited } from './visited.js';
+import { clearVisited } from './visited.js';
+import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
 import { escHtml, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
@@ -548,70 +549,6 @@ document.addEventListener('volumechange', e => {
   }
 }, true);
 
-// ── Visited post tracking ─────────────────────────────────────────────────────
-// _hideSet: in-memory only (not persisted). Posts enter this set when they
-// scroll past the top of the viewport in the current page session. This
-// drives post-read-hidden so that a fresh page load never hides everything.
-const _hideSet = new Set();
-
-function _shouldHideReadPosts() {
-  if (state.profileMode || state.searchMode || state.duplicatesMode || state.multiMode || state.liveMode) return false;
-  const homeSub = (settings.homeSub || 'popular').toLowerCase();
-  const cur = (state.currentSub || '').toLowerCase();
-  const isHome = cur === homeSub || cur === 'popular' || cur === 'all';
-  return isHome ? settings.hideReadHome : settings.hideReadSub;
-}
-
-function _applyVisitedEl(el) {
-  el.classList.add('post-visited');
-}
-
-function _markScrolledPast(el, id) {
-  el.classList.add('post-visited');
-  _hideSet.add(id);
-}
-
-function _markPostVisited(id) {
-  if (!id) return;
-  markVisited(id);
-  const el = feed.querySelector(`[data-post-id="${CSS.escape(id)}"]`);
-  if (el) _applyVisitedEl(el);
-}
-
-function applyVisitedHiding() {
-  if (_shouldHideReadPosts()) {
-    feed.querySelectorAll('.post-visited').forEach(el => {
-      if (_hideSet.has(el.dataset.postId)) el.classList.add('post-read-hidden');
-    });
-  } else {
-    feed.querySelectorAll('.post-read-hidden').forEach(el => el.classList.remove('post-read-hidden'));
-  }
-}
-
-// Scroll-past observer — marks a post as read when it fully exits at the top
-const _scrollReadObserver = new IntersectionObserver(entries => {
-  for (const entry of entries) {
-    if (!entry.isIntersecting && entry.boundingClientRect.bottom < 0) {
-      const el = entry.target;
-      const id = el.dataset.postId;
-      if (id && settings.markRead) { markVisited(id); _markScrolledPast(el, id); }
-    }
-  }
-}, { threshold: 0 });
-
-// Watch for new posts added to the feed — apply visited state at render time
-new MutationObserver(mutations => {
-  for (const m of mutations) {
-    for (const node of m.addedNodes) {
-      if (node.nodeType !== 1 || !node.dataset?.postId) continue;
-      _scrollReadObserver.observe(node);
-      const id = node.dataset.postId;
-      if (isVisited(id)) node.classList.add('post-visited');
-      if (_hideSet.has(id) && _shouldHideReadPosts()) node.classList.add('post-read-hidden');
-    }
-  }
-}).observe(feed, { childList: true });
-
 document.addEventListener('click', e => {
   const img = e.target.closest('.post-media img, .pv-media img, .md img, .gallery-main-img');
   if (!img) return;
@@ -692,8 +629,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-hide-read-sub').addEventListener('change', e => { settings.hideReadSub = e.target.checked; saveSettings(); applyVisitedHiding(); });
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();
-    _hideSet.clear();
-    feed.querySelectorAll('.post-visited, .post-read-hidden').forEach(el => el.classList.remove('post-visited', 'post-read-hidden'));
+    clearVisitedHiding();
   });
   settingsBody.querySelector('#s-reset').addEventListener('click', () => {
     Object.assign(settings, DEFAULTS);
