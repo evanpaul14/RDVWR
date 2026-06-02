@@ -254,7 +254,12 @@ GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-pre
 def download_gallery():
     import io, zipfile
     urls_param = request.args.get('urls', '').strip()
-    name = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))[:64]
+    _raw = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))
+    if len(_raw) > 20:
+        _sep = _raw.find('_', 20)
+        name = _raw[:_sep] if _sep != -1 else _raw
+    else:
+        name = _raw
     if not urls_param:
         return jsonify({'error': 'No URLs provided'}), 400
     urls = [u.strip() for u in urls_param.split(',') if u.strip()][:25]
