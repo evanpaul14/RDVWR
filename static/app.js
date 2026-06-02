@@ -394,8 +394,40 @@ function loadMore() {
   }
 }
 new IntersectionObserver(entries => {
-  if (entries[0].isIntersecting) loadMore();
+  if (!entries[0].isIntersecting) return;
+  if (settings.pagination) {
+    if (sentinel.querySelector('.next-page-btn') || state.loading) return;
+    const hasMore = state.afterToken || state.searchAfter || state.profileAfter ||
+                    state.duplicatesAfter || state.communityAfter || state.userAfter;
+    if (!hasMore) return;
+    const btn = document.createElement('button');
+    btn.className = 'next-page-btn';
+    btn.textContent = 'Next page →';
+    sentinel.appendChild(btn);
+  } else {
+    loadMore();
+  }
 }, { rootMargin: '300px' }).observe(sentinel);
+
+sentinel.addEventListener('click', e => {
+  const btn = e.target.closest('.next-page-btn');
+  if (!btn || state.loading) return;
+  sentinel.innerHTML = '';
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  if (state.duplicatesMode && state.duplicatesAfter) {
+    loadDuplicatesPage(state.duplicatesSub, state.duplicatesPostId, state.duplicatesAfter, false);
+  } else if (state.searchMode) {
+    if (state.searchType === 'communities' && state.communityAfter) loadCommunityResults(state.searchQuery, state.communityAfter, false);
+    else if (state.searchType === 'users' && state.userAfter)       loadUserResults(state.searchQuery, state.userAfter, false);
+    else if (state.searchAfter) loadSearchResults(state.searchQuery, state.searchSort, state.searchTime, state.searchAfter, false);
+  } else if (state.profileMode && state.profileAfter) {
+    loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime, state.profileAfter, false);
+  } else if (state.multiMode && state.afterToken) {
+    loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime, state.afterToken, false);
+  } else if (state.afterToken) {
+    loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, false);
+  }
+});
 
 // Spoiler reveal — delegated so it works in feed excerpts, post view body, and comments
 document.addEventListener('click', e => {
@@ -572,6 +604,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Home subreddit</span><input class="settings-input" id="s-home-sub" type="text" value="${escHtml(settings.homeSub || 'popular')}" placeholder="popular"></label>
+    <label class="settings-row"><span class="settings-label">Pagination (Next button instead of infinite scroll)</span>${chk('s-pagination', settings.pagination)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
@@ -615,6 +648,11 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
+    saveSettings();
+  });
+  settingsBody.querySelector('#s-pagination').addEventListener('change', e => {
+    settings.pagination = e.target.checked;
+    if (!e.target.checked) sentinel.innerHTML = '';
     saveSettings();
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });

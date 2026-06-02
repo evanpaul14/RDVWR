@@ -28,6 +28,7 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
 // ── Feed utilities ────────────────────────────────────────────────────────────
 export function showSkeletons() {
   state.selectedPostIdx = -1;
+  sentinel.innerHTML = '';
   feed.innerHTML = Array.from({length:SKELETON_COUNT}, (_, i) => {
     if (i % 3 === 1) return `
     <div class="skeleton-post skel-compact">

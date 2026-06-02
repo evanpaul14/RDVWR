@@ -460,6 +460,13 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   animation:spin .7s linear infinite;
 }
 #scroll-sentinel.loading::after { display:block; }
+.next-page-btn {
+  font-family:var(--mono); font-size:11px; letter-spacing:.05em;
+  padding:8px 20px; border-radius:6px;
+  border:1px solid var(--b2); background:var(--bg2); color:var(--tx2);
+  cursor:pointer; transition:border-color .15s, color .15s;
+}
+.next-page-btn:hover { border-color:var(--ac); color:var(--ac); }
 @keyframes spin { to { transform:rotate(360deg); } }
 .pv-loader { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:80px 24px; }
 .pv-loader::before { content:''; width:28px; height:28px; border-radius:50%; border:2px solid var(--b2); border-top-color:var(--ac); animation:spin .7s linear infinite; }
