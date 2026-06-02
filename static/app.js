@@ -578,14 +578,17 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
   </div>
   <div class="settings-section">
-    <div class="settings-section-title">Content</div>
+    <div class="settings-section-title">NSFW</div>
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW content in search</span>${chk('s-nsfw-search-hide', settings.nsfwSearchHide)}</label>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">Read history</div>
     <label class="settings-row"><span class="settings-label">Mark posts as read on scroll</span>${chk('s-mark-read', settings.markRead)}</label>
     <label class="settings-row"><span class="settings-label">Hide read posts (home feed)</span>${chk('s-hide-read-home', settings.hideReadHome)}</label>
     <label class="settings-row"><span class="settings-label">Hide read posts (subreddits)</span>${chk('s-hide-read-sub', settings.hideReadSub)}</label>
-    <div class="settings-row settings-row-action"><span class="settings-label">Read history</span><button class="settings-action-btn" id="s-clear-visited">Clear</button></div>
+    <div class="settings-row settings-row-action"><span class="settings-label">Clear read history</span><button class="settings-action-btn" id="s-clear-visited">Clear</button></div>
   </div>
   <div class="settings-section">
     <button class="settings-reset-btn" id="s-reset">Reset to defaults</button>
