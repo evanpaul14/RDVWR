@@ -27,4 +27,4 @@ Opens at `http://localhost:8002`.
 
 ### Credit
 
-- [Redlib](github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic
+- [Redlib](https://github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic
