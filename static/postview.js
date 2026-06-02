@@ -169,7 +169,10 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       renderFlair(p),
     ].filter(Boolean).join('');
     const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>` : '';
-    const bodyHtml = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
+    const bodyInner = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
+    const bodyHtml = (bodyInner && p.over_18)
+      ? `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${bodyInner}</div></div>`
+      : bodyInner;
     const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : '';
 
     pvContent.innerHTML = `
