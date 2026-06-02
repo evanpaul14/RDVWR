@@ -242,12 +242,9 @@ feed.addEventListener('click', e => {
   if (e.defaultPrevented) return;
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
   if (retryBtn) { retryFeedLoad(); return; }
-  const commBtn = e.target.closest('.comments-link[data-id]');
   const userBtn = e.target.closest('.post-author[data-user]');
   const liveAuthor = e.target.closest('.live-update-author[data-user]');
-  if (commBtn) {
-    navigateOrOpen(`/r/${commBtn.dataset.sub}/comments/${commBtn.dataset.id}`, e);
-  } else if (userBtn) {
+  if (userBtn) {
     navigateOrOpen(`/user/${userBtn.dataset.user}`, e);
   } else if (liveAuthor) {
     navigateOrOpen(`/user/${liveAuthor.dataset.user}`, e);
