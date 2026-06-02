@@ -14,8 +14,10 @@ export function parseRoute(path=location.pathname) {
   if (mSub) {
     const sort = SORTS.has(mSub[2]) ? mSub[2] : (mSub[1].toLowerCase() === 'popular' ? 'hot' : settings.subSort);
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
-    const time = new URLSearchParams(qs).get('t') || settings.subTime;
-    return { type:'sub', sub:mSub[1], sort, time };
+    const params = new URLSearchParams(qs);
+    const time = params.get('t') || settings.subTime;
+    const flair = params.get('f') || '';
+    return { type:'sub', sub:mSub[1], sort, time, flair };
   }
   const mMulti = pathname.match(/^\/u(?:ser)?\/([^\/]+)\/m\/([^\/]+)(?:\/([^\/]+))?/i);
   if (mMulti) {

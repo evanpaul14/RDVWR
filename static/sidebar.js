@@ -33,12 +33,14 @@ export async function toggleSidebar(sub) {
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
   try {
-    const [aboutRes, rulesRes] = await Promise.all([
+    const [aboutRes, rulesRes, modsRes] = await Promise.all([
       fetch(`/api/r/${encodeURIComponent(sub)}/about`),
       fetch(`/api/r/${encodeURIComponent(sub)}/rules`),
+      fetch(`/api/r/${encodeURIComponent(sub)}/about/moderators`),
     ]);
     const about = aboutRes.ok ? await aboutRes.json() : {};
     const rulesData = rulesRes.ok ? await rulesRes.json() : {rules:[]};
+    const modsData = modsRes.ok ? await modsRes.json() : {moderators:[]};
 
     let html = '';
     if (about.description) {
@@ -54,6 +56,18 @@ export async function toggleSidebar(sub) {
       html += `<div class="sidebar-section">
         <div class="sidebar-section-title">Rules</div>
         <ul class="sidebar-rules">${rulesHtml}</ul>
+      </div>`;
+    }
+    if (modsData.moderators?.length) {
+      const visible = modsData.moderators.slice(0, 12);
+      const modList = visible.map(m =>
+        `<a class="sidebar-mod-name" href="/user/${escHtml(m.name)}" data-nav="/user/${escHtml(m.name)}">u/${escHtml(m.name)}</a>`
+      ).join('');
+      const more = modsData.moderators.length > 12
+        ? `<span class="sidebar-mod-more">+${modsData.moderators.length - 12} more</span>` : '';
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Moderators</div>
+        <div class="sidebar-mods">${modList}${more}</div>
       </div>`;
     }
     if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No sidebar content.</div>';

@@ -481,12 +481,15 @@ def get_posts(subreddit):
     sort  = request.args.get("sort", "top")
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
+    f     = request.args.get("f", "").strip()[:200]
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
     if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
         params["after"] = after
+    if f:
+        params["f"] = f
     try:
         resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code == 404:
@@ -540,6 +543,22 @@ def get_rules(subreddit):
     except Exception as e:
         log.warning("get_rules failed sub=%s: %s", subreddit, e)
         return jsonify({"rules": []})
+
+
+@app.route("/api/r/<subreddit>/about/moderators")
+def get_moderators(subreddit):
+    try:
+        resp = reddit_get(
+            f"https://www.reddit.com/r/{subreddit}/about/moderators.json",
+            params={"raw_json": 1}, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"moderators": []})
+        children = resp.json().get("data", {}).get("children", [])
+        mods = [{"name": m.get("name", "")} for m in children if m.get("name")]
+        return cached_json({"moderators": mods}, CACHE_TTL_SUBREDDIT)
+    except Exception as e:
+        log.warning("get_moderators failed sub=%s: %s", subreddit, e)
+        return jsonify({"moderators": []})
 
 
 @app.route("/api/search/communities")
