@@ -63,7 +63,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      await loadSubreddit(route.sub, route.sort, route.time || 'all', route.flair || '');
+      await loadSubreddit(route.sub, route.sort, route.time || 'all');
       break;
     case 'multi':
       closePostView();
@@ -119,7 +119,7 @@ window.addEventListener('popstate', (e) => {
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
   const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.flair || '') === state.flairFilter) {
+  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -220,7 +220,7 @@ document.getElementById('post-view').addEventListener('click', e => {
   if (btn) btn.textContent = collapsed ? '+' : '−';
 });
 
-// pvContent: comment sort, load more, retry, user nav, flair filter
+// pvContent: comment sort, load more, retry, user nav
 pvContent.addEventListener('click', e => {
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
   if (retryBtn) {
@@ -233,12 +233,6 @@ pvContent.addEventListener('click', e => {
   if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const moreBtn = e.target.closest('.load-more-btn');
   if (moreBtn) { e.preventDefault(); loadMoreComments(moreBtn); return; }
-  const flairEl = e.target.closest('.flair.flair-clickable[data-flair]');
-  if (flairEl) {
-    const sub = flairEl.dataset.sub;
-    const flair = flairEl.dataset.flair;
-    if (sub && flair) { navigateOrOpen(`/r/${encodeURIComponent(sub)}?f=${encodeURIComponent(flair)}`, e); return; }
-  }
   const btn = e.target.closest('[data-user]');
   if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
@@ -274,14 +268,6 @@ searchTypeBar.addEventListener('click', e => {
   else                     loadSearchResults(state.searchQuery, state.searchSort, state.searchTime);
 });
 
-function buildSubUrl() {
-  const qs = [];
-  if (state.currentTime !== 'all') qs.push(`t=${state.currentTime}`);
-  if (state.flairFilter) qs.push(`f=${encodeURIComponent(state.flairFilter)}`);
-  const base = `/r/${encodeURIComponent(state.currentSub)}/${state.currentSort}`;
-  return qs.length ? base + '?' + qs.join('&') : base;
-}
-
 function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.searchTime, sub=state.searchSub, nsfw=state.searchNsfw) {
   let url = `/search?q=${encodeURIComponent(q)}&sort=${sort}`;
   if (time !== 'all') url += `&t=${time}`;
@@ -294,12 +280,6 @@ function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.s
 sortBar.addEventListener('click', e => {
   if (e.target.closest('#sidebar-toggle-btn')) {
     toggleSidebar(state.currentSub);
-    return;
-  }
-  const clearFlairBtn = e.target.closest('[data-clear-flair]');
-  if (clearFlairBtn) {
-    state.flairFilter = '';
-    navigate(`/r/${encodeURIComponent(state.currentSub)}/${state.currentSort}`, { replace:true });
     return;
   }
   if (e.target.closest('#nsfw-toggle') && state.searchMode && !settings.nsfwHide) {
@@ -343,7 +323,7 @@ sortBar.addEventListener('click', e => {
   if (state.multiMode) {
     navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
   } else {
-    navigate(buildSubUrl(), { replace:true });
+    navigate(`/r/${state.currentSub}/${state.currentSort}`, { replace:true });
   }
 });
 
@@ -373,7 +353,7 @@ sortBar.addEventListener('change', e => {
     state.currentTime = sel.value;
     state.afterToken = null;
     window.scrollTo({top:0, behavior:'instant'});
-    navigate(buildSubUrl(), { replace:true });
+    navigate(`/r/${state.currentSub}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
   }
 });
 
@@ -448,7 +428,7 @@ feed.addEventListener('click', e => {
     e.stopPropagation();
     const sub   = flairEl.dataset.sub;
     const flair = flairEl.dataset.flair;
-    if (sub && flair) navigateOrOpen(`/r/${encodeURIComponent(sub)}?f=${encodeURIComponent(flair)}`, e);
+    if (sub && flair) navigateOrOpen(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`, e);
     return;
   }
   const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');

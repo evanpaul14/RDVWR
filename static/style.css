@@ -777,20 +777,6 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .flair.flair-clickable { cursor:pointer; transition:opacity .15s; }
 .flair.flair-clickable:hover { opacity:.75; }
 
-/* ── Active flair filter badge in sort bar ───────────────────────────────── */
-.flair-filter-badge {
-  display:inline-flex; align-items:center; gap:5px;
-  padding:10px 6px 10px 12px; margin-bottom:-1px;
-  border-bottom:2px solid var(--ac);
-  font-family:var(--mono); font-size:10px; letter-spacing:.06em;
-  text-transform:uppercase; color:var(--ac);
-  white-space:nowrap; flex-shrink:0;
-}
-.flair-clear-btn {
-  background:none; border:none; cursor:pointer;
-  color:inherit; opacity:.55; font-size:15px; line-height:1; padding:0;
-}
-.flair-clear-btn:hover { opacity:1; }
 
 /* ── State retry button ──────────────────────────────────────────────────── */
 .state-retry-btn {
