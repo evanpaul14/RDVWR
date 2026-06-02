@@ -54,7 +54,7 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
 }
 
 export async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts') {
-  if (settings.nsfwHide) nsfw = false;
+  if (settings.nsfwHide || settings.nsfwSearchHide) nsfw = false;
   if (sub) state.searchSubStored = sub;
   else if (query !== state.searchQuery) state.searchSubStored = '';
 
@@ -82,11 +82,10 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   document.getElementById('ctx-stats').innerHTML = `<span>${sort}</span>${time !== 'all' ? ` · <span>${time}</span>` : ''}`;
   ctxInfo.classList.add('visible');
 
-  const nsfwToggleHtml = settings.nsfwHide ? '' : `<button class="nsfw-toggle${nsfw?' active':''}" id="nsfw-toggle">18+</button>`;
   const scopeCheckHtml = state.searchSubStored
     ? `<label class="scope-check-label"><input type="checkbox" class="scope-check-input" id="scope-check"${sub ? ' checked' : ''}><span>r/${escHtml(state.searchSubStored)}</span></label>`
     : '';
-  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwToggleHtml + scopeCheckHtml;
+  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + scopeCheckHtml;
   sortBar.style.display = 'flex';
   setActiveButton(sortBar, 'ssort', sort);
 

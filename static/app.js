@@ -86,7 +86,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
     case 'search':
       closePostView();
       closeSidebar();
-      await loadSearch(route.query, route.sort, route.time, route.sub, route.nsfw, route.stype || 'posts');
+      await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts');
       break;
     case 'duplicates':
       closePostView();
@@ -265,11 +265,10 @@ searchTypeBar.addEventListener('click', e => {
   else                     loadSearchResults(state.searchQuery, state.searchSort, state.searchTime);
 });
 
-function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.searchTime, sub=state.searchSub, nsfw=state.searchNsfw) {
+function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.searchTime, sub=state.searchSub) {
   let url = `/search?q=${encodeURIComponent(q)}&sort=${sort}`;
   if (time !== 'all') url += `&t=${time}`;
   if (sub)  url += `&sub=${encodeURIComponent(sub)}`;
-  if (!nsfw) url += `&nsfw=0`;
   return url;
 }
 
@@ -277,11 +276,6 @@ function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.s
 sortBar.addEventListener('click', e => {
   if (e.target.closest('#sidebar-toggle-btn')) {
     toggleSidebar(state.currentSub);
-    return;
-  }
-  if (e.target.closest('#nsfw-toggle') && state.searchMode && !settings.nsfwHide) {
-    state.searchNsfw = !state.searchNsfw;
-    navigate(buildSearchUrl(), { replace:true });
     return;
   }
   const ssortBtn = e.target.closest('.sort-btn[data-ssort]');
@@ -587,6 +581,7 @@ function _settingsHtml() {
     <div class="settings-section-title">Content</div>
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
+    <label class="settings-row"><span class="settings-label">Hide NSFW content in search</span>${chk('s-nsfw-search-hide', settings.nsfwSearchHide)}</label>
     <label class="settings-row"><span class="settings-label">Mark posts as read on scroll</span>${chk('s-mark-read', settings.markRead)}</label>
     <label class="settings-row"><span class="settings-label">Hide read posts (home feed)</span>${chk('s-hide-read-home', settings.hideReadHome)}</label>
     <label class="settings-row"><span class="settings-label">Hide read posts (subreddits)</span>${chk('s-hide-read-sub', settings.hideReadSub)}</label>
@@ -621,6 +616,7 @@ function bindSettingEvents() {
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-nsfw-search-hide').addEventListener('change', e => { settings.nsfwSearchHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-mark-read').addEventListener('change', e => { settings.markRead = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-hide-read-home').addEventListener('change', e => { settings.hideReadHome = e.target.checked; saveSettings(); applyVisitedHiding(); });
   settingsBody.querySelector('#s-hide-read-sub').addEventListener('change', e => { settings.hideReadSub = e.target.checked; saveSettings(); applyVisitedHiding(); });

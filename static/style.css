@@ -102,13 +102,6 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   padding:4px 8px; cursor:pointer; outline:none;
 }
 .time-filter:focus { border-color:var(--ac); }
-.nsfw-toggle {
-  background:none; border:1px solid var(--b2); border-radius:3px; cursor:pointer;
-  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.06em;
-  color:var(--tx3); padding:3px 7px; margin:auto 0; transition:color .15s,border-color .15s,background .15s;
-}
-.nsfw-toggle:hover { color:#ff5050; border-color:#ff5050; }
-.nsfw-toggle.active { color:#ff5050; border-color:#ff5050; background:rgba(255,80,80,.12); }
 .scope-chip {
   display:flex; align-items:center; gap:5px; margin-left:auto; padding:0 4px 0 12px;
   border-left:1px solid var(--b);
@@ -983,7 +976,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
     scrollbar-width:none; flex-wrap:nowrap;
   }
   .sort-bar::-webkit-scrollbar { display:none; }
-  .sort-btn, .sidebar-toggle, .nsfw-toggle,
+  .sort-btn, .sidebar-toggle,
   .time-filter-wrap { flex-shrink:0; }
   /* Scope chip: remove auto-margin so it appears right after nsfw toggle */
   .scope-chip { flex-shrink:0; margin-left:6px; }
