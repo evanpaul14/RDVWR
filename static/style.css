@@ -1208,7 +1208,7 @@ body.nsfw-hide [data-nsfw="1"] { display:none !important; }
 }
 body.nsfw-blur .nsfw-veil { display:flex; }
 body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-veil { display:none; }
-body.nsfw-blur .nsfw-content { filter:blur(8px); transform:scale(1.08); pointer-events:none; user-select:none; }
+body.nsfw-blur .nsfw-content { filter:blur(20px); transform:scale(1.08); pointer-events:none; user-select:none; }
 body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:none; pointer-events:auto; user-select:auto; }
 .nsfw-veil-label {
   font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:#ff8080;
