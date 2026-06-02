@@ -1,4 +1,4 @@
-"""Unit tests for the _OAuthDevice class and related helpers in app.py."""
+"""Unit tests for the _OAuthDevice class and related helpers in reddit_client.py."""
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -8,8 +8,8 @@ import uuid
 import pytest
 from unittest.mock import patch, MagicMock
 
-import app as app_module
-from app import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
+import reddit_client as app_module
+from reddit_client import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
 
 
 class TestOAuthDeviceInit:
