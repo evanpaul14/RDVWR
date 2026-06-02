@@ -12,6 +12,7 @@ export const DEFAULTS = {
   hideReadSub: false,
   homeSub: 'popular',
   theme: 'dark',
+  pagination: false,
 };
 
 function _load() {
