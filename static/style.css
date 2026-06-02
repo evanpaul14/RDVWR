@@ -195,6 +195,62 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 .kbd-help-grid span { font-family:var(--sans); font-size:13px; color:var(--tx2); }
 
+/* Gallery download modal */
+#gallery-dl-modal {
+  position:fixed; inset:0; z-index:600; background:rgba(0,0,0,.6);
+  display:flex; align-items:center; justify-content:center; padding:16px;
+}
+.gdl-box {
+  background:var(--bg2); border:1px solid var(--b2); border-radius:10px;
+  width:100%; max-width:540px; max-height:80vh; display:flex; flex-direction:column; overflow:hidden;
+}
+.gdl-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px 10px; border-bottom:1px solid var(--b);
+}
+.gdl-title { font-size:13px; font-weight:600; color:var(--tx); }
+.gdl-close {
+  background:none; border:none; color:var(--tx2); font-size:20px; cursor:pointer;
+  line-height:1; padding:0 2px;
+}
+.gdl-close:hover { color:var(--tx); }
+.gdl-actions {
+  display:flex; gap:8px; padding:10px 16px; border-bottom:1px solid var(--b);
+}
+.gdl-actions button {
+  font-size:11px; padding:3px 10px; border-radius:4px; border:1px solid var(--b2);
+  background:var(--bg3); color:var(--tx2); cursor:pointer;
+}
+.gdl-actions button:hover { color:var(--tx); border-color:var(--tx3); }
+.gdl-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr));
+  gap:8px; padding:12px; overflow-y:auto;
+}
+.gdl-item {
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  cursor:pointer; border-radius:6px; padding:6px;
+  border:2px solid transparent; transition:border-color .15s;
+}
+.gdl-item:has(.gdl-check:checked) { border-color:var(--ac); }
+.gdl-item input[type=checkbox] { display:none; }
+.gdl-thumb {
+  width:100%; aspect-ratio:1; border-radius:4px; overflow:hidden; background:var(--bg3);
+}
+.gdl-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.gdl-caption {
+  font-size:11px; color:var(--tx2); text-align:center;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.gdl-footer {
+  padding:10px 16px; border-top:1px solid var(--b); display:flex; justify-content:flex-end;
+}
+.gdl-download-btn {
+  font-size:12px; font-weight:600; padding:6px 18px; border-radius:6px;
+  background:var(--ac); color:#fff; border:none; cursor:pointer;
+}
+.gdl-download-btn:hover { opacity:.88; }
+.gdl-download-btn:disabled { opacity:.4; cursor:default; }
+
 .post-header { padding:14px 16px 10px; }
 .post-meta-top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:7px; }
 .flair {

@@ -21,19 +21,10 @@ function buildDownloadBtn(p) {
   if (p.redgifs_id) {
     return `<span class="share-btn pv-dl-placeholder" data-rg-dl="${escHtml(p.redgifs_id)}" title="Download (loading…)">${_DL_SVG} download</span>`;
   }
-  // Gallery: downloads current image; gallery nav updates the href
+  // Gallery: opens selection popup
   if (p.gallery?.length) {
-    const first = p.gallery[0].url;
-    if (!_pvDlOk(first)) return '';
-    const base = first.split('?')[0].split('/').pop() || 'image';
-    const dot = base.lastIndexOf('.');
-    const fname = dot > 0 ? `${base.slice(0, dot)}-1${base.slice(dot)}` : `${base}-1`;
-    const singleBtn = `<a class="share-btn pv-dl-gallery" href="${escHtml(`/api/download?url=${encodeURIComponent(first)}&filename=${encodeURIComponent(fname)}`)}" download="${escHtml(fname)}" title="Download current image">${_DL_SVG} download</a>`;
-    if (p.gallery.length < 2) return singleBtn;
-    const allUrls = p.gallery.map(g => g.url).filter(_pvDlOk).join(',');
-    const allHref = `/api/download/gallery?urls=${encodeURIComponent(allUrls)}&name=${encodeURIComponent(p.id)}`;
-    const allBtn = `<a class="share-btn" href="${escHtml(allHref)}" download title="Download all ${p.gallery.length} images as zip">${_DL_SVG} all (${p.gallery.length})</a>`;
-    return singleBtn + allBtn;
+    if (!p.gallery.some(g => _pvDlOk(g.url))) return '';
+    return `<button class="share-btn pv-gallery-dl-btn" title="Download images">${_DL_SVG} download</button>`;
   }
   // Imgur album: placeholder replaced by initImgurAlbums once images are loaded
   if (p.imgur_album_id) {
@@ -243,3 +234,69 @@ export async function loadMoreComments(btn) {
     btn.disabled = false;
   }
 }
+
+// ── Gallery download modal ────────────────────────────────────────────────────
+
+function _showGalleryDlModal(gallery, postId) {
+  document.getElementById('gallery-dl-modal')?.remove();
+
+  const eligible = gallery.filter(g => _pvDlOk(g.url));
+  if (!eligible.length) return;
+
+  const itemsHtml = eligible.map((img, i) => `
+    <label class="gdl-item">
+      <input type="checkbox" class="gdl-check" checked data-url="${escHtml(img.url)}">
+      <div class="gdl-thumb"><img src="${escHtml(img.url)}" alt="${escHtml(img.caption || '')}" loading="lazy"></div>
+      ${img.caption ? `<span class="gdl-caption">${escHtml(img.caption)}</span>` : `<span class="gdl-caption">${i + 1}</span>`}
+    </label>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'gallery-dl-modal';
+  modal.innerHTML = `
+    <div class="gdl-box">
+      <div class="gdl-header">
+        <span class="gdl-title">Download images</span>
+        <button class="gdl-close" aria-label="Close">×</button>
+      </div>
+      <div class="gdl-actions">
+        <button class="gdl-sel-all">Select all</button>
+        <button class="gdl-sel-none">Unselect all</button>
+      </div>
+      <div class="gdl-grid">${itemsHtml}</div>
+      <div class="gdl-footer">
+        <button class="gdl-download-btn">Download (${eligible.length})</button>
+      </div>
+    </div>`;
+
+  function _updateCount() {
+    const n = modal.querySelectorAll('.gdl-check:checked').length;
+    const dlBtn = modal.querySelector('.gdl-download-btn');
+    dlBtn.textContent = `Download (${n})`;
+    dlBtn.disabled = n === 0;
+  }
+
+  modal.addEventListener('change', e => { if (e.target.classList.contains('gdl-check')) _updateCount(); });
+  modal.querySelector('.gdl-close').addEventListener('click', () => modal.remove());
+  modal.querySelector('.gdl-sel-all').addEventListener('click', () => {
+    modal.querySelectorAll('.gdl-check').forEach(c => c.checked = true); _updateCount();
+  });
+  modal.querySelector('.gdl-sel-none').addEventListener('click', () => {
+    modal.querySelectorAll('.gdl-check').forEach(c => c.checked = false); _updateCount();
+  });
+  modal.querySelector('.gdl-download-btn').addEventListener('click', () => {
+    const urls = [...modal.querySelectorAll('.gdl-check:checked')].map(c => c.dataset.url).join(',');
+    if (!urls) return;
+    window.location.href = `/api/download/gallery?urls=${encodeURIComponent(urls)}&name=${encodeURIComponent(postId)}`;
+  });
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  document.body.appendChild(modal);
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.pv-gallery-dl-btn');
+  if (!btn) return;
+  const gallery = state._pvData?.post?.gallery;
+  if (!gallery?.length) return;
+  _showGalleryDlModal(gallery, state._pvPostId || 'gallery');
+});
