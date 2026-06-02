@@ -298,5 +298,6 @@ document.addEventListener('click', e => {
   if (!btn) return;
   const gallery = state._pvData?.post?.gallery;
   if (!gallery?.length) return;
-  _showGalleryDlModal(gallery, state._pvPostId || 'gallery');
+  const dlName = state._pvData?.post?.title || state._pvPostId || 'gallery';
+  _showGalleryDlModal(gallery, dlName);
 });
