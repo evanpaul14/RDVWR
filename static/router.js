@@ -32,7 +32,7 @@ export function parseRoute(path=location.pathname) {
     const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
     const params = new URLSearchParams(qs);
     const q = params.get('q') || '';
-    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', nsfw:params.get('nsfw')!=='0', stype:params.get('stype')||'posts' };
+    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', stype:params.get('stype')||'posts' };
   }
   return { type:'home' };
 }

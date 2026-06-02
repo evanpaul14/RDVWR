@@ -6,6 +6,7 @@ export const DEFAULTS = {
   commentSort: 'confidence',
   nsfwBlur: false,
   nsfwHide: false,
+  nsfwSearchHide: false,
   markRead: true,
   hideReadHome: false,
   hideReadSub: false,
