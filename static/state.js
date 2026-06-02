@@ -6,6 +6,7 @@ export const state = {
   currentSort: 'top',
   currentTime: 'all',
   afterToken: null,
+  currentAfter: null,
   loading: false,
   feedGen: 0,
 

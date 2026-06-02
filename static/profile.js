@@ -90,7 +90,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadProfile(username) {
+export async function loadProfile(username, after=null) {
   state.profileMode = true; state.profileUser = username; state.profileTab = 'overview'; state.profileSort = 'new'; state.profileTime = 'all'; state.profileAfter = null;
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
@@ -104,7 +104,7 @@ export async function loadProfile(username) {
   sortBar.style.display = 'flex';
 
   const [, aboutRes] = await Promise.all([
-    loadProfileTab(username, 'overview', state.profileSort, state.profileTime),
+    loadProfileTab(username, 'overview', state.profileSort, state.profileTime, after),
     aboutFetch
   ]);
   try {

@@ -103,13 +103,14 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadSubreddit(sub, sort='top', time='all') {
+export async function loadSubreddit(sub, sort='top', time='all', after=null) {
   state.profileMode = false;
   state.multiMode   = false;
   state.currentSub  = sub.trim();
   state.currentSort = sort;
   state.currentTime = time;
   state.afterToken  = null;
+  state.currentAfter = after;
   document.title = `r/${state.currentSub} — RDVWR`;
   subInput.value = state.currentSub;
   pvSubInput.value = state.currentSub;
@@ -118,7 +119,7 @@ export async function loadSubreddit(sub, sort='top', time='all') {
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
   loadAbout(state.currentSub);
-  await loadSubFeed(state.currentSub, state.currentSort, state.currentTime);
+  await loadSubFeed(state.currentSub, state.currentSort, state.currentTime, after);
 }
 
 // ── Multi feed ────────────────────────────────────────────────────────────────
@@ -164,7 +165,7 @@ export async function loadMultiFeed(username, multiname, sort, time, after=null,
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadMultireddit(username, multiname, sort='hot', time='all') {
+export async function loadMultireddit(username, multiname, sort='hot', time='all', after=null) {
   state.profileMode   = false;
   state.multiMode     = true;
   state.multiUsername = username;
@@ -172,6 +173,7 @@ export async function loadMultireddit(username, multiname, sort='hot', time='all
   state.currentSort   = sort;
   state.currentTime   = time;
   state.afterToken    = null;
+  state.currentAfter  = after;
   document.title = `${multiname} — RDVWR`;
   subInput.value = `user/${username}/m/${multiname}`;
   pvSubInput.value = `user/${username}/m/${multiname}`;
@@ -179,7 +181,7 @@ export async function loadMultireddit(username, multiname, sort='hot', time='all
   sortBar.innerHTML = buildSubSortHtml(sort, time, '');
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
-  await loadMultiFeed(username, multiname, sort, time);
+  await loadMultiFeed(username, multiname, sort, time, after);
 }
 
 // ── Duplicates ────────────────────────────────────────────────────────────────
