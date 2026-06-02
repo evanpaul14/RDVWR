@@ -24,3 +24,7 @@ Opens at `http://localhost:8002`.
 
 - **Backend:** Python/Flask — proxies Reddit's public JSON API
 - **Frontend:** Vanilla JS with client-side routing, `marked` + `DOMPurify` for markdown, `hls.js` for video
+
+### Credit
+
+- [Redlib](github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic
