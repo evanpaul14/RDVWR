@@ -259,8 +259,7 @@ function _showGalleryDlModal(gallery, postId) {
         <button class="gdl-close" aria-label="Close">×</button>
       </div>
       <div class="gdl-actions">
-        <button class="gdl-sel-all">Select all</button>
-        <button class="gdl-sel-none">Unselect all</button>
+        <button class="gdl-sel-toggle">Unselect all</button>
       </div>
       <div class="gdl-grid">${itemsHtml}</div>
       <div class="gdl-footer">
@@ -268,20 +267,24 @@ function _showGalleryDlModal(gallery, postId) {
       </div>
     </div>`;
 
-  function _updateCount() {
-    const n = modal.querySelectorAll('.gdl-check:checked').length;
+  const toggleBtn = modal.querySelector('.gdl-sel-toggle');
+
+  function _updateState() {
+    const checks = [...modal.querySelectorAll('.gdl-check')];
+    const n = checks.filter(c => c.checked).length;
     const dlBtn = modal.querySelector('.gdl-download-btn');
     dlBtn.textContent = `Download (${n})`;
     dlBtn.disabled = n === 0;
+    toggleBtn.textContent = n === checks.length ? 'Unselect all' : 'Select all';
   }
 
-  modal.addEventListener('change', e => { if (e.target.classList.contains('gdl-check')) _updateCount(); });
+  modal.addEventListener('change', e => { if (e.target.classList.contains('gdl-check')) _updateState(); });
   modal.querySelector('.gdl-close').addEventListener('click', () => modal.remove());
-  modal.querySelector('.gdl-sel-all').addEventListener('click', () => {
-    modal.querySelectorAll('.gdl-check').forEach(c => c.checked = true); _updateCount();
-  });
-  modal.querySelector('.gdl-sel-none').addEventListener('click', () => {
-    modal.querySelectorAll('.gdl-check').forEach(c => c.checked = false); _updateCount();
+  toggleBtn.addEventListener('click', () => {
+    const checks = [...modal.querySelectorAll('.gdl-check')];
+    const allChecked = checks.every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+    _updateState();
   });
   modal.querySelector('.gdl-download-btn').addEventListener('click', () => {
     const urls = [...modal.querySelectorAll('.gdl-check:checked')].map(c => c.dataset.url).join(',');
