@@ -214,14 +214,6 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   line-height:1; padding:0 2px;
 }
 .gdl-close:hover { color:var(--tx); }
-.gdl-actions {
-  display:flex; gap:8px; padding:10px 16px; border-bottom:1px solid var(--b);
-}
-.gdl-actions button {
-  font-size:11px; padding:3px 10px; border-radius:4px; border:1px solid var(--b2);
-  background:var(--bg3); color:var(--tx2); cursor:pointer;
-}
-.gdl-actions button:hover { color:var(--tx); border-color:var(--tx3); }
 .gdl-grid {
   display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr));
   gap:8px; padding:12px; overflow-y:auto;
@@ -242,7 +234,16 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .gdl-footer {
-  padding:10px 16px; border-top:1px solid var(--b); display:flex; justify-content:flex-end;
+  padding:10px 16px; border-top:1px solid var(--b);
+  display:flex; align-items:center; gap:10px;
+}
+.gdl-sel-toggle {
+  font-size:11px; padding:3px 10px; border-radius:4px; border:1px solid var(--b2);
+  background:var(--bg3); color:var(--tx2); cursor:pointer; white-space:nowrap;
+}
+.gdl-sel-toggle:hover { color:var(--tx); border-color:var(--tx3); }
+.gdl-count {
+  font-size:11px; color:var(--tx3); flex:1; text-align:center;
 }
 .gdl-download-btn {
   font-size:12px; font-weight:600; padding:6px 18px; border-radius:6px;
