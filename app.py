@@ -489,7 +489,7 @@ def get_posts(subreddit):
     if after:
         params["after"] = after
     if f:
-        params["f"] = f
+        params["f"] = f'flair:"{f}"'
     try:
         resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code == 404:
