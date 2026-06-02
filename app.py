@@ -6,6 +6,8 @@ import time
 import tempfile
 import subprocess
 import logging
+import socket
+import ipaddress
 import requests
 from urllib.parse import urlparse, quote as url_quote
 from flask import Flask, render_template, jsonify, request, Response, make_response
@@ -1031,11 +1033,32 @@ def translate_text():
         return jsonify({"error": str(e)}), 502
 
 
+_PRIVATE_NETS = [
+    ipaddress.ip_network(cidr) for cidr in (
+        "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+        "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10",
+    )
+]
+
+def _is_ssrf_safe(hostname: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return not any(addr in net for net in _PRIVATE_NETS)
+    except Exception:
+        return False
+
+
 @app.route("/api/og-image")
 def get_og_image():
     url = request.args.get("url", "").strip()
     if not url or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Invalid URL"}), 400
+    try:
+        hostname = urlparse(url).hostname or ""
+    except Exception:
+        return jsonify({"error": "Invalid URL"}), 400
+    if not hostname or not _is_ssrf_safe(hostname):
+        return jsonify({"error": "URL not allowed"}), 403
     if url in _og_cache:
         return cached_json({"url": _og_cache[url]}, 3600)
     try:
