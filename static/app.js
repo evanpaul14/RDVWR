@@ -63,14 +63,14 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      await loadSubreddit(route.sub, route.sort, route.time || 'all');
+      await loadSubreddit(route.sub, route.sort, route.time || 'all', route.after || null);
       break;
     case 'multi':
       closePostView();
       closeSidebar();
       state.searchMode = false;
       state.profileMode = false;
-      await loadMultireddit(route.username, route.multiname, route.sort, route.time || 'all');
+      await loadMultireddit(route.username, route.multiname, route.sort, route.time || 'all', route.after || null);
       break;
     case 'post':
       if (!feed.querySelector('.post')) await loadSubreddit(route.sub, state.currentSort);
@@ -81,19 +81,19 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      await loadProfile(route.username);
+      await loadProfile(route.username, route.after || null);
       break;
     case 'search':
       closePostView();
       closeSidebar();
-      await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts');
+      await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts', route.after || null);
       break;
     case 'duplicates':
       closePostView();
       closeSidebar();
       state.searchMode = false;
       state.profileMode = false;
-      await loadDuplicatesPage(route.sub, route.postId);
+      await loadDuplicatesPage(route.sub, route.postId, route.after || null);
       break;
     case 'wiki':
       closePostView();
@@ -119,11 +119,11 @@ window.addEventListener('popstate', (e) => {
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
   const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime) {
+  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
-  if (route.type === 'multi' && hasFeedPosts && route.username === state.multiUsername && route.multiname === state.multiName && state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime) {
+  if (route.type === 'multi' && hasFeedPosts && route.username === state.multiUsername && route.multiname === state.multiName && state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -393,39 +393,67 @@ function loadMore() {
     if (state.afterToken) loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, true);
   }
 }
+function buildNextPageUrl() {
+  const curPage = parseInt(new URLSearchParams(location.search).get('page')) || 1;
+  const nextPage = curPage + 1;
+  if (state.searchMode) {
+    const after = state.searchType === 'communities' ? state.communityAfter
+                : state.searchType === 'users'       ? state.userAfter
+                : state.searchAfter;
+    if (!after) return null;
+    let url = `/search?q=${encodeURIComponent(state.searchQuery)}&sort=${state.searchSort}`;
+    if (state.searchTime !== 'all') url += `&t=${state.searchTime}`;
+    if (state.searchSub) url += `&sub=${encodeURIComponent(state.searchSub)}`;
+    url += `&stype=${state.searchType}&after=${encodeURIComponent(after)}&page=${nextPage}`;
+    return url;
+  } else if (state.profileMode) {
+    if (!state.profileAfter) return null;
+    return `/user/${encodeURIComponent(state.profileUser)}?after=${encodeURIComponent(state.profileAfter)}&page=${nextPage}`;
+  } else if (state.duplicatesMode) {
+    if (!state.duplicatesAfter) return null;
+    return `/r/${encodeURIComponent(state.duplicatesSub)}/duplicates/${encodeURIComponent(state.duplicatesPostId)}?after=${encodeURIComponent(state.duplicatesAfter)}&page=${nextPage}`;
+  } else if (state.multiMode) {
+    if (!state.afterToken) return null;
+    const params = [];
+    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
+    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
+    return `/user/${encodeURIComponent(state.multiUsername)}/m/${encodeURIComponent(state.multiName)}/${state.currentSort}?${params.join('&')}`;
+  } else {
+    if (!state.afterToken) return null;
+    const params = [];
+    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
+    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
+    return `/r/${encodeURIComponent(state.currentSub)}/${state.currentSort}?${params.join('&')}`;
+  }
+}
+
 new IntersectionObserver(entries => {
   if (!entries[0].isIntersecting) return;
   if (settings.pagination) {
-    if (sentinel.querySelector('.next-page-btn') || state.loading) return;
-    const hasMore = state.afterToken || state.searchAfter || state.profileAfter ||
-                    state.duplicatesAfter || state.communityAfter || state.userAfter;
-    if (!hasMore) return;
-    const btn = document.createElement('button');
-    btn.className = 'next-page-btn';
-    btn.textContent = 'Next page →';
-    sentinel.appendChild(btn);
+    if (sentinel.querySelector('.pagination-bar') || state.loading) return;
+    const curPage = parseInt(new URLSearchParams(location.search).get('page')) || 1;
+    const hasNext = !!(state.afterToken || state.searchAfter || state.profileAfter ||
+                    state.duplicatesAfter || state.communityAfter || state.userAfter);
+    if (!hasNext && curPage <= 1) return;
+    const bar = document.createElement('div');
+    bar.className = 'pagination-bar';
+    if (curPage > 1) bar.innerHTML += `<button class="pagination-btn prev-page-btn">← Previous</button>`;
+    if (hasNext) bar.innerHTML += `<button class="pagination-btn next-page-btn">Next page →</button>`;
+    sentinel.appendChild(bar);
   } else {
     loadMore();
   }
 }, { rootMargin: '300px' }).observe(sentinel);
 
 sentinel.addEventListener('click', e => {
-  const btn = e.target.closest('.next-page-btn');
-  if (!btn || state.loading) return;
-  sentinel.innerHTML = '';
-  window.scrollTo({ top: 0, behavior: 'instant' });
-  if (state.duplicatesMode && state.duplicatesAfter) {
-    loadDuplicatesPage(state.duplicatesSub, state.duplicatesPostId, state.duplicatesAfter, false);
-  } else if (state.searchMode) {
-    if (state.searchType === 'communities' && state.communityAfter) loadCommunityResults(state.searchQuery, state.communityAfter, false);
-    else if (state.searchType === 'users' && state.userAfter)       loadUserResults(state.searchQuery, state.userAfter, false);
-    else if (state.searchAfter) loadSearchResults(state.searchQuery, state.searchSort, state.searchTime, state.searchAfter, false);
-  } else if (state.profileMode && state.profileAfter) {
-    loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime, state.profileAfter, false);
-  } else if (state.multiMode && state.afterToken) {
-    loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime, state.afterToken, false);
-  } else if (state.afterToken) {
-    loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, false);
+  if (e.target.closest('.next-page-btn')) {
+    const url = buildNextPageUrl();
+    if (url) { sentinel.innerHTML = ''; navigate(url); }
+    return;
+  }
+  if (e.target.closest('.prev-page-btn')) {
+    sentinel.innerHTML = '';
+    history.back();
   }
 });
 

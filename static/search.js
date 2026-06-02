@@ -53,7 +53,7 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts') {
+export async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts', after=null) {
   if (settings.nsfwHide || settings.nsfwSearchHide) nsfw = false;
   if (sub) state.searchSubStored = sub;
   else if (query !== state.searchQuery) state.searchSubStored = '';
@@ -100,9 +100,9 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   }
   sortBar.style.display = type === 'posts' ? 'flex' : 'none';
 
-  if (type === 'communities') { await loadCommunityResults(query); }
-  else if (type === 'users')  { await loadUserResults(query); }
-  else                        { await loadSearchResults(query, sort, time); }
+  if (type === 'communities') { await loadCommunityResults(query, after); }
+  else if (type === 'users')  { await loadUserResults(query, after); }
+  else                        { await loadSearchResults(query, sort, time, after); }
 }
 
 export async function loadCommunityResults(query, after=null, append=false) {
