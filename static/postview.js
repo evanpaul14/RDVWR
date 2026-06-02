@@ -85,32 +85,6 @@ function findComment(comments, id) {
   return null;
 }
 
-function renderPoll(poll) {
-  if (!poll?.options?.length) return '';
-  const total = poll.total_votes || 0;
-  const opts = poll.options.map(o => {
-    const count = o.vote_count ?? null;
-    const pct = (total && count != null) ? Math.round(count / total * 100) : null;
-    const barStyle = pct != null ? `style="width:${pct}%"` : '';
-    const barCls = pct != null ? '' : ' poll-bar-hidden';
-    return `<div class="poll-option">
-      <span class="poll-option-text">${escHtml(o.text)}</span>
-      <div class="poll-bar"><div class="poll-bar-fill${barCls}" ${barStyle}></div></div>
-      <span class="poll-pct">${pct != null ? pct+'%' : '?'}</span>
-    </div>`;
-  }).join('');
-  const statusCls = poll.closed ? 'poll-closed' : 'poll-open';
-  const statusLabel = poll.closed ? 'closed' : 'open';
-  const totalText = total ? `${fmtNum(total)} vote${total !== 1 ? 's' : ''}` : 'no votes yet';
-  return `<div class="poll-widget">
-    <div class="poll-options">${opts}</div>
-    <div class="poll-meta">
-      <span class="poll-status ${statusCls}">${statusLabel}</span>
-      <span class="poll-total">${totalText}</span>
-    </div>
-  </div>`;
-}
-
 function buildCommentSortBar(active) {
   return `<div class="comment-sort-bar">${COMMENT_SORTS.map(s =>
     `<button class="sort-btn${s.value===active?' active':''}" data-csort="${s.value}">${s.label}</button>`
@@ -220,7 +194,6 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       ${p.crosspost_from ? '' : mediaHtmlFull(p)}
       ${!p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') ? `<a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a>` : ''}
       ${bodyHtml}
-      ${renderPoll(p.poll)}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
       </div>
