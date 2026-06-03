@@ -41,19 +41,21 @@ export function initCustomPlayer(videoEl) {
       <div class="vp-spacer"></div>
       <div class="vp-quality-slot"></div>
       <button class="vp-btn vp-mute" title="Toggle mute">${I_VOL}</button>
+      <input class="vp-vol-slider" type="range" min="0" max="1" step="0.02" value="1" title="Volume" aria-label="Volume">
       <button class="vp-btn vp-full" title="Fullscreen">${I_FULL}</button>
     </div>`;
 
   wrap.append(overlay, ctrl);
 
-  const playBtn = ctrl.querySelector('.vp-play');
-  const muteBtn = ctrl.querySelector('.vp-mute');
-  const fullBtn = ctrl.querySelector('.vp-full');
-  const timeEl  = ctrl.querySelector('.vp-time');
-  const progEl  = ctrl.querySelector('.vp-progress');
-  const fillEl  = ctrl.querySelector('.vp-fill');
-  const bufEl   = ctrl.querySelector('.vp-buf');
-  const knobEl  = ctrl.querySelector('.vp-knob');
+  const playBtn  = ctrl.querySelector('.vp-play');
+  const muteBtn  = ctrl.querySelector('.vp-mute');
+  const fullBtn  = ctrl.querySelector('.vp-full');
+  const volSlider = ctrl.querySelector('.vp-vol-slider');
+  const timeEl   = ctrl.querySelector('.vp-time');
+  const progEl   = ctrl.querySelector('.vp-progress');
+  const fillEl   = ctrl.querySelector('.vp-fill');
+  const bufEl    = ctrl.querySelector('.vp-buf');
+  const knobEl   = ctrl.querySelector('.vp-knob');
 
   // Play / pause
   function setPlayIcon() {
@@ -69,17 +71,51 @@ export function initCustomPlayer(videoEl) {
   videoEl.addEventListener('pause', setPlayIcon);
   videoEl.addEventListener('ended', setPlayIcon);
 
-  // Mute
-  function setMuteIcon() { muteBtn.innerHTML = videoEl.muted ? I_MUTE : I_VOL; }
+  // Volume + mute
+  let _lastVol = videoEl.volume || 1;
+
+  function syncVol() {
+    const muted = videoEl.muted || videoEl.volume === 0;
+    muteBtn.innerHTML = muted ? I_MUTE : I_VOL;
+    const displayVol = muted ? 0 : videoEl.volume;
+    volSlider.value = displayVol;
+    volSlider.style.setProperty('--vol', (displayVol * 100) + '%');
+  }
+
   muteBtn.addEventListener('click', e => {
     e.stopPropagation();
-    videoEl.muted = !videoEl.muted;
+    if (videoEl.muted || videoEl.volume === 0) {
+      videoEl.muted = false;
+      videoEl.volume = _lastVol || 1;
+    } else {
+      _lastVol = videoEl.volume;
+      videoEl.muted = true;
+    }
     state.userPrefersMuted = videoEl.muted;
     localStorage.setItem('mutePreference', videoEl.muted ? 'muted' : 'unmuted');
-    setMuteIcon();
+    syncVol();
   });
-  videoEl.addEventListener('volumechange', setMuteIcon);
-  setMuteIcon();
+
+  volSlider.addEventListener('input', e => {
+    e.stopPropagation();
+    const v = parseFloat(volSlider.value);
+    if (v === 0) {
+      videoEl.muted = true;
+    } else {
+      videoEl.muted = false;
+      videoEl.volume = v;
+      _lastVol = v;
+    }
+    state.userPrefersMuted = videoEl.muted;
+    localStorage.setItem('mutePreference', videoEl.muted ? 'muted' : 'unmuted');
+    syncVol();
+  });
+  volSlider.addEventListener('click',      e => e.stopPropagation());
+  volSlider.addEventListener('mousedown',  e => e.stopPropagation());
+  volSlider.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+
+  videoEl.addEventListener('volumechange', syncVol);
+  syncVol();
 
   // Progress
   function syncProgress() {
@@ -163,7 +199,7 @@ export function initCustomPlayer(videoEl) {
   videoEl.addEventListener('play',  showCtrl);
   videoEl.addEventListener('pause', () => { clearTimeout(hideTimer); wrap.classList.add('vp-ctrl-show'); });
 
-  // Touch: first tap shows controls; second tap (with controls already up) plays/pauses
+  // Touch: first tap shows controls; second tap plays/pauses
   let touchShowed = false;
   wrap.addEventListener('touchstart', () => {
     touchShowed = !wrap.classList.contains('vp-ctrl-show');
@@ -176,5 +212,5 @@ export function initCustomPlayer(videoEl) {
 
   // Initial state
   wrap.classList.add('vp-ctrl-show');
-  if (!state.userPrefersMuted) { videoEl.muted = false; setMuteIcon(); }
+  if (!state.userPrefersMuted) { videoEl.muted = false; syncVol(); }
 }
