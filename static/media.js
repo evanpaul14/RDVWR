@@ -38,8 +38,14 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
       if (data.levels.length < 2) return;
       const wrap = videoEl.closest('[data-hls]');
       if (!wrap) return;
-      const levels = data.levels.map((l, i) => ({
-        idx: i,
+      const seen = new Map();
+      data.levels.forEach((l, i) => {
+        const key = l.height || `${Math.round(l.bitrate / 1000)}k`;
+        const prev = seen.get(key);
+        if (!prev || l.bitrate > prev.bitrate) seen.set(key, { idx: i, bitrate: l.bitrate, height: l.height });
+      });
+      const levels = [...seen.values()].map(l => ({
+        idx: l.idx,
         label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)}k`,
       }));
       const btn = document.createElement('button');
