@@ -30,6 +30,7 @@ export function saveSettings() {
 export function applySettings() {
   document.body.classList.toggle('nsfw-blur', settings.nsfwBlur);
   document.body.classList.toggle('nsfw-hide', settings.nsfwHide);
+  document.body.classList.toggle('pagination-mode', !!settings.pagination);
   document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
   document.body.classList.add(`theme-${settings.theme || 'dark'}`);
 }
