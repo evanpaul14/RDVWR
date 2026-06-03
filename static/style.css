@@ -305,6 +305,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .post-video iframe { width:100%; aspect-ratio:16/9; display:block; border:none; }
 .tiktok-wrap { display:flex; justify-content:center; background:#000; }
 .tiktok-wrap iframe { width:315px; height:560px; aspect-ratio:unset; border:none; }
+.streamable-embed { position:relative; width:100%; padding-bottom:56.25%; background:#000; }
+.streamable-embed iframe { position:absolute; top:0; left:0; width:100%; height:100%; border:none; overflow:hidden; }
 [data-hls] { position:relative; }
 .hls-quality-btn {
   position:absolute; top:8px; right:8px; z-index:10;

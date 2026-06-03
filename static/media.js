@@ -276,7 +276,7 @@ export function mediaHtmlCard(p) {
   else if (p.tiktok_id)  html = `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   else if (p.redgifs_id) html = `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   else if (p.imgur_album_id) html = `<div class="post-video imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.streamable_id) html = `<div class="post-video"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.streamable_id) html = `<div class="post-video"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
   else if (p.embed_url)  html = `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   else if (p.gif_url) html = p.gif_is_video
     ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
@@ -301,7 +301,7 @@ export function mediaHtmlFull(p) {
   else if (p.tiktok_id)  html = `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   else if (p.redgifs_id) html = `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
   else if (p.imgur_album_id) html = `<div class="pv-media imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.streamable_id) html = `<div class="pv-media"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  else if (p.streamable_id) html = `<div class="pv-media"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
   else if (p.embed_url)  html = `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   else if (p.gif_url) html = p.gif_is_video
     ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
