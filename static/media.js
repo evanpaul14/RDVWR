@@ -48,6 +48,7 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         idx: l.idx,
         label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)}k`,
       }));
+      const labelByIdx = new Map(levels.map(l => [l.idx, l.label]));
       const btn = document.createElement('button');
       btn.className = 'hls-quality-btn';
       btn.textContent = 'auto';
@@ -65,11 +66,11 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         const lvl = parseInt(ql.dataset.level, 10);
         hls.currentLevel = lvl;
         menu.querySelectorAll('.hls-ql').forEach(b => b.classList.toggle('active', b === ql));
-        btn.textContent = lvl === -1 ? 'auto' : (levels[lvl]?.label ?? 'auto');
+        btn.textContent = lvl === -1 ? 'auto' : (labelByIdx.get(lvl) ?? 'auto');
         menu.classList.remove('open');
       });
       hls.on(Hls.Events.LEVEL_SWITCHED, (_ev2, d) => {
-        if (hls.autoLevelEnabled) btn.textContent = `auto (${levels[d.level]?.label ?? ''})`;
+        if (hls.autoLevelEnabled) btn.textContent = `auto (${labelByIdx.get(d.level) ?? ''})`;
       });
     });
   } else if (hlsUrl && videoEl.canPlayType('application/vnd.apple.mpegurl')) {
