@@ -461,6 +461,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 #scroll-sentinel.loading::after { display:block; }
 .pagination-bar { display:flex; gap:8px; align-items:center; }
+body.pagination-mode #feed { padding-bottom:20px; }
+body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .pagination-btn {
   font-family:var(--mono); font-size:11px; letter-spacing:.05em;
   padding:8px 20px; border-radius:6px;
