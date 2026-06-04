@@ -314,7 +314,6 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
   padding:3px 8px; font-size:11px; font-family:var(--mono); cursor:pointer;
   opacity:0; transition:opacity .2s; line-height:1.6;
 }
-[data-hls]:hover .hls-quality-btn,
 [data-hls]:focus-within .hls-quality-btn { opacity:1; }
 .hls-quality-menu {
   display:none; flex-direction:column; position:absolute; top:34px; right:8px; z-index:11;
