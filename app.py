@@ -472,6 +472,8 @@ def subreddit_search():
 # ── SPA catch-all routes ──────────────────────────────────────────────────────
 
 @app.route("/")
+@app.route("/home")
+@app.route("/home/<sort>")
 @app.route("/r/<path:path>")
 @app.route("/user/<username>")
 @app.route("/user/<username>/m/<multiname>")
@@ -543,6 +545,32 @@ def get_posts(subreddit):
             return jsonify({"error": "Subreddit not found"}), 404
         if resp.status_code == 403:
             return jsonify({"error": "Subreddit is private"}), 403
+        if resp.status_code != 200:
+            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+        listing = resp.json()["data"]
+        posts   = extract_posts(listing)
+        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/home")
+def get_home():
+    sort  = request.args.get("sort", "best")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
+    if sort not in {"best", "hot", "new", "top", "rising", "controversial"}:
+        sort = "best"
+    url    = f"https://www.reddit.com/{sort}.json"
+    params = {"limit": FEED_LIMIT, "raw_json": 1}
+    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
+    if after:
+        params["after"] = after
+    try:
+        resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
