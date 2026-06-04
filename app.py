@@ -8,12 +8,16 @@ import subprocess
 import logging
 import socket
 import ipaddress
+import uuid
 import requests
-from urllib.parse import urlparse, quote as url_quote
+from datetime import datetime, timezone
+from urllib.parse import urlparse, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
-from media_detection import process_post, extract_posts, clean_url, _parse_awards
+from bs4 import BeautifulSoup
+from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE
 from reddit_client import reddit_get, SESSION, HEADERS
+from curl_cffi import requests as cffi_requests
 
 CACHE_TTL_STATIC     = 604800   # 1 week
 CACHE_TTL_FEED       = 300
@@ -59,6 +63,80 @@ def get_redgifs_token():
     _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
     log.info("redgifs token refreshed, expires in %ss", REDGIFS_TOKEN_TTL)
     return _rg_token
+
+
+def _parse_shreddit_post(el):
+    raw_id  = el.get('id', '')
+    post_id = raw_id[3:] if raw_id.startswith('t3_') else raw_id
+    permalink = el.get('permalink', '')
+    content_href = el.get('content-href', '') or ''
+    post_type = el.get('post-type', '')
+
+    try:
+        created_utc = int(datetime.fromisoformat(
+            el.get('created-timestamp', '').replace('+0000', '+00:00')
+        ).timestamp())
+    except Exception:
+        created_utc = 0
+
+    try: score = int(el.get('score', 0))
+    except Exception: score = 0
+    try: upvote_ratio = round(float(el.get('upvote-ratio', 0)) * 100)
+    except Exception: upvote_ratio = 0
+    try: num_comments = int(el.get('comment-count', 0))
+    except Exception: num_comments = 0
+
+    is_self = post_type in ('self', 'text', 'poll')
+    url = content_href if (content_href and not is_self) else f'https://www.reddit.com{permalink}'
+
+    preview_img = None
+    if post_type == 'image' and content_href:
+        h = urlparse(content_href).hostname or ''
+        if h in ('preview.redd.it', 'external-preview.redd.it'):
+            preview_img = f'/api/img?url={url_quote(content_href, safe="")}'
+        else:
+            preview_img = content_href
+
+    is_video = post_type in ('video', 'gif')
+    video_url = hls_url = audio_url = None
+    if is_video and content_href and 'v.redd.it' in content_href:
+        video_url = content_href
+        audio_url = re.sub(r'/DASH_\d+\.mp4$', '/DASH_audio.mp4', content_href) if '/DASH_' in content_href else None
+
+    redgifs_id = extract_redgifs_id(url)
+    yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
+    sm = STREAMABLE_RE.search(url); streamable_id = sm.group(1) if sm else None
+
+    awards = []
+    icon = el.get('award-icon-url', '')
+    if icon:
+        try: cnt = int(el.get('award-count', 1))
+        except Exception: cnt = 1
+        awards = [{'name': '', 'count': cnt, 'icon': icon}]
+
+    return {
+        'id': post_id, 'title': el.get('post-title', ''),
+        'author': el.get('author', '[deleted]'),
+        'subreddit': el.get('subreddit-name', ''),
+        'score': score, 'upvote_ratio': upvote_ratio,
+        'num_comments': num_comments, 'created_utc': created_utc,
+        'url': url, 'permalink': f'https://www.reddit.com{permalink}',
+        'is_self': is_self, 'selftext': '',
+        'preview_img': preview_img, 'gallery': [],
+        'is_video': is_video, 'video_url': video_url,
+        'hls_url': hls_url, 'audio_url': audio_url,
+        'youtube_id': youtube_id, 'tiktok_id': None,
+        'streamable_id': streamable_id, 'embed_url': None,
+        'redgifs_id': redgifs_id, 'gif_url': None, 'gif_is_video': False,
+        'imgur_album_id': None, 'post_hint': post_type,
+        'over_18': el.has_attr('is-nsfw'),
+        'flair': '', 'flair_richtext': [], 'flair_type': 'text',
+        'flair_bg': '', 'flair_tc': 'dark',
+        'domain': el.get('domain', ''), 'poll': None,
+        'crosspost_from': None, 'is_stickied': False,
+        'is_oc': False, 'is_spoiler': False, 'locked': False,
+        'edited_utc': None, 'awards': awards,
+    }
 
 
 def _parse_comment_fields(d):
@@ -563,18 +641,53 @@ def get_home():
     after = request.args.get("after", "")
     if sort not in {"best", "hot", "new", "top", "rising", "controversial"}:
         sort = "best"
+
+    cookie = request.headers.get("X-Reddit-Cookie", "").strip()
+    if cookie:
+        shreddit_sort = {"best": "HOT", "hot": "HOT", "new": "NEW",
+                         "top": "TOP", "rising": "RISING",
+                         "controversial": "CONTROVERSIAL"}.get(sort, "HOT")
+        nav_id = str(uuid.uuid4())
+        params = {"sort": shreddit_sort, "distance": 4, "adDistance": 2,
+                  "navigationSessionId": nav_id, "referer": "www.reddit.com"}
+        if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
+            params["t"] = t
+        if after:
+            params["after"] = after
+            params["cursor"] = after
+        try:
+            resp = cffi_requests.get(
+                "https://www.reddit.com/svc/shreddit/feeds/home-feed",
+                params=params,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:151.0) Gecko/20100101 Firefox/151.0",
+                    "Accept": "text/vnd.reddit.partial+html, text/html;q=0.9",
+                    "Cookie": cookie,
+                    "x-reddit-client-version": "2026-06-04T20:11Z~59b9f87c",
+                    "Referer": "https://www.reddit.com/?feed=home",
+                    "x-original-referer": "https://www.reddit.com/?feed=home",
+                },
+                impersonate="firefox133",
+                timeout=15,
+            )
+            if resp.ok:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                posts = [_parse_shreddit_post(el) for el in soup.find_all('shreddit-post')]
+                m = re.search(r'[?&]after=([A-Za-z0-9%+/=_-]+)', resp.text)
+                next_after = url_unquote(m.group(1)) if m else None
+                return jsonify({"posts": posts, "after": next_after})
+        except Exception as e:
+            log.warning("shreddit home-feed failed: %s", e)
+
+    # Fallback: anonymous JSON API
     url    = f"https://www.reddit.com/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
     if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
     if after:
         params["after"] = after
-    extra = {}
-    loid = request.headers.get("X-Reddit-Loid", "").strip()
-    if loid:
-        extra["x-reddit-loid"] = loid
     try:
-        resp = reddit_get(url, params=params, headers=extra, timeout=10)
+        resp = reddit_get(url, params=params, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
