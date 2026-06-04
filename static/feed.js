@@ -48,6 +48,68 @@ export function showSkeletons() {
   sentinel.classList.remove('active', 'loading');
 }
 
+// ── Home feed ─────────────────────────────────────────────────────────────────
+export function buildHomeSortHtml(sort='best', time='all') {
+  const btns = ['best','hot','new','top','rising','controversial'].map(s =>
+    `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+  ).join('');
+  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '');
+}
+
+export async function loadHomeFeed(sort, time, after=null, append=false) {
+  if (append && state.loading) return;
+  if (!append) state.feedGen++;
+  const myGen = state.feedGen;
+  state.loading = true;
+  if (!append) showSkeletons();
+  else sentinel.classList.add('loading');
+  try {
+    let url = `/api/home?sort=${sort}`;
+    if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
+    if (after) url += `&after=${encodeURIComponent(after)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (myGen !== state.feedGen) return;
+    if (!res.ok) {
+      if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+      return;
+    }
+    if (!append) feed.innerHTML = '';
+    if (!data.posts.length && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      return;
+    }
+    const startIdx = append ? feed.children.length : 0;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
+    initMedia(tmp);
+    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+    initGifVideos(feed);
+    state.afterToken = data.after;
+    sentinel.classList.remove('loading');
+  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
+  finally  { if (myGen === state.feedGen) state.loading = false; }
+}
+
+export async function loadHome(sort='best', time='all', after=null) {
+  state.homeMode    = true;
+  state.profileMode = false;
+  state.multiMode   = false;
+  state.currentSub  = '';
+  state.currentSort = sort;
+  state.currentTime = time;
+  state.afterToken  = null;
+  state.currentAfter = after;
+  document.title = 'Home — RDVWR';
+  subInput.value = '';
+  pvSubInput.value = '';
+  setMainOpen('https://www.reddit.com/');
+  sortBar.innerHTML = buildHomeSortHtml(sort, time);
+  sortBar.style.display = 'flex';
+  ctxInfo.classList.remove('visible');
+  await loadHomeFeed(sort, time, after);
+}
+
 // ── Subreddit feed ────────────────────────────────────────────────────────────
 export async function loadAbout(sub) {
   try {

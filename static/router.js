@@ -14,6 +14,13 @@ export function parseRoute(path=location.pathname) {
   if (mWiki) return { type: 'wiki', sub: mWiki[1], page: mWiki[2] || 'index' };
   const mPost = pathname.match(/^\/r\/([^\/]+)\/comments\/([^\/]+)(?:\/[^\/]*(?:\/([a-z0-9]+))?)?/i);
   if (mPost) return { type:'post', sub:mPost[1], postId:mPost[2], commentId:mPost[3]||'' };
+  const mHome = pathname.match(/^\/home(?:\/([^\/]+))?$/i);
+  if (mHome) {
+    const sort = SORTS.has(mHome[1]) ? mHome[1] : 'best';
+    const qs = path.includes('?') ? path.split('?')[1] : location.search.slice(1);
+    const params = new URLSearchParams(qs);
+    return { type: 'home', sort, time: params.get('t') || 'all', after: params.get('after') || null };
+  }
   const mSub  = pathname.match(/^\/r\/([^\/]+)(?:\/([^\/]+))?/);
   if (mSub) {
     const sort = SORTS.has(mSub[2]) ? mSub[2] : (mSub[1].toLowerCase() === 'popular' ? 'hot' : settings.subSort);

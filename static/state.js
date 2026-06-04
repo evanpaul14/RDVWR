@@ -10,6 +10,9 @@ export const state = {
   loading: false,
   feedGen: 0,
 
+  // Home
+  homeMode: false,
+
   // Multi
   multiMode: false,
   multiUsername: '',

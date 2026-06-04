@@ -10,6 +10,7 @@ import { initKeyboard } from './keyboard.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
+  loadHome, loadHomeFeed, buildHomeSortHtml,
   loadDuplicatesPage,
   sortBar, setMainOpen, buildSubSortHtml,
 } from './feed.js';
@@ -47,18 +48,17 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
     searchTypeBar.style.display = 'none';
     state.searchType = 'posts';
   }
+  if (route.type !== 'home') state.homeMode = false;
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
-    case 'home': {
-      const sub = settings.homeSub || 'popular';
-      const sort = sub.toLowerCase() === 'popular' ? 'hot' : settings.subSort;
-      const time = (sort === 'top' || sort === 'controversial') && settings.subTime !== 'all'
-        ? `?t=${settings.subTime}` : '';
-      navigate(`/r/${sub}/${sort}${time}`, { replace: true });
-      return;
-    }
+    case 'home':
+      closePostView();
+      closeSidebar();
+      state.searchMode = false;
+      await loadHome(route.sort || 'best', route.time || 'all', route.after || null);
+      break;
     case 'sub':
       closePostView();
       closeSidebar();
@@ -119,7 +119,11 @@ window.addEventListener('popstate', (e) => {
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
   const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
+  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && !state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
+    window.scrollTo({top: savedScroll, behavior: 'instant'});
+    return;
+  }
+  if (route.type === 'home' && hasFeedPosts && state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -203,9 +207,7 @@ function retryFeedLoad() {
 
 // pv-home button
 document.getElementById('pv-home').addEventListener('click', () => {
-  const sub = settings.homeSub || 'popular';
-  const sort = sub.toLowerCase() === 'popular' ? 'hot' : settings.subSort;
-  navigate(`/r/${sub}/${sort}`);
+  navigate('/home');
 });
 
 // Comment collapse
@@ -311,7 +313,9 @@ sortBar.addEventListener('click', e => {
   state.currentSort = newSort; state.currentTime = newSort === 'controversial' ? 'day' : 'all';
   state.afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
-  if (state.multiMode) {
+  if (state.homeMode) {
+    navigate(`/home/${state.currentSort}`, { replace:true });
+  } else if (state.multiMode) {
     navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
   } else {
     navigate(`/r/${state.currentSub}/${state.currentSort}`, { replace:true });
@@ -335,6 +339,11 @@ sortBar.addEventListener('change', e => {
     state.profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
+  } else if (state.homeMode) {
+    state.currentTime = sel.value;
+    state.afterToken = null;
+    window.scrollTo({top:0, behavior:'instant'});
+    navigate(`/home/${state.currentSort}?t=${state.currentTime}`, { replace:true });
   } else if (state.multiMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
@@ -389,6 +398,8 @@ function loadMore() {
     if (state.afterToken) loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime, state.afterToken, true);
   } else if (state.liveMode) {
     if (state.liveAfter) loadMoreLiveUpdates(state.liveThreadId, state.liveAfter);
+  } else if (state.homeMode) {
+    if (state.afterToken) loadHomeFeed(state.currentSort, state.currentTime, state.afterToken, true);
   } else {
     if (state.afterToken) loadSubFeed(state.currentSub, state.currentSort, state.currentTime, state.afterToken, true);
   }
@@ -412,6 +423,12 @@ function buildNextPageUrl() {
   } else if (state.duplicatesMode) {
     if (!state.duplicatesAfter) return null;
     return `/r/${encodeURIComponent(state.duplicatesSub)}/duplicates/${encodeURIComponent(state.duplicatesPostId)}?after=${encodeURIComponent(state.duplicatesAfter)}&page=${nextPage}`;
+  } else if (state.homeMode) {
+    if (!state.afterToken) return null;
+    const params = [];
+    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
+    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
+    return `/home/${state.currentSort}?${params.join('&')}`;
   } else if (state.multiMode) {
     if (!state.afterToken) return null;
     const params = [];
@@ -611,7 +628,6 @@ function _settingsHtml() {
     <div class="settings-section-title">Feed</div>
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
-    <label class="settings-row"><span class="settings-label">Home subreddit</span><input class="settings-input" id="s-home-sub" type="text" value="${escHtml(settings.homeSub || 'popular')}" placeholder="popular"></label>
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
   </div>
   <div class="settings-section">
@@ -648,11 +664,6 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-home-sub').addEventListener('change', e => {
-    settings.homeSub = e.target.value.trim().replace(/^r\//,'') || 'popular';
-    e.target.value = settings.homeSub;
-    saveSettings();
-  });
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
