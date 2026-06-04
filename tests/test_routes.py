@@ -12,6 +12,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 import app as app_module
+import reddit_client
 from app import app
 
 
@@ -53,6 +54,12 @@ def _make_post(post_id="abc123", title="Test", subreddit="testsubreddit"):
 
 def _session_get(data=None, status_code=200, **kw):
     return MockResponse(data=data, status_code=status_code, **kw)
+
+
+@pytest.fixture(autouse=True)
+def no_oauth(monkeypatch):
+    """Force reddit_get to use SESSION (not cffi) so SESSION.get mocks work."""
+    monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
 
 
 @pytest.fixture

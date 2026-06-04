@@ -82,17 +82,26 @@ export function initCustomPlayer(videoEl) {
     volSlider.style.setProperty('--vol', (displayVol * 100) + '%');
   }
 
+  function propagateUnmute() {
+    document.querySelectorAll('video[data-vp-init]').forEach(other => {
+      if (other !== videoEl) other.muted = false;
+    });
+  }
+
   muteBtn.addEventListener('click', e => {
     e.stopPropagation();
     if (videoEl.muted || videoEl.volume === 0) {
+      state.userPrefersMuted = false;
+      localStorage.setItem('mutePreference', 'unmuted');
       videoEl.muted = false;
       videoEl.volume = _lastVol || 1;
+      propagateUnmute();
     } else {
       _lastVol = videoEl.volume;
+      state.userPrefersMuted = true;
+      localStorage.setItem('mutePreference', 'muted');
       videoEl.muted = true;
     }
-    state.userPrefersMuted = videoEl.muted;
-    localStorage.setItem('mutePreference', videoEl.muted ? 'muted' : 'unmuted');
     syncVol();
   });
 
@@ -100,21 +109,32 @@ export function initCustomPlayer(videoEl) {
     e.stopPropagation();
     const v = parseFloat(volSlider.value);
     if (v === 0) {
+      state.userPrefersMuted = true;
+      localStorage.setItem('mutePreference', 'muted');
       videoEl.muted = true;
     } else {
+      const wasM = videoEl.muted;
+      state.userPrefersMuted = false;
+      localStorage.setItem('mutePreference', 'unmuted');
       videoEl.muted = false;
       videoEl.volume = v;
       _lastVol = v;
+      if (wasM) propagateUnmute();
     }
-    state.userPrefersMuted = videoEl.muted;
-    localStorage.setItem('mutePreference', videoEl.muted ? 'muted' : 'unmuted');
     syncVol();
   });
   volSlider.addEventListener('click',      e => e.stopPropagation());
   volSlider.addEventListener('mousedown',  e => e.stopPropagation());
   volSlider.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 
-  videoEl.addEventListener('volumechange', syncVol);
+  videoEl.addEventListener('volumechange', () => {
+    // Re-enforce mute if something external (HLS load, browser audio session) undoes it
+    if (state.userPrefersMuted && !videoEl.muted) {
+      videoEl.muted = true;
+      return;
+    }
+    syncVol();
+  });
   syncVol();
 
   // Progress
