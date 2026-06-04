@@ -68,7 +68,7 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
     let url = `/api/home?sort=${sort}`;
     if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
-    const fetchOpts = settings.loid ? { headers: { 'X-Reddit-Loid': settings.loid } } : {};
+    const fetchOpts = settings.redditCookies ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
     const res  = await fetch(url, fetchOpts);
     const data = await res.json();
     if (myGen !== state.feedGen) return;

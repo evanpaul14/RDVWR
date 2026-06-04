@@ -1330,6 +1330,7 @@ a.comment-time:hover { color:var(--ac); }
 .settings-input:focus { border-color:var(--ac); }
 .settings-row--stack { flex-direction:column; align-items:flex-start; gap:6px; }
 .settings-row--stack .settings-input { width:100%; box-sizing:border-box; }
+.settings-textarea { resize:vertical; height:64px; font-size:10px; line-height:1.4; word-break:break-all; }
 .settings-hint { font-size:11px; color:var(--tx3); font-family:var(--mono); }
 .settings-hint code { background:var(--bg3); padding:1px 4px; border-radius:3px; }
 

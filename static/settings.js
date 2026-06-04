@@ -10,7 +10,7 @@ export const DEFAULTS = {
   markRead: true,
   hideReadHome: false,
   hideReadSub: false,
-  loid: '',
+  redditCookies: '',
   theme: 'dark',
   pagination: false,
 };
