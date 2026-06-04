@@ -1,6 +1,5 @@
 import { state } from './state.js';
 import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
-import { initCustomPlayer } from './player.js';
 
 const _DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
 function _dlOk(url) {
@@ -50,17 +49,15 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         label: l.height ? `${l.height}p` : `${Math.round(l.bitrate / 1000)}k`,
       }));
       const labelByIdx = new Map(levels.map(l => [l.idx, l.label]));
-      const slot = wrap.querySelector('.vp-quality-slot');
-      if (!slot) return;
       const btn = document.createElement('button');
-      btn.className = 'vp-quality-btn';
+      btn.className = 'hls-quality-btn';
       btn.textContent = 'auto';
       btn.title = 'Video quality';
       const menu = document.createElement('div');
-      menu.className = 'vp-quality-menu';
+      menu.className = 'hls-quality-menu';
       menu.innerHTML = `<button class="hls-ql active" data-level="-1">Auto</button>` +
         levels.map(l => `<button class="hls-ql" data-level="${l.idx}">${l.label}</button>`).join('');
-      slot.append(btn, menu);
+      wrap.append(btn, menu);
       btn.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
       document.addEventListener('click', () => menu.classList.remove('open'), { passive: true });
       menu.addEventListener('click', e => {
@@ -107,7 +104,6 @@ export function initVideos(container) {
   container.querySelectorAll('[data-hls]:not([data-hls-init])').forEach(wrap => {
     const v = wrap.querySelector('video');
     if (v) {
-      initCustomPlayer(v);
       setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
       if (wrap.dataset.poster) {
         const img = new Image();
