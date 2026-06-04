@@ -579,26 +579,6 @@ document.addEventListener('click', e => {
   }
 });
 
-// Unmute propagation
-let _propagatingUnmute = false;
-document.addEventListener('volumechange', e => {
-  const v = e.target;
-  if (v.tagName !== 'VIDEO' || _propagatingUnmute) return;
-  if (v.muted && v.volume > 0) {
-    if (state.userPrefersMuted) {
-      v.muted = false;
-    } else {
-      state.userPrefersMuted = true;
-      localStorage.setItem('mutePreference', 'muted');
-    }
-  } else if (!v.muted) {
-    state.userPrefersMuted = false;
-    localStorage.setItem('mutePreference', 'unmuted');
-    _propagatingUnmute = true;
-    document.querySelectorAll('video').forEach(other => { other.muted = false; });
-    _propagatingUnmute = false;
-  }
-}, true);
 
 document.addEventListener('click', e => {
   const img = e.target.closest('.post-media img, .pv-media img, .md img, .gallery-main-img');
