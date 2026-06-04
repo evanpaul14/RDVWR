@@ -58,8 +58,11 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
       menu.innerHTML = `<button class="hls-ql active" data-level="-1">Auto</button>` +
         levels.map(l => `<button class="hls-ql" data-level="${l.idx}">${l.label}</button>`).join('');
       wrap.append(btn, menu);
+      const hideBtn = () => { if (!menu.classList.contains('open')) btn.style.opacity = ''; };
+      wrap.addEventListener('mouseenter', () => { btn.style.opacity = '1'; }, { passive: true });
+      wrap.addEventListener('mouseleave', hideBtn, { passive: true });
       btn.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
-      document.addEventListener('click', () => menu.classList.remove('open'), { passive: true });
+      document.addEventListener('click', () => { menu.classList.remove('open'); hideBtn(); }, { passive: true });
       menu.addEventListener('click', e => {
         const ql = e.target.closest('.hls-ql');
         if (!ql) return;
@@ -68,6 +71,7 @@ export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         menu.querySelectorAll('.hls-ql').forEach(b => b.classList.toggle('active', b === ql));
         btn.textContent = lvl === -1 ? 'auto' : (labelByIdx.get(lvl) ?? 'auto');
         menu.classList.remove('open');
+        hideBtn();
       });
       hls.on(Hls.Events.LEVEL_SWITCHED, (_ev2, d) => {
         if (hls.autoLevelEnabled) btn.textContent = `auto (${labelByIdx.get(d.level) ?? ''})`;
