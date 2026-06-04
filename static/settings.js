@@ -10,6 +10,7 @@ export const DEFAULTS = {
   markRead: true,
   hideReadHome: false,
   hideReadSub: false,
+  loid: '',
   theme: 'dark',
   pagination: false,
 };

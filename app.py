@@ -569,8 +569,12 @@ def get_home():
         params["t"] = t
     if after:
         params["after"] = after
+    extra = {}
+    loid = request.headers.get("X-Reddit-Loid", "").strip()
+    if loid:
+        extra["x-reddit-loid"] = loid
     try:
-        resp = reddit_get(url, params=params, timeout=10)
+        resp = reddit_get(url, params=params, headers=extra, timeout=10)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]

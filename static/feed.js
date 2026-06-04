@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT } from './utils.js';
 import { renderPost } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
@@ -67,7 +68,8 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
     let url = `/api/home?sort=${sort}`;
     if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
-    const res  = await fetch(url);
+    const fetchOpts = settings.loid ? { headers: { 'X-Reddit-Loid': settings.loid } } : {};
+    const res  = await fetch(url, fetchOpts);
     const data = await res.json();
     if (myGen !== state.feedGen) return;
     if (!res.ok) {

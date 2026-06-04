@@ -629,6 +629,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
+    <label class="settings-row settings-row--stack"><span class="settings-label">Reddit loid <span class="settings-hint">(for home feed — open reddit.com, F12 → Application → Cookies → copy <code>loid</code> value)</span></span><input class="settings-input" id="s-loid" type="text" value="${escHtml(settings.loid || '')}" placeholder="paste loid cookie value…" spellcheck="false" autocomplete="off"></label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
@@ -664,6 +665,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
+  settingsBody.querySelector('#s-loid').addEventListener('change', e => { settings.loid = e.target.value.trim(); saveSettings(); });
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
