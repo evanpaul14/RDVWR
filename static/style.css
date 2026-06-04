@@ -1328,6 +1328,10 @@ a.comment-time:hover { color:var(--ac); }
   transition:border-color .15s;
 }
 .settings-input:focus { border-color:var(--ac); }
+.settings-row--stack { flex-direction:column; align-items:flex-start; gap:6px; }
+.settings-row--stack .settings-input { width:100%; box-sizing:border-box; }
+.settings-hint { font-size:11px; color:var(--tx3); font-family:var(--mono); }
+.settings-hint code { background:var(--bg3); padding:1px 4px; border-radius:3px; }
 
 .settings-toggle {
   appearance:none; -webkit-appearance:none;
