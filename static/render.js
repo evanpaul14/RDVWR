@@ -207,8 +207,11 @@ export function renderPost(p, idx, showSub=false) {
     </div>`;
   }
 
-  const excerptInner = p.selftext ? `<div class="post-excerpt"><div class="md">${renderMd(p.selftext)}</div></div>` : '';
-  const excerptHtml = (p.selftext && p.over_18)
+  const excerptContent = p.selftext_html
+    ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] })
+    : p.selftext ? renderMd(p.selftext) : '';
+  const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';
+  const excerptHtml = (excerptContent && p.over_18)
     ? `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${excerptInner}</div></div>`
     : excerptInner;
   return `
