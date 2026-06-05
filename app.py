@@ -112,6 +112,30 @@ def _parse_shreddit_post(el):
         else:
             preview_img = content_href
 
+    gallery = []
+    if post_type == 'gallery':
+        seen = set()
+        for img in el.find_all('img'):
+            src = img.get('src', '') or img.get('data-src', '') or ''
+            if not src or src in seen:
+                continue
+            h = urlparse(src).hostname or ''
+            if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
+                continue
+            seen.add(src)
+            proxied = f'/api/img?url={url_quote(src, safe="")}' if h != 'i.redd.it' else src
+            fig = img.find_parent('figure')
+            cap_el = fig.find('figcaption') if fig else None
+            try: w = int(img.get('width', 0) or 0)
+            except Exception: w = 0
+            try: h_val = int(img.get('height', 0) or 0)
+            except Exception: h_val = 0
+            gallery.append({'url': proxied, 'width': w, 'height': h_val,
+                            'caption': cap_el.get_text().strip() if cap_el else ''})
+        if gallery and not preview_img:
+            preview_img = gallery[0]['url']
+        log.info("shreddit gallery id=%s images=%d", post_id, len(gallery))
+
     is_video = post_type in ('video', 'gif')
     video_url = hls_url = audio_url = None
     if is_video and content_href and 'v.redd.it' in content_href:
@@ -137,7 +161,7 @@ def _parse_shreddit_post(el):
         'num_comments': num_comments, 'created_utc': created_utc,
         'url': url, 'permalink': f'https://www.reddit.com{permalink}',
         'is_self': is_self, 'selftext': selftext, 'selftext_html': selftext_html,
-        'preview_img': preview_img, 'gallery': [],
+        'preview_img': preview_img, 'gallery': gallery,
         'is_video': is_video, 'video_url': video_url,
         'hls_url': hls_url, 'audio_url': audio_url,
         'youtube_id': youtube_id, 'tiktok_id': None,
