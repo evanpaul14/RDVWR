@@ -96,7 +96,10 @@ def _parse_shreddit_post(el):
         if not body_el:
             body_el = el.find('faceplate-html', {'slot': 'text-body'})
         if body_el:
+            for a in body_el.find_all('a'):
+                a.unwrap()
             inner = body_el.decode_contents().strip()
+            log.debug("shreddit selftext_html sample: %.200s", inner)
             if inner:
                 selftext_html = inner
                 selftext = body_el.get_text(separator=' ').strip()
