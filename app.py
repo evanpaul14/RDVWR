@@ -89,6 +89,14 @@ def _parse_shreddit_post(el):
     is_self = post_type in ('self', 'text', 'poll')
     url = content_href if (content_href and not is_self) else f'https://www.reddit.com{permalink}'
 
+    selftext = ''
+    if is_self:
+        body_el = el.find(slot='text-body') or el.find('div', {'slot': 'text-body'})
+        if not body_el:
+            body_el = el.find('faceplate-html', {'slot': 'text-body'})
+        if body_el:
+            selftext = body_el.get_text(separator='\n').strip()
+
     preview_img = None
     if post_type == 'image' and content_href:
         h = urlparse(content_href).hostname or ''
@@ -121,7 +129,7 @@ def _parse_shreddit_post(el):
         'score': score, 'upvote_ratio': upvote_ratio,
         'num_comments': num_comments, 'created_utc': created_utc,
         'url': url, 'permalink': f'https://www.reddit.com{permalink}',
-        'is_self': is_self, 'selftext': '',
+        'is_self': is_self, 'selftext': selftext,
         'preview_img': preview_img, 'gallery': [],
         'is_video': is_video, 'video_url': video_url,
         'hls_url': hls_url, 'audio_url': audio_url,
