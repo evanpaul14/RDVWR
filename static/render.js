@@ -208,7 +208,7 @@ export function renderPost(p, idx, showSub=false) {
   }
 
   const excerptContent = p.selftext_html
-    ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] })
+    ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'], FORBID_TAGS: ['a'] })
     : p.selftext ? renderMd(p.selftext) : '';
   const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';
   const excerptHtml = (excerptContent && p.over_18)
