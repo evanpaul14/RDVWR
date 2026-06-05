@@ -1,6 +1,19 @@
 import { state } from './state.js';
 import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
+function _trackVideoMute(v) {
+  if (v.dataset.muteTracked) return;
+  v.dataset.muteTracked = '1';
+  v.muted = state.userPrefersMuted;
+  v.addEventListener('volumechange', () => {
+    const nowMuted = v.muted || v.volume === 0;
+    if (nowMuted !== state.userPrefersMuted) {
+      state.userPrefersMuted = nowMuted;
+      localStorage.setItem('mutePreference', nowMuted ? 'muted' : 'unmuted');
+    }
+  });
+}
+
 const _DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
 function _dlOk(url) {
   if (!url) return false;
@@ -31,7 +44,7 @@ export function syncAudio(videoEl, audioSrc) {
 
 export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
   if (hlsUrl && typeof Hls !== 'undefined' && Hls.isSupported()) {
-    const hls = new Hls({ autoStartLoad: false });
+    const hls = new Hls({ autoStartLoad: false, startLevel: 999 });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
     videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
     hls.on(Hls.Events.MANIFEST_PARSED, (_ev, data) => {
@@ -117,7 +130,7 @@ export function initVideos(container) {
       wrap.dataset.hlsInit = '1';
     }
   });
-  if (!state.userPrefersMuted) container.querySelectorAll('video').forEach(v => { v.muted = false; });
+  container.querySelectorAll('video').forEach(_trackVideoMute);
 }
 
 export async function initRedgifs(container) {
@@ -147,6 +160,7 @@ export async function initRedgifs(container) {
     const videoSrc = data.hd || data.sd;
     const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
     wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
+    _trackVideoMute(wrap.querySelector('video'));
     // Activate the pv-meta placeholder if present
     const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
     if (placeholder) {

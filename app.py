@@ -113,11 +113,13 @@ def _parse_shreddit_post(el):
         else:
             preview_img = content_href
 
+    is_gallery_url = content_href and '/gallery/' in content_href
     gallery = []
-    if post_type == 'gallery':
+    if post_type == 'gallery' or is_gallery_url:
         seen = set()
-        for img in el.find_all('img'):
-            src = img.get('src', '') or img.get('data-src', '') or ''
+        for img in el.find_all(['img', 'faceplate-img']):
+            src = (img.get('src', '') or img.get('data-lazy-src', '') or
+                   img.get('data-src', '') or '')
             if not src or src in seen:
                 continue
             h = urlparse(src).hostname or ''
@@ -135,7 +137,7 @@ def _parse_shreddit_post(el):
                             'caption': cap_el.get_text().strip() if cap_el else ''})
         if gallery and not preview_img:
             preview_img = gallery[0]['url']
-        log.info("shreddit gallery id=%s images=%d", post_id, len(gallery))
+        log.info("shreddit gallery id=%s images=%d post_type=%s", post_id, len(gallery), post_type)
 
     is_video = post_type in ('video', 'gif')
     video_url = hls_url = audio_url = None
@@ -719,6 +721,26 @@ def get_home():
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 posts = [_parse_shreddit_post(el) for el in soup.find_all('shreddit-post')]
                 log.info("shreddit home-feed parsed %d posts", len(posts))
+                # Batch-fetch gallery data for gallery posts where HTML parsing found no images
+                missing = [(i, p['id']) for i, p in enumerate(posts)
+                           if p['post_hint'] == 'gallery' and not p['gallery']]
+                if missing:
+                    ids_str = ','.join(f't3_{pid}' for _, pid in missing)
+                    try:
+                        gi = reddit_get('https://www.reddit.com/api/info.json',
+                                        params={'id': ids_str, 'raw_json': 1}, timeout=8)
+                        if gi.ok:
+                            by_id = {c['data']['id']: c['data']
+                                     for c in gi.json()['data']['children']}
+                            for i, pid in missing:
+                                if pid in by_id:
+                                    full = process_post(by_id[pid])
+                                    if full.get('gallery'):
+                                        posts[i]['gallery'] = full['gallery']
+                                        if full.get('preview_img'):
+                                            posts[i]['preview_img'] = full['preview_img']
+                    except Exception as ge:
+                        log.warning("gallery batch-fetch failed: %s", ge)
                 m = re.search(r'[?&]after=([A-Za-z0-9%+/=_-]+)', resp.text)
                 next_after = url_unquote(m.group(1)) if m else None
                 return jsonify({"posts": posts, "after": next_after, "via": "shreddit"})
