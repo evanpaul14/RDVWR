@@ -182,6 +182,8 @@ def _parse_shreddit_post(el):
         'crosspost_from': None, 'is_stickied': False,
         'is_oc': False, 'is_spoiler': False, 'locked': False,
         'edited_utc': None, 'awards': awards,
+        'recommendation_source': el.get('recommendation-source', ''),
+        'feed_label': None,
     }
 
 
@@ -719,7 +721,28 @@ def get_home():
             log.info("shreddit home-feed status=%s", resp.status_code)
             if resp.ok:
                 soup = BeautifulSoup(resp.text, 'html.parser')
-                posts = [_parse_shreddit_post(el) for el in soup.find_all('shreddit-post')]
+                posts = []
+                current_label = None
+                last_source = None
+                _SKIP_TAGS = {'script', 'hr', 'faceplate-loader', 'faceplate-partial',
+                              'ac-publish', 'style', 'link', 'meta'}
+                for child in soup.children:
+                    if not hasattr(child, 'name') or not child.name:
+                        continue
+                    if child.name == 'article':
+                        post_el = child.find('shreddit-post')
+                        if post_el:
+                            post = _parse_shreddit_post(post_el)
+                            src = post.get('recommendation_source', '')
+                            if current_label and src != last_source:
+                                post['feed_label'] = current_label
+                                current_label = None
+                            last_source = src
+                            posts.append(post)
+                    elif child.name not in _SKIP_TAGS:
+                        txt = child.get_text(separator=' ', strip=True)
+                        if txt and len(txt) < 300:
+                            current_label = txt
                 log.info("shreddit home-feed parsed %d posts", len(posts))
                 # Batch-fetch gallery data for gallery posts where HTML parsing found no images
                 missing = [(i, p['id']) for i, p in enumerate(posts)

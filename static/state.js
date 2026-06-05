@@ -12,6 +12,7 @@ export const state = {
 
   // Home
   homeMode: false,
+  homeLastRecSource: null,
 
   // Multi
   multiMode: false,

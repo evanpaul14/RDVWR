@@ -153,6 +153,14 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 
 /* ── Post card ───────────────────────────────────────────────────────────── */
 @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+.feed-section-label {
+  display:flex; align-items:center; gap:8px; padding:4px 0 2px;
+  color:var(--tx3); font-size:11px; font-weight:500; letter-spacing:.02em;
+}
+.feed-section-label::before, .feed-section-label::after {
+  content:''; flex:1; height:1px; background:var(--b);
+}
+.feed-section-label span { white-space:nowrap; padding:0 6px; }
 .post {
   display:flex; flex-direction:column;
   background:var(--bg2); border:1px solid var(--b); border-radius:8px; overflow:hidden;
