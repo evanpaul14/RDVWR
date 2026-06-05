@@ -670,12 +670,16 @@ def get_home():
                 impersonate="firefox133",
                 timeout=15,
             )
+            log.info("shreddit home-feed status=%s", resp.status_code)
             if resp.ok:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 posts = [_parse_shreddit_post(el) for el in soup.find_all('shreddit-post')]
+                log.info("shreddit home-feed parsed %d posts", len(posts))
                 m = re.search(r'[?&]after=([A-Za-z0-9%+/=_-]+)', resp.text)
                 next_after = url_unquote(m.group(1)) if m else None
-                return jsonify({"posts": posts, "after": next_after})
+                return jsonify({"posts": posts, "after": next_after, "via": "shreddit"})
+            else:
+                log.warning("shreddit home-feed non-OK: %s %.300s", resp.status_code, resp.text)
         except Exception as e:
             log.warning("shreddit home-feed failed: %s", e)
 
@@ -692,7 +696,7 @@ def get_home():
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
-        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
+        return cached_json({"posts": posts, "after": listing.get("after"), "via": "anonymous"}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
