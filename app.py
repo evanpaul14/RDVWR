@@ -15,7 +15,7 @@ from urllib.parse import urlparse, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
 from bs4 import BeautifulSoup
-from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE
+from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE
 from reddit_client import reddit_get, SESSION, HEADERS
 from curl_cffi import requests as cffi_requests
 
@@ -86,7 +86,8 @@ def _parse_shreddit_post(el):
     try: num_comments = int(el.get('comment-count', 0))
     except Exception: num_comments = 0
 
-    is_self = post_type in ('self', 'text', 'poll')
+    domain_str = el.get('domain', '')
+    is_self = post_type in ('self', 'text', 'poll') or domain_str.startswith('self.')
     url = content_href if (content_href and not is_self) else f'https://www.reddit.com{permalink}'
 
     selftext = ''
@@ -139,8 +140,12 @@ def _parse_shreddit_post(el):
     is_video = post_type in ('video', 'gif')
     video_url = hls_url = audio_url = None
     if is_video and content_href and 'v.redd.it' in content_href:
-        video_url = content_href
-        audio_url = re.sub(r'/DASH_\d+\.mp4$', '/DASH_audio.mp4', content_href) if '/DASH_' in content_href else None
+        m = VREDDDIT_RE.match(content_href)
+        base = m.group(1) if m else None
+        if base:
+            video_url = content_href if '/DASH_' in content_href else base + '/DASH_480.mp4'
+            hls_url = base + '/HLSPlaylist.m3u8'
+            audio_url = base + '/DASH_audio.mp4'
 
     redgifs_id = extract_redgifs_id(url)
     yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
@@ -171,7 +176,7 @@ def _parse_shreddit_post(el):
         'over_18': el.has_attr('is-nsfw'),
         'flair': '', 'flair_richtext': [], 'flair_type': 'text',
         'flair_bg': '', 'flair_tc': 'dark',
-        'domain': el.get('domain', ''), 'poll': None,
+        'domain': domain_str, 'poll': None,
         'crosspost_from': None, 'is_stickied': False,
         'is_oc': False, 'is_spoiler': False, 'locked': False,
         'edited_utc': None, 'awards': awards,
