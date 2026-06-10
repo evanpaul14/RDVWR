@@ -230,4 +230,5 @@ def process_post(p):
 
 
 def extract_posts(listing):
-    return [process_post(c["data"]) for c in listing["children"] if c.get("kind") == "t3"]
+    return [process_post(c["data"]) for c in listing["children"]
+            if c.get("kind") == "t3" and not c.get("data", {}).get("promoted")]
