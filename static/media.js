@@ -109,6 +109,25 @@ const _gifObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
+// Resolved URL cache shared across feed and postview — keyed by redgifs ID.
+// Feed's batch fetch populates it; postview hits it instantly for the same IDs.
+const _rgCache = new Map();
+
+function _rgCacheSet(id, data) {
+  if (!_rgCache.has(id)) _rgCache.set(id, Promise.resolve(data));
+}
+
+function _prefetchRedgifs(id) {
+  if (_rgCache.has(id)) return;
+  _rgCache.set(id, fetch(`/api/redgifs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null));
+}
+
+const _rgPrefetchObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) _prefetchRedgifs(entry.target.dataset.rgid);
+  });
+}, { rootMargin: '400px' });
+
 export function initGifVideos(container) {
   container.querySelectorAll('video[autoplay]:not([data-gif-obs])').forEach(v => {
     v.dataset.gifObs = '1';
@@ -133,24 +152,40 @@ export function initVideos(container) {
   container.querySelectorAll('video').forEach(_trackVideoMute);
 }
 
+export function observeRedgifsPrefetch(container) {
+  container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-prefetch])').forEach(w => {
+    w.dataset.rgPrefetch = '1';
+    _rgPrefetchObserver.observe(w);
+  });
+}
+
 export async function initRedgifs(container) {
   const wraps = [...container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')];
   if (!wraps.length) return;
-  wraps.forEach(w => { w.dataset.rgInit = '1'; });
+  wraps.forEach(w => {
+    w.dataset.rgInit = '1';
+    _rgPrefetchObserver.unobserve(w);
+  });
   const ids = wraps.map(w => w.dataset.rgid);
+  const coldIds = ids.filter(id => !_rgCache.has(id));
   let batchData = {};
-  try {
-    const res = await fetch(`/api/redgifs/batch?ids=${ids.join(',')}`);
-    if (res.ok) batchData = await res.json();
-  } catch {}
+  if (coldIds.length) {
+    try {
+      const res = await fetch(`/api/redgifs/batch?ids=${coldIds.join(',')}`);
+      if (res.ok) {
+        batchData = await res.json();
+        Object.entries(batchData).forEach(([id, data]) => _rgCacheSet(id, data));
+      }
+    } catch {}
+  }
   await Promise.all(wraps.map(async wrap => {
     const id = wrap.dataset.rgid;
-    let data = batchData[id];
+    let data = batchData[id] ?? await _rgCache.get(id) ?? null;
     if (!data) {
       try {
         const res = await fetch(`/api/redgifs/${id}`);
-        data = await res.json();
-        if (!res.ok) data = null;
+        data = res.ok ? await res.json() : null;
+        if (data) _rgCacheSet(id, data);
       } catch { data = null; }
     }
     if (!data || (!data.hd && !data.sd)) {
@@ -177,6 +212,7 @@ export async function initRedgifs(container) {
 
 export function initMedia(container) {
   initVideos(container);
+  observeRedgifsPrefetch(container);
   initRedgifs(container);
   initImgurAlbums(container);
   initOgImages(container);
