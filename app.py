@@ -227,7 +227,11 @@ def get_redgifs(gif_id):
         if resp.status_code != 200:
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
         urls = resp.json()["gif"]["urls"]
-        return cached_json({"hd": urls.get("hd"), "sd": urls.get("sd")}, 3600)
+        def proxied(url):
+            if not url: return None
+            fname = url.rsplit("/", 1)[-1]
+            return f"/api/redgifs/media/{fname}"
+        return cached_json({"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -253,7 +257,11 @@ def get_redgifs_batch():
             if not gid:
                 continue
             urls = gif.get("urls", {})
-            result[gid] = {"hd": urls.get("hd"), "sd": urls.get("sd")}
+            def proxied(url):
+                if not url: return None
+                fname = url.rsplit("/", 1)[-1]
+                return f"/api/redgifs/media/{fname}"
+            result[gid] = {"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}
         return cached_json(result, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
