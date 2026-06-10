@@ -159,7 +159,7 @@ export async function initRedgifs(container) {
     }
     const videoSrc = data.hd || data.sd;
     const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
-    wrap.innerHTML = `<video controls playsinline preload="metadata" muted referrerpolicy="no-referrer" src="${escHtml(videoSrc)}"></video>`;
+    wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
     _trackVideoMute(wrap.querySelector('video'));
     // Activate the pv-meta placeholder if present
     const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
