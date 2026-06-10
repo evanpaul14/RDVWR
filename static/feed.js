@@ -81,27 +81,10 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
-    if (!append) state.homeLastRecSource = null;
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
-    const isShreddit = data.via === 'shreddit';
-    const REC_LABELS = {
-      'subreddit_discovery': 'Suggested for you',
-      'similar_community_posts': "Because you've shown interest in a similar community",
-      'geolocation': 'Popular near you',
-      'global_good_visits': 'Popular posts',
-      'popular_feed': 'Popular posts',
-    };
     const tmp = document.createElement('div');
     const parts = [];
     data.posts.forEach((p, i) => {
-      if (isShreddit) {
-        const label = p.feed_label || REC_LABELS[p.recommendation_source] || null;
-        const srcChanged = p.recommendation_source !== state.homeLastRecSource;
-        if (label && srcChanged && (startIdx + i) > 0) {
-          parts.push(`<div class="feed-section-label"><span>${escHtml(label)}</span></div>`);
-        }
-        state.homeLastRecSource = p.recommendation_source;
-      }
       parts.push(renderPost(p, startIdx + i, true));
     });
     tmp.innerHTML = parts.join('');
