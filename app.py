@@ -731,6 +731,14 @@ def get_home():
                     if child.name == 'article':
                         post_el = child.find('shreddit-post')
                         if post_el:
+                            if (post_el.has_attr('promoted') or
+                                    child.find('shreddit-ad-post') or
+                                    'promoted' in str(child.attrs).lower()):
+                                log.info("shreddit skipping promoted post author=%s attrs=%s",
+                                         post_el.get('author','?'), dict(child.attrs))
+                                continue
+                            log.debug("shreddit-post author=%s art-class=%s promoted=%s",
+                                      post_el.get('author','?'), child.get('class',''), post_el.has_attr('promoted'))
                             post = _parse_shreddit_post(post_el)
                             src = post.get('recommendation_source', '')
                             if current_label and src != last_source:
@@ -738,6 +746,9 @@ def get_home():
                                 current_label = None
                             last_source = src
                             posts.append(post)
+                        elif child.find('shreddit-ad-post'):
+                            log.info("shreddit skipping ad-post article attrs=%s", dict(child.attrs))
+                            continue
                     elif child.name not in _SKIP_TAGS:
                         txt = child.get_text(separator=' ', strip=True)
                         if txt and len(txt) < 300:
