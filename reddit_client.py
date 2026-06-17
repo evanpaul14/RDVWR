@@ -322,7 +322,7 @@ def reddit_get(url, **kwargs):
             log.debug("cffi GET TLS fallback url=%s: %s", url, e)
             return SESSION.get(url, headers=headers, **kwargs)
         if resp.status_code == 429:
-            time.sleep(min(int(resp.headers.get("Retry-After", 5)), 30))
+            time.sleep(min(int(resp.headers.get("Retry-After", 5)), 5))
             continue
         if resp.status_code == 401 and attempt < 2:
             device.expires_at = 0.0  # force this device to re-auth next use
