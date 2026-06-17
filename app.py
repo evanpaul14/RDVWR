@@ -4,6 +4,7 @@ import json
 import html as html_lib
 import time
 import tempfile
+import shutil
 import subprocess
 import logging
 import socket
@@ -291,6 +292,7 @@ def proxy_redgifs_media(filename):
         for h in ("Content-Length", "Content-Range"):
             if h in upstream.headers:
                 resp_headers[h] = upstream.headers[h]
+        resp_headers["Cache-Control"] = "public, max-age=604800, immutable"
         return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE),
                         status=upstream.status_code, headers=resp_headers)
     except Exception as e:
@@ -378,6 +380,8 @@ GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-pre
 @app.route("/api/download/gallery")
 def download_gallery():
     import io, zipfile
+    from concurrent.futures import ThreadPoolExecutor
+
     urls_param = request.args.get('urls', '').strip()
     _raw = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))
     if len(_raw) > 20:
@@ -395,21 +399,31 @@ def download_gallery():
             return jsonify({'error': 'Invalid URL'}), 400
         if parsed.scheme not in ('http', 'https') or parsed.netloc not in GALLERY_ALLOWED_HOSTS:
             return jsonify({'error': 'URL not allowed'}), 400
+
+    def _fetch(url):
+        try:
+            r = SESSION.get(url, stream=True, timeout=20,
+                            headers={'Referer': 'https://www.reddit.com/'})
+            if not r.ok:
+                return None
+            path = urlparse(url).path
+            ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
+            if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
+                ext = 'jpg'
+            return ext, r.content
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(_fetch, urls))
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_STORED) as zf:
-        for i, url in enumerate(urls, 1):
-            try:
-                r = SESSION.get(url, stream=True, timeout=20,
-                                headers={'Referer': 'https://www.reddit.com/'})
-                if not r.ok:
-                    continue
-                path = urlparse(url).path
-                ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
-                if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
-                    ext = 'jpg'
-                zf.writestr(f'{name}-{i:02d}.{ext}', r.content)
-            except Exception:
+        for i, result in enumerate(results, 1):
+            if result is None:
                 continue
+            ext, content = result
+            zf.writestr(f'{name}-{i:02d}.{ext}', content)
     buf.seek(0)
     data = buf.read()
     return Response(data, status=200, headers={
@@ -433,36 +447,49 @@ def download_reddit_video():
     if parsed.scheme not in ('http', 'https') or parsed.netloc != 'v.redd.it':
         return jsonify({'error': 'URL not allowed'}), 400
 
+    tmpdir = tempfile.mkdtemp()
+    out_path = os.path.join(tmpdir, 'merged.mp4')
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            out_path = os.path.join(tmpdir, 'merged.mp4')
-            cmd = [
-                'ffmpeg', '-y',
-                '-user_agent', HEADERS['User-Agent'],
-                '-i', hls_url,
-                '-c', 'copy',
-                '-movflags', '+faststart',
-                out_path,
-            ]
-            result = subprocess.run(cmd, capture_output=True, timeout=180)
-            if result.returncode != 0:
-                return jsonify({'error': 'ffmpeg failed'}), 502
+        cmd = [
+            'ffmpeg', '-y',
+            '-user_agent', HEADERS['User-Agent'],
+            '-i', hls_url,
+            '-c', 'copy',
+            '-movflags', '+faststart',
+            out_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        if result.returncode != 0:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return jsonify({'error': 'ffmpeg failed'}), 502
 
-            with open(out_path, 'rb') as f:
-                data = f.read()
+        size = os.path.getsize(out_path)
+
+        def _stream():
+            try:
+                with open(out_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(STREAM_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                shutil.rmtree(tmpdir, ignore_errors=True)
 
         return Response(
-            data,
+            _stream(),
             status=200,
             headers={
                 'Content-Type': 'video/mp4',
                 'Content-Disposition': f'attachment; filename="{filename}"',
-                'Content-Length': str(len(data)),
+                'Content-Length': str(size),
             }
         )
     except subprocess.TimeoutExpired:
+        shutil.rmtree(tmpdir, ignore_errors=True)
         return jsonify({'error': 'Processing timed out'}), 504
     except Exception as e:
+        shutil.rmtree(tmpdir, ignore_errors=True)
         return jsonify({'error': str(e)}), 502
 
 
@@ -772,7 +799,9 @@ def get_home():
                         log.warning("gallery batch-fetch failed: %s", ge)
                 m = re.search(r'[?&]after=([A-Za-z0-9%+/=_-]+)', resp.text)
                 next_after = url_unquote(m.group(1)) if m else None
-                return jsonify({"posts": posts, "after": next_after, "via": "shreddit"})
+                resp_out = make_response(jsonify({"posts": posts, "after": next_after, "via": "shreddit"}))
+                resp_out.headers['Cache-Control'] = 'private, no-store'
+                return resp_out
             else:
                 log.warning("shreddit home-feed non-OK: %s %.300s", resp.status_code, resp.text)
         except Exception as e:

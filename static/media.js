@@ -111,14 +111,30 @@ const _gifObserver = new IntersectionObserver((entries) => {
 
 // Resolved URL cache shared across feed and postview — keyed by redgifs ID.
 // Feed's batch fetch populates it; postview hits it instantly for the same IDs.
+// Capped so a long scrolling session doesn't grow this unbounded.
 const _rgCache = new Map();
+const RG_CACHE_MAX = 500;
+
+function _rgCacheEvictIfFull() {
+  if (_rgCache.size < RG_CACHE_MAX) return;
+  const evictCount = Math.ceil(RG_CACHE_MAX / 5);
+  const it = _rgCache.keys();
+  for (let i = 0; i < evictCount; i++) {
+    const { value, done } = it.next();
+    if (done) break;
+    _rgCache.delete(value);
+  }
+}
 
 function _rgCacheSet(id, data) {
-  if (!_rgCache.has(id)) _rgCache.set(id, Promise.resolve(data));
+  if (_rgCache.has(id)) return;
+  _rgCacheEvictIfFull();
+  _rgCache.set(id, Promise.resolve(data));
 }
 
 function _prefetchRedgifs(id) {
   if (_rgCache.has(id)) return;
+  _rgCacheEvictIfFull();
   _rgCache.set(id, fetch(`/api/redgifs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null));
 }
 

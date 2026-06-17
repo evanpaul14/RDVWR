@@ -514,6 +514,7 @@ feed.addEventListener('keydown', e => {
 
 // Logo
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
+document.getElementById('popular-btn').addEventListener('click', () => navigate('/r/popular'));
 
 // Long-press on post card → open in new tab (mobile)
 let _longPressTimer = null;
