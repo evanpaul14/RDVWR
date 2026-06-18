@@ -11,6 +11,10 @@ const _link = mdRenderer.link.bind(mdRenderer);
 mdRenderer.image = (href, title, text) => {
   if (href?.startsWith('giphy|'))   return `<img src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
   if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
+  if (href?.startsWith('redditvid|')) {
+    const base = `https://v.redd.it/${href.slice(10)}`;
+    return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
+  }
   try {
     const h = new URL(href).hostname;
     if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
@@ -32,6 +36,14 @@ mdRenderer.link = (href, title, text) => {
   return base.replace('<a ', '<a target="_blank" rel="noopener" ');
 };
 marked.use({ renderer: mdRenderer, breaks: true, gfm: true });
+
+// Comments often just paste reddit's video player URL as plain text (no real embed
+// metadata is exposed for comments, unlike posts) — rewrite it into a video embed.
+function embedRedditCommentVideos(text) {
+  return text.replace(
+    /(`[^`]*`|\[[^\]]*\]\([^)]*\))|https?:\/\/(?:www\.)?reddit\.com\/link\/[A-Za-z0-9_]+\/video\/([A-Za-z0-9_]+)\/?(?:player)?\/?/gi,
+    (m, skip, vid) => skip ? skip : `![](redditvid|${vid})`);
+}
 
 export function linkifyReddit(text) {
   return text
@@ -58,7 +70,7 @@ export async function xlateText(text) {
 
 export function renderMd(text) {
   if (!text) return '';
-  const processed = linkifyReddit(text).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
+  const processed = embedRedditCommentVideos(linkifyReddit(text)).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
     `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
