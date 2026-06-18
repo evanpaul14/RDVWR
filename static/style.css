@@ -540,6 +540,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .md th { background:var(--bg3); color:var(--tx2); font-family:var(--mono); font-size:.85em; }
 .md .md-gif-embed { width:100%; max-width:400px; aspect-ratio:16/9; border-radius:4px; overflow:hidden; margin:6px 0; }
 .md .md-gif-embed iframe { width:100%; height:100%; border:none; }
+.md .md-video-embed { width:100%; max-width:480px; border-radius:4px; overflow:hidden; margin:6px 0; border-top:none; border-bottom:none; }
+.md .md-video-embed video { max-height:480px; }
 .spoiler { background:var(--tx); color:var(--tx); border-radius:3px; cursor:pointer; padding:0 2px; user-select:none; transition:background .15s,color .15s; }
 .spoiler.revealed { background:var(--bg3); color:var(--tx); }
 .redgifs-wrap video { width:100%; display:block; border-radius:inherit; }
