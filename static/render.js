@@ -199,9 +199,9 @@ export function renderPost(p, idx, showSub=false) {
     let thumbHtml = '';
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
-      const thumbContent = p.over_18
-        ? `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbInner}</div></div>`
-        : thumbInner;
+      let thumbContent = thumbInner;
+      if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
+      if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
     } else if (p.url && /^https?:\/\//.test(p.url)) {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
@@ -223,9 +223,9 @@ export function renderPost(p, idx, showSub=false) {
     ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] })
     : p.selftext ? renderMd(p.selftext) : '';
   const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';
-  const excerptHtml = (excerptContent && p.over_18)
-    ? `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${excerptInner}</div></div>`
-    : excerptInner;
+  let excerptHtml = excerptInner;
+  if (excerptContent && p.is_spoiler) excerptHtml = `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${excerptHtml}</div></div>`;
+  if (excerptContent && p.over_18) excerptHtml = `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${excerptHtml}</div></div>`;
   return `
     <div class="post${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-header">
