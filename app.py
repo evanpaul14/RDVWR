@@ -36,7 +36,6 @@ log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
-PROXY_API_KEY       = os.environ.get('PROXY_API_KEY', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -627,7 +626,6 @@ def subreddit_search():
 @app.route("/")
 @app.route("/home")
 @app.route("/home/<sort>")
-@app.route("/r/<path:path>")
 @app.route("/user/<username>")
 @app.route("/user/<username>/m/<multiname>")
 @app.route("/user/<username>/m/<multiname>/<path:rest>")
@@ -638,6 +636,14 @@ def subreddit_search():
 @app.route("/r/<subreddit>/wiki/<path:page>")
 @app.route("/live/<path:path>")
 def spa(**kwargs):
+    resp = render_template("index.html")
+    return resp, 200, {'Cache-Control': 'no-store'}
+
+
+@app.route("/r/<path:reddit_path>")
+def r_json_or_spa(reddit_path):
+    if reddit_path.endswith(".json"):
+        return _proxy_reddit(f"r/{reddit_path}")
     resp = render_template("index.html")
     return resp, 200, {'Cache-Control': 'no-store'}
 
@@ -1402,13 +1408,7 @@ def get_og_image():
         return cached_json({"url": None}, 60)
 
 
-@app.route("/proxy/<path:reddit_path>")
-def reddit_proxy(reddit_path):
-    if not PROXY_API_KEY:
-        return jsonify({"error": "proxy not configured"}), 503
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or auth[7:] != PROXY_API_KEY:
-        return jsonify({"error": "unauthorized"}), 401
+def _proxy_reddit(reddit_path):
     url = f"https://oauth.reddit.com/{reddit_path}"
     if request.query_string:
         url += "?" + request.query_string.decode("utf-8")
@@ -1419,6 +1419,13 @@ def reddit_proxy(reddit_path):
         return jsonify({"error": "upstream request failed"}), 502
     content_type = resp.headers.get("Content-Type", "application/json")
     return Response(resp.content, status=resp.status_code, content_type=content_type)
+
+
+@app.route("/<path:reddit_path>")
+def json_catch_all(reddit_path):
+    if reddit_path.endswith(".json"):
+        return _proxy_reddit(reddit_path)
+    return jsonify({"error": "not found"}), 404
 
 
 if __name__ == "__main__":
