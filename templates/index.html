@@ -17,15 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.min.css') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='app.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='feed.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='render.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='media.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='player.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='state.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='settings.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='utils.js') }}">
-<link rel="modulepreload" href="{{ url_for('static', filename='router.js') }}">
+<link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js') }}">
 </head>
 <body>
 
@@ -135,6 +127,7 @@
   <div class="settings-body" id="settings-body"></div>
 </div>
 {% if initial_data %}<script>window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
-<script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+{% if initial_about %}<script>window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
+<script type="module" src="{{ url_for('static', filename='app.bundle.js') }}"></script>
 </body>
 </html>
