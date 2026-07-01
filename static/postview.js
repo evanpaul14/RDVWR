@@ -101,6 +101,7 @@ function buildCommentsHtml(data, commentId) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 export function openPostView() {
+  document.getElementById('feed')?.querySelectorAll('video').forEach(v => { if (!v.paused) v.pause(); });
   _pvPrevFocus = document.activeElement;
   postView.classList.add('open');
   document.body.style.overflow = 'hidden';
