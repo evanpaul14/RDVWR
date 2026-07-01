@@ -332,24 +332,39 @@ export function nsfwWrap(html) {
   return `<div class="nsfw-media-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="nsfw-veil-label">nsfw — click to reveal</span></div><div class="nsfw-content">${html}</div></div>`;
 }
 
-export function mediaHtmlCard(p) {
+export function mediaHtml(p, full = false) {
   if (p.poll) return renderPoll(p.poll);
+  const vc = full ? 'pv-media' : 'post-video';
+  const ic = full ? 'pv-media' : 'post-media';
+  const preload = full ? 'metadata' : 'none';
   let html = '';
-  if (p.is_video) html = `<div class="post-video" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="none" playsinline muted></video></div>`;
-  else if (p.youtube_id) html = `<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
-  else if (p.tiktok_id)  html = `<div class="post-video tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
-  else if (p.redgifs_id) html = `<div class="post-video redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.imgur_album_id) html = `<div class="post-video imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.streamable_id) html = `<div class="post-video"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
-  else if (p.embed_url)  html = `<div class="post-video"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
-  else if (p.gif_url) html = p.gif_is_video
-    ? `<div class="post-video"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
-    : `<div class="post-media"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
-  else if (p.gallery?.length > 1) html = renderGallery(p.gallery);
-  else {
+  if (p.is_video) {
+    html = `<div class="${vc}" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="${preload}" playsinline muted></video></div>`;
+  } else if (p.youtube_id) {
+    html = `<div class="${vc}"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+  } else if (p.tiktok_id) {
+    html = `<div class="${vc} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  } else if (p.redgifs_id) {
+    html = `<div class="${vc} redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+  } else if (p.imgur_album_id) {
+    html = `<div class="${vc} imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
+  } else if (p.streamable_id) {
+    html = `<div class="${vc}"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
+  } else if (p.embed_url) {
+    html = `<div class="${vc}"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+  } else if (p.gif_url) {
+    html = p.gif_is_video
+      ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
+      : `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+  } else if (p.gallery?.length > (full ? 0 : 1)) {
+    html = renderGallery(p.gallery);
+  } else {
     const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
-    if (imgSrc) html = `<div class="post-media">\n    <img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')">\n  </div>`;
-    else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) html = `<div class="og-placeholder post-media" data-og-url="${escHtml(p.url)}"></div>`;
+    if (imgSrc) {
+      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+    } else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) {
+      html = `<div class="og-placeholder ${ic}" data-og-url="${escHtml(p.url)}"></div>`;
+    }
   }
   if (!html) return '';
   if (p.is_spoiler) html = spoilerWrap(html);
@@ -357,27 +372,8 @@ export function mediaHtmlCard(p) {
   return html;
 }
 
-export function mediaHtmlFull(p) {
-  if (p.poll) return renderPoll(p.poll);
-  let html = '';
-  if (p.is_video) html = `<div class="pv-media" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="metadata" playsinline muted></video></div>`;
-  else if (p.youtube_id) html = `<div class="pv-media"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
-  else if (p.tiktok_id)  html = `<div class="pv-media tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
-  else if (p.redgifs_id) html = `<div class="pv-media redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.imgur_album_id) html = `<div class="pv-media imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
-  else if (p.streamable_id) html = `<div class="pv-media"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
-  else if (p.embed_url)  html = `<div class="pv-media"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
-  else if (p.gif_url) html = p.gif_is_video
-    ? `<div class="pv-media"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
-    : `<div class="pv-media"><img src="${escHtml(p.gif_url)}" alt="" loading="lazy"></div>`;
-  else if (p.gallery?.length) html = renderGallery(p.gallery);
-  else if (p.preview_img && !p.is_self) html = `<div class="pv-media"><img src="${escHtml(p.preview_img)}" alt="" loading="lazy"></div>`;
-  else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) html = `<div class="og-placeholder pv-media" data-og-url="${escHtml(p.url)}"></div>`;
-  if (!html) return '';
-  if (p.is_spoiler) html = spoilerWrap(html);
-  if (p.over_18)   html = nsfwWrap(html);
-  return html;
-}
+export const mediaHtmlCard = p => mediaHtml(p, false);
+export const mediaHtmlFull = p => mediaHtml(p, true);
 
 // ── Gallery event delegation ─────────────────────────────────────────────────
 document.addEventListener('click', e => {
