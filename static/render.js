@@ -5,37 +5,44 @@ import { isVisited } from './visited.js';
 const THREAD_MAX_DEPTH = 4;
 
 // ── Markdown ─────────────────────────────────────────────────────────────────
-const mdRenderer = new marked.Renderer();
-const _img  = mdRenderer.image.bind(mdRenderer);
-const _link = mdRenderer.link.bind(mdRenderer);
-mdRenderer.image = (href, title, text) => {
-  if (href?.startsWith('giphy|'))   return `<img src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
-  if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
-  if (href?.startsWith('redditvid|')) {
-    const base = `https://v.redd.it/${href.slice(10)}`;
-    return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
-  }
-  try {
-    const h = new URL(href).hostname;
-    if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
-      href = `/api/img?url=${encodeURIComponent(href)}`;
-  } catch (_) {}
-  return _img(href, title, text);
-};
-mdRenderer.link = (href, title, text) => {
-  const decodedText = text ? text.replace(/&amp;/g, '&') : text;
-  if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && (!decodedText || decodedText === href)) {
-    const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
-      ? `/api/img?url=${encodeURIComponent(href)}` : href;
-    return `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
-  }
-  const base = _link(href, title, text) || '';
-  // Relative links and reddit.com links are intercepted by the SPA router — no _blank
-  if (!href || !/^https?:\/\//i.test(href) || /reddit\.com\//i.test(href))
-    return base;
-  return base.replace('<a ', '<a target="_blank" rel="noopener" ');
-};
-marked.use({ renderer: mdRenderer, breaks: true, gfm: true });
+// Lazy-init so marked.min.js (loaded via defer) is guaranteed to be evaluated
+// before we touch it, regardless of module-vs-defer execution order.
+let _markedReady = false;
+function _initMarked() {
+  if (_markedReady) return;
+  _markedReady = true;
+  const r = new marked.Renderer();
+  const _img  = r.image.bind(r);
+  const _link = r.link.bind(r);
+  r.image = (href, title, text) => {
+    if (href?.startsWith('giphy|'))   return `<img src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
+    if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
+    if (href?.startsWith('redditvid|')) {
+      const base = `https://v.redd.it/${href.slice(10)}`;
+      return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
+    }
+    try {
+      const h = new URL(href).hostname;
+      if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
+        href = `/api/img?url=${encodeURIComponent(href)}`;
+    } catch (_) {}
+    return _img(href, title, text);
+  };
+  r.link = (href, title, text) => {
+    const decodedText = text ? text.replace(/&amp;/g, '&') : text;
+    if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && (!decodedText || decodedText === href)) {
+      const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
+        ? `/api/img?url=${encodeURIComponent(href)}` : href;
+      return `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
+    }
+    const base = _link(href, title, text) || '';
+    // Relative links and reddit.com links are intercepted by the SPA router — no _blank
+    if (!href || !/^https?:\/\//i.test(href) || /reddit\.com\//i.test(href))
+      return base;
+    return base.replace('<a ', '<a target="_blank" rel="noopener" ');
+  };
+  marked.use({ renderer: r, breaks: true, gfm: true });
+}
 
 // Comments often just paste reddit's video player URL as plain text (no real embed
 // metadata is exposed for comments, unlike posts) — rewrite it into a video embed.
@@ -70,6 +77,7 @@ export async function xlateText(text) {
 
 export function renderMd(text) {
   if (!text) return '';
+  _initMarked();
   const processed = embedRedditCommentVideos(linkifyReddit(text)).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
     `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });

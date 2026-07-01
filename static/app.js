@@ -547,6 +547,8 @@ document.addEventListener('touchstart', e => {
   _navFromTouch = false;
 }, { passive: true });
 document.addEventListener('touchend', e => {
+  // Leave edge touches alone so the browser's back/forward swipe gesture can fire
+  if (_touchStartX < 20 || _touchStartX > window.innerWidth - 20) return;
   const dx = Math.abs(e.changedTouches[0].clientX - _touchStartX);
   const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
   if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) return;
