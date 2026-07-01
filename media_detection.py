@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 SELFTEXT_MAX_LEN = 600
 
-YOUTUBE_RE      = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})')
+YOUTUBE_RE      = re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE      = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
 TIKTOK_RE       = re.compile(r'tiktok\.com/player/v1/(\d+)', re.I)
 VREDDDIT_RE     = re.compile(r'(https://v\.redd\.it/[^/?]+)')
