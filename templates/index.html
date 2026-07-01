@@ -86,10 +86,11 @@
 
 <!-- ── Feed ── -->
 <div id="feed">
-  <div class="state">
-    <div class="state-icon">⌗</div>
-    <div class="state-title">Loading…</div>
-  </div>
+<div class="skeleton-post"><div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div><div class="skel skel-banner"></div><div class="skel skel-footer"></div></div>
+<div class="skeleton-post skel-compact"><div class="skel-compact-left"><div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div><div class="skel skel-footer"></div></div><div class="skel skel-compact-thumb"></div></div>
+<div class="skeleton-post"><div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div><div class="skel skel-banner"></div><div class="skel skel-footer"></div></div>
+<div class="skeleton-post"><div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div><div class="skel skel-banner"></div><div class="skel skel-footer"></div></div>
+<div class="skeleton-post skel-compact"><div class="skel-compact-left"><div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div><div class="skel skel-footer"></div></div><div class="skel skel-compact-thumb"></div></div>
 </div>
 <div id="scroll-sentinel"></div>
 </main>
@@ -133,6 +134,7 @@
   </div>
   <div class="settings-body" id="settings-body"></div>
 </div>
+{% if initial_data %}<script>window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
 <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

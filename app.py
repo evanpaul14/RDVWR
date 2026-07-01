@@ -34,6 +34,7 @@ Compress(app)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
+_SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
@@ -640,11 +641,41 @@ def spa(**kwargs):
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
+def _try_inject_feed(sub, sort, time):
+    """Fetch subreddit feed for SSR injection. Returns dict or None on any error."""
+    try:
+        url = f"https://www.reddit.com/r/{sub}/{sort}.json"
+        params = {"limit": FEED_LIMIT, "raw_json": 1}
+        if sort in ("top", "controversial") and time in ("hour", "day", "week", "month", "year", "all"):
+            params["t"] = time
+        resp = reddit_get(url, params=params, timeout=6)
+        if resp.status_code != 200:
+            return None
+        listing = resp.json()["data"]
+        return {
+            "posts": extract_posts(listing),
+            "after": listing.get("after"),
+            "_sub":  sub.lower(),
+            "_sort": sort,
+            "_time": time,
+        }
+    except Exception as e:
+        log.warning("_try_inject_feed sub=%s: %s", sub, e)
+        return None
+
+
 @app.route("/r/<path:reddit_path>")
 def r_json_or_spa(reddit_path):
     if reddit_path.endswith(".json"):
         return _proxy_reddit(f"r/{reddit_path}")
-    resp = render_template("index.html")
+    initial_data = None
+    m = _SUB_FEED_RE.match(reddit_path)
+    if m:
+        sub  = m.group(1)
+        sort = m.group(2) or ('hot' if sub.lower() == 'popular' else 'top')
+        time = request.args.get('t', 'all')
+        initial_data = _try_inject_feed(sub, sort, time)
+    resp = render_template("index.html", initial_data=initial_data)
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
