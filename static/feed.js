@@ -119,9 +119,16 @@ export async function loadHome(sort='best', time='all', after=null) {
 // ── Subreddit feed ────────────────────────────────────────────────────────────
 export async function loadAbout(sub) {
   try {
-    const res = await fetch(`/api/r/${encodeURIComponent(sub)}/about`);
-    if (!res.ok) return;
-    const d = await res.json();
+    let d;
+    const inj = window.__INITIAL_ABOUT__;
+    if (inj && inj._sub === sub.toLowerCase()) {
+      window.__INITIAL_ABOUT__ = null;
+      d = inj;
+    } else {
+      const res = await fetch(`/api/r/${encodeURIComponent(sub)}/about`);
+      if (!res.ok) return;
+      d = await res.json();
+    }
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
       ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;

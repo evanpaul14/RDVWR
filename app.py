@@ -641,41 +641,61 @@ def spa(**kwargs):
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
-def _try_inject_feed(sub, sort, time):
-    """Fetch subreddit feed for SSR injection. Returns dict or None on any error."""
-    try:
-        url = f"https://www.reddit.com/r/{sub}/{sort}.json"
-        params = {"limit": FEED_LIMIT, "raw_json": 1}
-        if sort in ("top", "controversial") and time in ("hour", "day", "week", "month", "year", "all"):
-            params["t"] = time
-        resp = reddit_get(url, params=params, timeout=6)
-        if resp.status_code != 200:
+def _try_inject_subreddit(sub, sort, time):
+    """Fetch subreddit feed + about in parallel for SSR injection.
+    Returns (feed_dict, about_dict); either may be None on error."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _feed():
+        try:
+            url = f"https://www.reddit.com/r/{sub}/{sort}.json"
+            params = {"limit": FEED_LIMIT, "raw_json": 1}
+            if sort in ("top", "controversial") and time in ("hour", "day", "week", "month", "year", "all"):
+                params["t"] = time
+            r = reddit_get(url, params=params, timeout=6)
+            if r.status_code != 200:
+                return None
+            listing = r.json()["data"]
+            return {"posts": extract_posts(listing), "after": listing.get("after"),
+                    "_sub": sub.lower(), "_sort": sort, "_time": time}
+        except Exception as e:
+            log.warning("inject feed sub=%s: %s", sub, e)
             return None
-        listing = resp.json()["data"]
-        return {
-            "posts": extract_posts(listing),
-            "after": listing.get("after"),
-            "_sub":  sub.lower(),
-            "_sort": sort,
-            "_time": time,
-        }
-    except Exception as e:
-        log.warning("_try_inject_feed sub=%s: %s", sub, e)
-        return None
+
+    def _about():
+        try:
+            r = reddit_get(f"https://www.reddit.com/r/{sub}/about.json",
+                           params={"raw_json": 1}, timeout=5)
+            if r.status_code != 200:
+                return None
+            d = r.json()["data"]
+            icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
+            active = d.get("active_user_count") or d.get("accounts_active") or 0
+            return {"title": d.get("title", sub), "description": d.get("public_description", ""),
+                    "subscribers": d.get("subscribers", 0), "active": active,
+                    "icon": icon or "", "_sub": sub.lower()}
+        except Exception as e:
+            log.warning("inject about sub=%s: %s", sub, e)
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_feed  = ex.submit(_feed)
+        f_about = ex.submit(_about)
+        return f_feed.result(), f_about.result()
 
 
 @app.route("/r/<path:reddit_path>")
 def r_json_or_spa(reddit_path):
     if reddit_path.endswith(".json"):
         return _proxy_reddit(f"r/{reddit_path}")
-    initial_data = None
+    initial_data = initial_about = None
     m = _SUB_FEED_RE.match(reddit_path)
     if m:
         sub  = m.group(1)
         sort = m.group(2) or ('hot' if sub.lower() == 'popular' else 'top')
         time = request.args.get('t', 'all')
-        initial_data = _try_inject_feed(sub, sort, time)
-    resp = render_template("index.html", initial_data=initial_data)
+        initial_data, initial_about = _try_inject_subreddit(sub, sort, time)
+    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about)
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
