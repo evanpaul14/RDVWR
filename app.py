@@ -181,7 +181,7 @@ def _parse_shreddit_post(el):
         'flair_bg': '', 'flair_tc': 'dark',
         'domain': domain_str, 'poll': None,
         'crosspost_from': None, 'is_stickied': False,
-        'is_oc': False, 'is_spoiler': False, 'locked': False,
+        'is_oc': False, 'is_spoiler': el.has_attr('is-spoiler') or el.has_attr('spoiler'), 'locked': False,
         'edited_utc': None, 'awards': awards,
         'recommendation_source': el.get('recommendation-source', ''),
         'feed_label': None,
