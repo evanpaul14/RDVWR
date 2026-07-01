@@ -146,10 +146,19 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
   if (!append) showSkeletons();
   else sentinel.classList.add('loading');
   try {
-    const res  = await fetchPosts(sub, sort, time, after);
-    const data = await res.json();
+    let data, ok;
+    const inj = !append && window.__INITIAL_DATA__;
+    if (inj && inj._sub === sub.toLowerCase() && inj._sort === sort && inj._time === (time || 'all')) {
+      window.__INITIAL_DATA__ = null;
+      data = inj;
+      ok = true;
+    } else {
+      const res = await fetchPosts(sub, sort, time, after);
+      data = await res.json();
+      ok = res.ok;
+    }
     if (myGen !== state.feedGen) return;
-    if (!res.ok) {
+    if (!ok) {
       if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
       return;
     }
