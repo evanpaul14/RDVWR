@@ -46,10 +46,16 @@ def _parse_awards(awardings):
 def process_post(p):
     """Normalise a raw Reddit post dict into our API shape."""
     preview_img = None
+    thumb_url = None
     if p.get("preview") and p["preview"].get("images"):
         imgs = p["preview"]["images"][0]
         if imgs.get("source"):
             preview_img = clean_url(imgs["source"]["url"])
+            res = imgs.get("resolutions", [])
+            # card thumbnail: smallest resolution ≥320px wide
+            card = next((r for r in res if r.get("width", 0) >= 320), None) or (res[0] if res else None)
+            if card:
+                thumb_url = clean_url(card["url"])
         elif imgs.get("resolutions"):
             preview_img = clean_url(imgs["resolutions"][-1]["url"])
 
@@ -83,6 +89,10 @@ def process_post(p):
         _ph = urlparse(preview_img).hostname or ''
         if _ph in ('preview.redd.it', 'external-preview.redd.it'):
             preview_img = f"/api/img?url={url_quote(preview_img, safe='')}"
+    if thumb_url:
+        _th = urlparse(thumb_url).hostname or ''
+        if _th in ('preview.redd.it', 'external-preview.redd.it'):
+            thumb_url = f"/api/img?url={url_quote(thumb_url, safe='')}"
 
     # RedGifs: extract ID from post URL early so we skip Reddit's video-only preview
     redgifs_id = extract_redgifs_id(p.get("url", ""))
@@ -197,6 +207,7 @@ def process_post(p):
         "is_self":        p.get("is_self", False),
         "selftext":       p.get("selftext", "")[:SELFTEXT_MAX_LEN] if p.get("is_self") else "",
         "preview_img":    preview_img,
+        "thumb_url":      thumb_url,
         "gallery":        gallery,
         "is_video":       is_video,
         "video_url":      video_url,

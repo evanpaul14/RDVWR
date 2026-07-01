@@ -4,9 +4,25 @@ import { isVisited } from './visited.js';
 
 const THREAD_MAX_DEPTH = 4;
 
-// ── Markdown ─────────────────────────────────────────────────────────────────
-// Lazy-init so marked.min.js (loaded via defer) is guaranteed to be evaluated
-// before we touch it, regardless of module-vs-defer execution order.
+// ── Markdown libs (marked + DOMPurify) — loaded on demand ────────────────────
+let _mdLibsReady = false;
+let _mdLibsPromise = null;
+
+function _loadMdLibs() {
+  if (_mdLibsReady || _mdLibsPromise) return _mdLibsPromise || Promise.resolve();
+  let loaded = 0;
+  _mdLibsPromise = new Promise(resolve => {
+    for (const file of ['marked.min.js', 'purify.min.js']) {
+      const s = document.createElement('script');
+      s.src = `/static/${file}`;
+      s.onload = () => { if (++loaded === 2) { _mdLibsReady = true; resolve(); } };
+      document.head.appendChild(s);
+    }
+  });
+  return _mdLibsPromise;
+}
+_loadMdLibs();
+
 let _markedReady = false;
 function _initMarked() {
   if (_markedReady) return;
@@ -77,6 +93,7 @@ export async function xlateText(text) {
 
 export function renderMd(text) {
   if (!text) return '';
+  if (!_mdLibsReady) return '';
   _initMarked();
   const processed = embedRedditCommentVideos(linkifyReddit(text)).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
     `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
@@ -203,7 +220,7 @@ export function renderPost(p, idx, showSub=false) {
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
   const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
   if (isCompact) {
-    const imgSrc = p.gallery?.[0]?.url ?? p.preview_img ?? null;
+    const imgSrc = p.gallery?.[0]?.url ?? p.thumb_url ?? p.preview_img ?? null;
     let thumbHtml = '';
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
@@ -227,7 +244,7 @@ export function renderPost(p, idx, showSub=false) {
     </div>`;
   }
 
-  const excerptContent = p.selftext_html
+  const excerptContent = p.selftext_html && _mdLibsReady
     ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] })
     : p.selftext ? renderMd(p.selftext) : '';
   const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';

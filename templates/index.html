@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.min.css') }}">
 <link rel="modulepreload" href="{{ url_for('static', filename='app.js') }}">
 <link rel="modulepreload" href="{{ url_for('static', filename='feed.js') }}">
 <link rel="modulepreload" href="{{ url_for('static', filename='render.js') }}">
@@ -133,9 +133,6 @@
   </div>
   <div class="settings-body" id="settings-body"></div>
 </div>
-<script defer src="{{ url_for('static', filename='marked.min.js') }}"></script>
-<script defer src="{{ url_for('static', filename='purify.min.js') }}"></script>
-<script defer src="{{ url_for('static', filename='hls.min.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

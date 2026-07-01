@@ -42,7 +42,24 @@ export function syncAudio(videoEl, audioSrc) {
   videoEl.addEventListener('volumechange', () => { audio.volume = videoEl.volume; audio.muted = videoEl.muted; });
 }
 
-export function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
+let _hlsPromise = null;
+function _ensureHls() {
+  if (typeof Hls !== 'undefined') return Promise.resolve();
+  if (_hlsPromise) return _hlsPromise;
+  _hlsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/static/hls.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return _hlsPromise;
+}
+
+export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
+  if (hlsUrl) {
+    await _ensureHls();
+  }
   if (hlsUrl && typeof Hls !== 'undefined' && Hls.isSupported()) {
     const hls = new Hls({ autoStartLoad: false, startLevel: 999 });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
