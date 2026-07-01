@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
+PROXY_API_KEY       = os.environ.get('PROXY_API_KEY', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -1399,6 +1400,25 @@ def get_og_image():
         log.warning("get_og_image failed url=%s: %s", url, e)
         _og_cache[url] = None
         return cached_json({"url": None}, 60)
+
+
+@app.route("/proxy/<path:reddit_path>")
+def reddit_proxy(reddit_path):
+    if not PROXY_API_KEY:
+        return jsonify({"error": "proxy not configured"}), 503
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ") or auth[7:] != PROXY_API_KEY:
+        return jsonify({"error": "unauthorized"}), 401
+    url = f"https://oauth.reddit.com/{reddit_path}"
+    if request.query_string:
+        url += "?" + request.query_string.decode("utf-8")
+    try:
+        resp = reddit_get(url, timeout=15)
+    except Exception as e:
+        log.warning("proxy request failed url=%s: %s", url, e)
+        return jsonify({"error": "upstream request failed"}), 502
+    content_type = resp.headers.get("Content-Type", "application/json")
+    return Response(resp.content, status=resp.status_code, content_type=content_type)
 
 
 if __name__ == "__main__":
