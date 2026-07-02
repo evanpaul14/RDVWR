@@ -1,5 +1,7 @@
 # RDVWR
 
+![RDVWR UI](https://i.imgur.com/3NwifGP.png)
+
 A minimal Reddit viewer. Browse subreddits, posts, comments, user profiles, and search — no Reddit account required.
 
 ## Setup
