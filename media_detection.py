@@ -15,6 +15,7 @@ GIFV_RE         = re.compile(r'\.gifv$', re.I)
 IMGUR_ALBUM_RE  = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
 IMGUR_DIRECT_RE = re.compile(r'(?:^|/)imgur\.com/([a-zA-Z0-9]{5,9})(?:[?#]|$)', re.I)
 STREAMABLE_RE   = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
+DEVVIT_RE       = re.compile(r'content not supported on old Reddit.*?\((https?://sh\.reddit\.com/[^\)]+)\)', re.I | re.S)
 
 
 def clean_url(url):
@@ -165,6 +166,16 @@ def process_post(p):
             if m:
                 gif_url = f"https://i.imgur.com/{m.group(1)}.jpg"
 
+    # Devvit custom posts: is_self + magic selftext string
+    is_devvit = False
+    devvit_url = None
+    if p.get("is_self"):
+        full_selftext = p.get("selftext", "")
+        m = DEVVIT_RE.search(full_selftext)
+        if m:
+            is_devvit = True
+            devvit_url = m.group(1)
+
     poll = None
     if p.get("poll_data"):
         pd = p["poll_data"]
@@ -237,6 +248,8 @@ def process_post(p):
         "locked":         p.get("locked", False),
         "edited_utc":     edited_utc,
         "awards":         awards,
+        "is_devvit":      is_devvit,
+        "devvit_url":     devvit_url,
     }
 
 

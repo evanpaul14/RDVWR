@@ -351,6 +351,19 @@ export function nsfwWrap(html) {
 
 export function mediaHtml(p, full = false) {
   if (p.poll) return renderPoll(p.poll);
+  if (p.is_devvit) {
+    const imgHtml = p.preview_img
+      ? `<img class="devvit-preview" src="${escHtml(p.preview_img)}" loading="lazy" alt="">`
+      : '';
+    const href = escHtml(p.devvit_url || p.permalink || '#');
+    return `<div class="devvit-card${full ? ' devvit-card-full' : ''}">
+      ${imgHtml}
+      <div class="devvit-overlay">
+        <span class="devvit-badge"><svg width="14" height="14" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Interactive App</span>
+        <a class="devvit-open-btn" href="${href}" target="_blank" rel="noopener noreferrer">Open on Reddit ↗</a>
+      </div>
+    </div>`;
+  }
   const vc = full ? 'pv-media' : 'post-video';
   const ic = full ? 'pv-media' : 'post-media';
   const preload = full ? 'metadata' : 'none';
