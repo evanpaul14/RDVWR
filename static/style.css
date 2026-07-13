@@ -556,10 +556,16 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .devvit-overlay { position:relative; z-index:1; width:100%; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; background:linear-gradient(transparent,rgba(0,0,0,.55)); }
 .devvit-card:not(:has(.devvit-preview)) .devvit-overlay { background:none; padding:16px; }
 .devvit-badge { display:inline-flex; align-items:center; gap:5px; font-size:.78em; font-weight:600; color:#fff; background:rgba(255,69,0,.85); padding:3px 8px; border-radius:12px; white-space:nowrap; }
+.devvit-btns { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .devvit-open-btn { font-size:.8em; font-weight:600; color:#fff; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); padding:5px 12px; border-radius:16px; text-decoration:none; white-space:nowrap; transition:background .15s; }
 .devvit-open-btn:hover { background:rgba(255,255,255,.32); }
+.devvit-try-btn { font-size:.8em; font-weight:600; color:#fff; background:rgba(255,140,0,.8); border:none; padding:5px 12px; border-radius:16px; cursor:pointer; white-space:nowrap; transition:background .15s; }
+.devvit-try-btn:hover:not(:disabled) { background:rgba(255,140,0,1); }
+.devvit-try-btn:disabled { opacity:.6; cursor:default; }
 .devvit-card:not(:has(.devvit-preview)) .devvit-badge { color:var(--tx); background:var(--bg3); }
 .devvit-card:not(:has(.devvit-preview)) .devvit-open-btn { color:var(--accent); background:transparent; border-color:var(--accent); }
+.devvit-card:not(:has(.devvit-preview)) .devvit-try-btn { background:var(--accent); color:#fff; }
+.devvit-iframe { display:block; width:100%; border:none; border-radius:6px; }
 
 /* Comments: keep images compact */
 .pv-comments .md img { max-height:300px; width:auto; max-width:100%; }
