@@ -356,11 +356,15 @@ export function mediaHtml(p, full = false) {
       ? `<img class="devvit-preview" src="${escHtml(p.preview_img)}" loading="lazy" alt="">`
       : '';
     const href = escHtml(p.devvit_url || p.permalink || '#');
-    return `<div class="devvit-card${full ? ' devvit-card-full' : ''}">
+    const permalink = escHtml(p.permalink || '');
+    return `<div class="devvit-card${full ? ' devvit-card-full' : ''}" data-permalink="${permalink}">
       ${imgHtml}
       <div class="devvit-overlay">
         <span class="devvit-badge"><svg width="14" height="14" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Interactive App</span>
-        <a class="devvit-open-btn" href="${href}" target="_blank" rel="noopener noreferrer">Open on Reddit ↗</a>
+        <div class="devvit-btns">
+          <button class="devvit-try-btn" title="Load the app in this page">Try App</button>
+          <a class="devvit-open-btn" href="${href}" target="_blank" rel="noopener noreferrer">Open on Reddit ↗</a>
+        </div>
       </div>
     </div>`;
   }
@@ -443,6 +447,34 @@ document.addEventListener('click', e => {
     pvDlGallery.href = _dlHref(t.src, fn);
     pvDlGallery.download = fn;
   }
+});
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.devvit-try-btn');
+  if (!btn) return;
+  const card = btn.closest('.devvit-card');
+  if (!card) return;
+  const permalink = card.dataset.permalink;
+  if (!permalink) return;
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  fetch(`/api/devvit?url=${encodeURIComponent(permalink)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.embedded || !d.url) {
+        btn.textContent = 'Not available';
+        return;
+      }
+      const height = Math.max(300, Math.min(d.height || 512, 800));
+      const iframe = document.createElement('iframe');
+      iframe.src = d.url;
+      iframe.className = 'devvit-iframe';
+      iframe.style.height = `${height}px`;
+      iframe.allow = 'autoplay; clipboard-write';
+      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
+      card.replaceWith(iframe);
+    })
+    .catch(() => { btn.disabled = false; btn.textContent = 'Failed — retry'; });
 });
 
 let _galleryTouchX = 0;

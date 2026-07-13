@@ -17,7 +17,7 @@ from flask import Flask, render_template, jsonify, request, Response, make_respo
 from flask_compress import Compress
 from bs4 import BeautifulSoup
 from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE
-from reddit_client import reddit_get, SESSION, HEADERS
+from reddit_client import reddit_get, SESSION, HEADERS, _get_device
 from curl_cffi import requests as cffi_requests
 
 CACHE_TTL_STATIC     = 604800   # 1 week
@@ -1462,6 +1462,43 @@ def get_og_image():
         log.warning("get_og_image failed url=%s: %s", url, e)
         _og_cache[url] = None
         return cached_json({"url": None}, 60)
+
+
+_DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')
+_devvit_cache: dict = {}
+DEVVIT_CACHE_MAX = 200
+
+@app.route("/api/devvit")
+def get_devvit_embed():
+    """Fetch the Devvit webview entrypoint URL for a custom post."""
+    permalink = request.args.get('url', '').strip()
+    if not permalink or not _DEVVIT_URL_RE.match(permalink):
+        return jsonify({'error': 'Invalid URL'}), 400
+    if permalink in _devvit_cache:
+        return cached_json(_devvit_cache[permalink], 3600)
+    try:
+        device = _get_device()
+        hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8'}
+        r = cffi_requests.get(permalink, impersonate=device.impersonate,
+                              headers=hdrs, timeout=20, allow_redirects=True)
+        m = re.search(r'<devvit2-surface[^>]+\binit="([^"]+)"', r.text, re.I)
+        if not m:
+            result = {'embedded': False}
+        else:
+            init = json.loads(html_lib.unescape(m.group(1)))
+            entry = init.get('entrypointUrl', '')
+            if not entry or 'devvit.net' not in entry:
+                result = {'embedded': False}
+            else:
+                height = (init.get('postStyles') or {}).get('heightPixels', 512)
+                result = {'embedded': True, 'url': entry, 'height': int(height)}
+        if len(_devvit_cache) >= DEVVIT_CACHE_MAX:
+            _devvit_cache.pop(next(iter(_devvit_cache)))
+        _devvit_cache[permalink] = result
+        return cached_json(result, 3600)
+    except Exception as e:
+        log.error('devvit embed error url=%s: %s', permalink, e)
+        return jsonify({'embedded': False}), 200
 
 
 def _proxy_reddit(reddit_path):
