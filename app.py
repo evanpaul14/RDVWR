@@ -155,6 +155,10 @@ def _parse_shreddit_post(el):
     yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
     sm = STREAMABLE_RE.search(url); streamable_id = sm.group(1) if sm else None
 
+    is_devvit = post_type == 'custom'
+    devvit_url = (f'https://sh.reddit.com/r/{el.get("subreddit-name", "")}/comments/{post_id}'
+                  if is_devvit else None)
+
     awards = []
     icon = el.get('award-icon-url', '')
     if icon:
@@ -177,6 +181,7 @@ def _parse_shreddit_post(el):
         'streamable_id': streamable_id, 'embed_url': None,
         'redgifs_id': redgifs_id, 'gif_url': None, 'gif_is_video': False,
         'imgur_album_id': None, 'post_hint': post_type,
+        'is_devvit': is_devvit, 'devvit_url': devvit_url,
         'over_18': el.has_attr('is-nsfw'),
         'flair': '', 'flair_richtext': [], 'flair_type': 'text',
         'flair_bg': '', 'flair_tc': 'dark',
