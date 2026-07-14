@@ -944,6 +944,11 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   padding:4px 12px 10px;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
 }
+.crosspost-embed-full .xp-excerpt-full {
+  font-size:14px; line-height:1.7; color:var(--tx);
+  padding:8px 12px 12px;
+  display:block; -webkit-line-clamp:unset; overflow:visible;
+}
 
 /* ── Comment sort bar (inside post view) ─────────────────────────────────── */
 .comment-sort-bar {
