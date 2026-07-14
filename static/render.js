@@ -148,8 +148,8 @@ function renderCrosspostEmbed(orig, full=false) {
   const nav  = `/r/${sub}/comments/${id}`;
   const mediaHtml = orig.id ? (full ? mediaHtmlFull(orig) : mediaHtmlCard(orig)) : '';
   const excerptHtml = orig.selftext?.trim()
-    ? `<div class="xp-excerpt md">${renderMd(orig.selftext)}</div>` : '';
-  return `<div class="crosspost-embed">
+    ? `<div class="xp-excerpt md${full ? ' xp-excerpt-full' : ''}">${renderMd(orig.selftext)}</div>` : '';
+  return `<div class="crosspost-embed${full ? ' crosspost-embed-full' : ''}">
     <div class="crosspost-embed-header">↪ crossposted from <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a></div>
     <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${escHtml(orig.title || '')}</a>
     ${mediaHtml}${excerptHtml}
