@@ -144,13 +144,13 @@ function interceptNavLink(a, e) {
   if (!href || href.startsWith('#') || href.startsWith('javascript:') ||
       href.startsWith('mailto:') || href.startsWith('tel:')) return false;
 
-  const redditLive = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/live\/([A-Za-z0-9_-]+)/);
+  const redditLive = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/live\/([A-Za-z0-9_-]+)/);
   if (redditLive) { e.preventDefault(); navigateOrOpen(`/live/${redditLive[1]}`, e); return true; }
-  const redditPost = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
+  const redditPost = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
   if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
-  const redditWiki = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
+  const redditWiki = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
   if (redditWiki) { e.preventDefault(); navigateOrOpen(`/r/${redditWiki[1]}/wiki/${redditWiki[2]||'index'}`, e); return true; }
-  const redditSub  = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/r\/([^\/?\s#]+)(\/[^?\s#]*)?/);
+  const redditSub  = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/?\s#]+)(\/[^?\s#]*)?/);
   if (redditSub) {
     const extra = redditSub[2] || '';
     if (!extra || /^\/(hot|new|top|rising|controversial|best|gilded)?\/?$/.test(extra)) {
@@ -169,7 +169,7 @@ function interceptNavLink(a, e) {
       .catch(() => window.open(href, '_blank'));
     return true;
   }
-  const redditUser = href.match(/(?:https?:\/\/(?:www\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
+  const redditUser = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/u(?:ser)?\/([^\/?\s#]+)/);
   if (redditUser) { e.preventDefault(); navigateOrOpen(`/user/${redditUser[1]}`, e); return true; }
   try {
     const url = new URL(href, location.origin);
