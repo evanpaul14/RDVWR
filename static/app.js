@@ -163,8 +163,12 @@ function interceptNavLink(a, e) {
       .then(data => {
         if (!data.url) return;
         const post = data.url.match(/\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-        if (post) navigate(`/r/${post[1]}/comments/${post[2]}`);
-        else window.open(data.url, '_blank');
+        if (post) { navigate(`/r/${post[1]}/comments/${post[2]}`); return; }
+        const user = data.url.match(/\/u(?:ser)?\/([^\/?\s#]+)/);
+        if (user) { navigate(`/user/${user[1]}`); return; }
+        const sub = data.url.match(/\/r\/([^\/?\s#]+)/);
+        if (sub) { navigate(`/r/${sub[1]}`); return; }
+        window.open(data.url, '_blank');
       })
       .catch(() => window.open(href, '_blank'));
     return true;
