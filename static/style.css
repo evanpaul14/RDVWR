@@ -759,6 +759,11 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .pv-article-link span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pv-article-link:hover { background:var(--bg3); border-color:var(--ac); }
 .pv-article-link svg { flex-shrink:0; opacity:.8; }
+.pv-article-desc {
+  font-family:var(--sans); font-size:13px; line-height:1.5; color:var(--tx2);
+  margin-top:-10px; margin-bottom:16px;
+}
+.pv-article-desc:empty { display:none; }
 .pv-body { margin-bottom:24px; font-size:14px; line-height:1.7; color:var(--tx); }
 .pv-body .md img { max-height:500px; }
 
