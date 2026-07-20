@@ -294,12 +294,33 @@ export async function initImgurAlbums(container) {
   }));
 }
 
+// Dedupes og-image/description lookups: og-placeholder (image) and pv-article-desc
+// (subtitle) can both want the same post URL, so share one fetch and one cached result.
+const _ogFetchCache = new Map();
+const OG_FETCH_CACHE_MAX = 500;
+function fetchOg(url) {
+  let p = _ogFetchCache.get(url);
+  if (!p) {
+    if (_ogFetchCache.size >= OG_FETCH_CACHE_MAX) {
+      const evictCount = Math.ceil(OG_FETCH_CACHE_MAX / 5);
+      const it = _ogFetchCache.keys();
+      for (let i = 0; i < evictCount; i++) {
+        const { value, done } = it.next();
+        if (done) break;
+        _ogFetchCache.delete(value);
+      }
+    }
+    p = fetch(`/api/og-image?url=${encodeURIComponent(url)}`).then(r => r.json());
+    _ogFetchCache.set(url, p);
+  }
+  return p;
+}
+
 export function initOgImages(container) {
   container.querySelectorAll('.og-placeholder[data-og-url]:not([data-og-init])').forEach(wrap => {
     wrap.dataset.ogInit = '1';
     const url = wrap.dataset.ogUrl;
-    fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
-      .then(r => r.json())
+    fetchOg(url)
       .then(d => {
         if (!d.url) { wrap.remove(); return; }
         if (wrap.classList.contains('post-compact-thumb')) {
@@ -328,8 +349,7 @@ export function initOgDescriptions(container) {
   container.querySelectorAll('.pv-article-desc[data-og-url]:not([data-og-init])').forEach(el => {
     el.dataset.ogInit = '1';
     const url = el.dataset.ogUrl;
-    fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
-      .then(r => r.json())
+    fetchOg(url)
       .then(d => {
         if (!d.description) { el.remove(); return; }
         el.textContent = d.description;
