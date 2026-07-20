@@ -10,6 +10,9 @@ function _trackVideoMute(v) {
     if (nowMuted !== state.userPrefersMuted) {
       state.userPrefersMuted = nowMuted;
       localStorage.setItem('mutePreference', nowMuted ? 'muted' : 'unmuted');
+      document.querySelectorAll('video[data-mute-tracked]').forEach(other => {
+        if (other !== v) other.muted = nowMuted;
+      });
     }
   });
 }
