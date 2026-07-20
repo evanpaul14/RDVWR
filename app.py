@@ -41,6 +41,7 @@ IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jp
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
 OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
+OG_DESC_RE          = re.compile(r'<meta[^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])', re.I)
 _og_cache: dict = {}
 OG_CACHE_MAX = 1000
 
@@ -1444,7 +1445,7 @@ def get_og_image():
     if not hostname or not _is_ssrf_safe(hostname):
         return jsonify({"error": "URL not allowed"}), 403
     if url in _og_cache:
-        return cached_json({"url": _og_cache[url]}, 3600)
+        return cached_json(_og_cache[url], 3600)
     try:
         r = SESSION.get(url, timeout=8, stream=True, headers={**HEADERS, "Accept": "text/html"})
         # Read only the first 32 KB — enough for <head> tags
@@ -1453,15 +1454,19 @@ def get_og_image():
         text = chunk.decode("utf-8", errors="ignore")
         m = OG_IMAGE_RE.search(text)
         img_url = (m.group(1) or m.group(2)).strip() if m else None
+        d = OG_DESC_RE.search(text)
+        desc = html_lib.unescape(d.group(1) or d.group(2)).strip() if d else None
+        result = {"url": img_url, "description": desc or None}
         if len(_og_cache) >= OG_CACHE_MAX:
             for k in list(_og_cache)[:OG_CACHE_MAX // 5]:
                 del _og_cache[k]
-        _og_cache[url] = img_url
-        return cached_json({"url": img_url}, 3600)
+        _og_cache[url] = result
+        return cached_json(result, 3600)
     except Exception as e:
         log.warning("get_og_image failed url=%s: %s", url, e)
-        _og_cache[url] = None
-        return cached_json({"url": None}, 60)
+        result = {"url": None, "description": None}
+        _og_cache[url] = result
+        return cached_json(result, 60)
 
 
 _DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')

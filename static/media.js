@@ -252,6 +252,7 @@ export function initMedia(container) {
   initRedgifs(container);
   initImgurAlbums(container);
   initOgImages(container);
+  initOgDescriptions(container);
 }
 
 export async function initImgurAlbums(container) {
@@ -320,6 +321,20 @@ export function initOgImages(container) {
         }
       })
       .catch(() => { wrap.remove(); });
+  });
+}
+
+export function initOgDescriptions(container) {
+  container.querySelectorAll('.pv-article-desc[data-og-url]:not([data-og-init])').forEach(el => {
+    el.dataset.ogInit = '1';
+    const url = el.dataset.ogUrl;
+    fetch(`/api/og-image?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.description) { el.remove(); return; }
+        el.textContent = d.description;
+      })
+      .catch(() => { el.remove(); });
   });
 }
 
