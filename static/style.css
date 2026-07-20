@@ -738,7 +738,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .pv-meta {
   display:flex; gap:12px; flex-wrap:wrap;
   font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em;
-  margin-bottom:16px;
+  margin-bottom:10px;
 }
 .pv-meta .up { color:var(--up); }
 .pv-meta a { color:var(--tx3); text-decoration:none; transition:color .15s; }
