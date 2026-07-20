@@ -209,7 +209,7 @@
       </div>
       ${h}
       ${i.crosspost_from?"":He(i)}
-      ${!i.is_self&&!i.crosspost_from&&i.url&&i.domain&&!i.domain.startsWith("self.")&&!i.domain.endsWith("redd.it")&&!i.url.includes("reddit.com/gallery")?`<a class="pv-article-link" href="${c(i.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${c(i.url)}</span></a><div class="pv-article-desc" data-og-url="${c(i.url)}"></div>`:""}
+      ${!i.is_self&&!i.crosspost_from&&i.url&&i.domain&&!i.domain.startsWith("self.")&&!i.domain.endsWith("redd.it")&&!i.url.includes("reddit.com/gallery")?`<div class="pv-article-box"><a class="pv-article-link" href="${c(i.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${c(i.url)}</span></a><div class="pv-article-desc" data-og-url="${c(i.url)}"></div></div>`:""}
       ${p}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
