@@ -153,7 +153,7 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
   if (!append) showSkeletons();
   else sentinel.classList.add('loading');
   try {
-    let data, ok;
+    let data, ok, status;
     const inj = !append && window.__INITIAL_DATA__;
     if (inj && inj._sub === sub.toLowerCase() && inj._sort === sort && inj._time === (time || 'all')) {
       window.__INITIAL_DATA__ = null;
@@ -163,10 +163,14 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
       const res = await fetchPosts(sub, sort, time, after);
       data = await res.json();
       ok = res.ok;
+      status = res.status;
     }
     if (myGen !== state.feedGen) return;
     if (!ok) {
-      if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+      if (!append) {
+        if (status === 404) return { notFound: true };
+        feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+      }
       return;
     }
     if (!append) feed.innerHTML = '';
@@ -203,7 +207,7 @@ export async function loadSubreddit(sub, sort='top', time='all', after=null) {
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
   loadAbout(state.currentSub);
-  await loadSubFeed(state.currentSub, state.currentSort, state.currentTime, after);
+  return await loadSubFeed(state.currentSub, state.currentSort, state.currentTime, after);
 }
 
 // ── Multi feed ────────────────────────────────────────────────────────────────
