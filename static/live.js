@@ -11,10 +11,20 @@ const subInput   = document.getElementById('subreddit-input');
 const pvSubInput = document.getElementById('pv-subreddit-input');
 
 let _liveTimer = null;
+let _liveResumeArgs = null;
 
 export function cancelLivePoll() {
   if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
+  _liveResumeArgs = null;
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (_liveTimer) { clearTimeout(_liveTimer); _liveTimer = null; }
+  } else if (_liveResumeArgs && !_liveTimer) {
+    _liveTimer = setTimeout(() => _pollLiveUpdates(..._liveResumeArgs), 0);
+  }
+});
 
 export async function loadLiveThread(threadId) {
   cancelLivePoll();
@@ -64,7 +74,8 @@ export async function loadLiveThread(threadId) {
     </div>`;
 
     if (isLive && state._liveNewestId) {
-      _liveTimer = setTimeout(() => _pollLiveUpdates(threadId, myGen), 30000);
+      _liveResumeArgs = [threadId, myGen];
+      if (!document.hidden) _liveTimer = setTimeout(() => _pollLiveUpdates(threadId, myGen), 30000);
     }
   } catch { if (myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === state.feedGen) state.loading = false; }
@@ -93,7 +104,8 @@ async function _pollLiveUpdates(threadId, myGen) {
     } catch {}
   }
   if (myGen === state.feedGen && state.liveMode && state.liveState === 'live' && state.liveThreadId === threadId) {
-    _liveTimer = setTimeout(() => _pollLiveUpdates(threadId, myGen), 30000);
+    _liveResumeArgs = [threadId, myGen];
+    if (!document.hidden) _liveTimer = setTimeout(() => _pollLiveUpdates(threadId, myGen), 30000);
   }
 }
 

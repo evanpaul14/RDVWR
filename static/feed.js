@@ -117,17 +117,26 @@ export async function loadHome(sort='best', time='all', after=null) {
 }
 
 // ── Subreddit feed ────────────────────────────────────────────────────────────
+const _aboutCache = new Map();
+const ABOUT_CACHE_TTL = 5 * 60 * 1000;
+
 export async function loadAbout(sub) {
   try {
     let d;
+    const key = sub.toLowerCase();
     const inj = window.__INITIAL_ABOUT__;
-    if (inj && inj._sub === sub.toLowerCase()) {
+    const cached = _aboutCache.get(key);
+    if (inj && inj._sub === key) {
       window.__INITIAL_ABOUT__ = null;
       d = inj;
+      _aboutCache.set(key, { d, ts: Date.now() });
+    } else if (cached && Date.now() - cached.ts < ABOUT_CACHE_TTL) {
+      d = cached.d;
     } else {
       const res = await fetch(`/api/r/${encodeURIComponent(sub)}/about`);
       if (!res.ok) return;
       d = await res.json();
+      _aboutCache.set(key, { d, ts: Date.now() });
     }
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
       ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';

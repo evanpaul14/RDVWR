@@ -73,6 +73,36 @@ def cached_json(data, seconds):
     resp.headers['Cache-Control'] = f'public, max-age={seconds}'
     return resp
 
+_view_cache: dict = {}
+_view_cache_lock = threading.Lock()
+VIEW_CACHE_MAX = 1000
+
+def server_cache(ttl):
+    """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
+    request path+query, so identical requests (repeat visits, multiple tabs)
+    don't re-hit Reddit within the window."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            key = request.full_path
+            now = time.time()
+            with _view_cache_lock:
+                hit = _view_cache.get(key)
+            if hit and hit[0] > now:
+                return cached_json(hit[1], ttl)
+            resp = f(*args, **kwargs)
+            cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
+            if isinstance(resp, Response) and resp.status_code == 200 and 'no-store' not in cache_control and 'private' not in cache_control:
+                data = resp.get_json(silent=True)
+                if data is not None:
+                    with _view_cache_lock:
+                        if len(_view_cache) >= VIEW_CACHE_MAX:
+                            _view_cache.pop(next(iter(_view_cache)))
+                        _view_cache[key] = (now + ttl, data)
+            return resp
+        return wrapper
+    return decorator
+
 def get_redgifs_token():
     global _rg_token, _rg_token_exp
     if _rg_token and time.time() < _rg_token_exp:
@@ -607,6 +637,7 @@ def _scrape_imgur_album(album_id):
 
 
 @app.route("/api/imgur/album/<album_id>")
+@server_cache(CACHE_TTL_SUBREDDIT)
 def get_imgur_album(album_id):
     if not IMGUR_ALBUM_ID_RE.match(album_id):
         return jsonify({"error": "Invalid album ID"}), 400
@@ -735,6 +766,7 @@ def r_json_or_spa(reddit_path):
 SEARCH_SORTS = {'relevance', 'hot', 'top', 'new'}
 
 @app.route("/api/search")
+@server_cache(CACHE_TTL_FEED)
 def search_posts():
     q     = request.args.get("q", "").strip()
     sort  = request.args.get("sort", "relevance")
@@ -771,6 +803,7 @@ def search_posts():
 
 @app.route("/api/r/<subreddit>")
 @validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_posts(subreddit):
     sort  = request.args.get("sort", "top")
     if sort not in FEED_SORTS:
@@ -921,6 +954,7 @@ def get_home():
 
 @app.route("/api/r/<subreddit>/about")
 @validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_about(subreddit):
     try:
         resp = reddit_get(
@@ -945,6 +979,7 @@ def get_about(subreddit):
 
 @app.route("/api/r/<subreddit>/rules")
 @validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
 def get_rules(subreddit):
     try:
         resp = reddit_get(
@@ -961,6 +996,7 @@ def get_rules(subreddit):
 
 @app.route("/api/r/<subreddit>/about/moderators")
 @validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
 def get_moderators(subreddit):
     try:
         resp = reddit_get(
@@ -1045,6 +1081,7 @@ def search_users():
 
 @app.route("/api/r/<subreddit>/duplicates/<post_id>")
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_duplicates(subreddit, post_id):
     try:
         after = request.args.get("after", "")
@@ -1072,6 +1109,7 @@ COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
 @app.route("/api/r/<subreddit>/comments/<post_id>")
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_comments(subreddit, post_id):
     try:
         comment_id = request.args.get('comment')
@@ -1121,6 +1159,7 @@ def get_comments(subreddit, post_id):
 
 @app.route("/api/r/<subreddit>/morechildren/<post_id>")
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_morechildren(subreddit, post_id):
     children = request.args.get("children", "")
     sort     = request.args.get("sort", "confidence")
@@ -1165,6 +1204,7 @@ def get_morechildren(subreddit, post_id):
 
 @app.route("/api/user/<username>/about")
 @validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_user_about(username):
     try:
         resp = reddit_get(
@@ -1190,6 +1230,7 @@ def get_user_about(username):
 
 @app.route("/api/user/<username>/posts")
 @validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_user_posts_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
@@ -1216,6 +1257,7 @@ def get_user_posts_api(username):
 
 @app.route("/api/user/<username>/comments")
 @validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_user_comments_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
@@ -1257,6 +1299,7 @@ def get_user_comments_api(username):
 
 @app.route("/api/user/<username>/overview")
 @validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_user_overview_api(username):
     sort  = request.args.get("sort", "new")
     t     = request.args.get("t", "")
@@ -1306,6 +1349,7 @@ WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
 @app.route("/api/r/<subreddit>/wiki")
 @app.route("/api/r/<subreddit>/wiki/<path:page>")
 @validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
 def get_wiki(subreddit, page='index'):
     if not WIKI_PAGE_RE.match(page):
         return jsonify({"error": "Invalid page name"}), 400
@@ -1332,6 +1376,7 @@ def get_wiki(subreddit, page='index'):
 
 @app.route("/api/user/<username>/m/<multiname>")
 @validate_params(username=USERNAME_RE, multiname=MULTINAME_RE)
+@server_cache(CACHE_TTL_FEED)
 def get_multireddit(username, multiname):
     sort  = request.args.get("sort", "hot")
     t     = request.args.get("t", "")
