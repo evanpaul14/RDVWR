@@ -59,12 +59,16 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       state.searchMode = false;
       await loadHome(route.sort || 'best', route.time || 'all', route.after || null);
       break;
-    case 'sub':
+    case 'sub': {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      await loadSubreddit(route.sub, route.sort, route.time || 'all', route.after || null);
+      const subResult = await loadSubreddit(route.sub, route.sort, route.time || 'all', route.after || null);
+      if (subResult?.notFound) {
+        navigate(`/search?q=${encodeURIComponent(route.sub)}&stype=communities`, { replace: true });
+      }
       break;
+    }
     case 'multi':
       closePostView();
       closeSidebar();
