@@ -10,7 +10,9 @@ import logging
 import socket
 import ipaddress
 import uuid
+import threading
 import requests
+from functools import wraps
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
@@ -35,6 +37,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 _SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
+SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
+USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
+POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
+MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
+FEED_SORTS   = {'hot', 'new', 'top', 'rising', 'controversial'}
+
+def validate_params(**patterns):
+    """Route decorator: 400 if a path/view param doesn't match its allowlist regex."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            for key, pattern in patterns.items():
+                if key in kwargs and not pattern.match(kwargs[key]):
+                    return jsonify({"error": f"Invalid {key}"}), 400
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
@@ -47,6 +66,7 @@ OG_CACHE_MAX = 1000
 
 _rg_token     = None
 _rg_token_exp = 0.0
+_rg_lock      = threading.Lock()
 
 def cached_json(data, seconds):
     resp = make_response(jsonify(data))
@@ -57,15 +77,18 @@ def get_redgifs_token():
     global _rg_token, _rg_token_exp
     if _rg_token and time.time() < _rg_token_exp:
         return _rg_token
-    log.info("refreshing redgifs token")
-    r = SESSION.get("https://api.redgifs.com/v2/auth/temporary", timeout=10)
-    if not r.ok:
-        log.warning("redgifs token HTTP %s: %s", r.status_code, r.text[:200])
-    r.raise_for_status()
-    _rg_token     = r.json()["token"]
-    _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
-    log.info("redgifs token refreshed, expires in %ss", REDGIFS_TOKEN_TTL)
-    return _rg_token
+    with _rg_lock:
+        if _rg_token and time.time() < _rg_token_exp:
+            return _rg_token
+        log.info("refreshing redgifs token")
+        r = SESSION.get("https://api.redgifs.com/v2/auth/temporary", timeout=10)
+        if not r.ok:
+            log.warning("redgifs token HTTP %s: %s", r.status_code, r.text[:200])
+        r.raise_for_status()
+        _rg_token     = r.json()["token"]
+        _rg_token_exp = time.time() + REDGIFS_TOKEN_TTL
+        log.info("redgifs token refreshed, expires in %ss", REDGIFS_TOKEN_TTL)
+        return _rg_token
 
 
 def _parse_shreddit_post(el):
@@ -347,13 +370,15 @@ def resolve_url():
         parsed = urlparse(url)
     except Exception:
         return jsonify({'error': 'Invalid URL'}), 400
-    if parsed.scheme not in ('http', 'https') or 'reddit.com' not in parsed.netloc:
+    hostname = parsed.hostname or ''
+    if parsed.scheme not in ('http', 'https') or not (hostname == 'reddit.com' or hostname.endswith('.reddit.com')):
         return jsonify({'error': 'Only reddit.com URLs supported'}), 400
     try:
         r = requests.head(url, allow_redirects=True, timeout=5, headers=HEADERS)
         return jsonify({'url': r.url})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 502
+    except Exception:
+        log.warning("resolve_url failed url=%s", url)
+        return jsonify({'error': 'Request failed'}), 502
 
 @app.route("/api/download")
 def download_media():
@@ -745,8 +770,11 @@ def search_posts():
 # ── Subreddit API ─────────────────────────────────────────────────────────────
 
 @app.route("/api/r/<subreddit>")
+@validate_params(subreddit=SUBREDDIT_RE)
 def get_posts(subreddit):
     sort  = request.args.get("sort", "top")
+    if sort not in FEED_SORTS:
+        sort = "top"
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
@@ -892,6 +920,7 @@ def get_home():
 
 
 @app.route("/api/r/<subreddit>/about")
+@validate_params(subreddit=SUBREDDIT_RE)
 def get_about(subreddit):
     try:
         resp = reddit_get(
@@ -915,6 +944,7 @@ def get_about(subreddit):
 
 
 @app.route("/api/r/<subreddit>/rules")
+@validate_params(subreddit=SUBREDDIT_RE)
 def get_rules(subreddit):
     try:
         resp = reddit_get(
@@ -930,6 +960,7 @@ def get_rules(subreddit):
 
 
 @app.route("/api/r/<subreddit>/about/moderators")
+@validate_params(subreddit=SUBREDDIT_RE)
 def get_moderators(subreddit):
     try:
         resp = reddit_get(
@@ -1013,6 +1044,7 @@ def search_users():
 
 
 @app.route("/api/r/<subreddit>/duplicates/<post_id>")
+@validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 def get_duplicates(subreddit, post_id):
     try:
         after = request.args.get("after", "")
@@ -1039,6 +1071,7 @@ def get_duplicates(subreddit, post_id):
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
 @app.route("/api/r/<subreddit>/comments/<post_id>")
+@validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 def get_comments(subreddit, post_id):
     try:
         comment_id = request.args.get('comment')
@@ -1087,6 +1120,7 @@ def get_comments(subreddit, post_id):
 
 
 @app.route("/api/r/<subreddit>/morechildren/<post_id>")
+@validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 def get_morechildren(subreddit, post_id):
     children = request.args.get("children", "")
     sort     = request.args.get("sort", "confidence")
@@ -1130,6 +1164,7 @@ def get_morechildren(subreddit, post_id):
 # ── User API ──────────────────────────────────────────────────────────────────
 
 @app.route("/api/user/<username>/about")
+@validate_params(username=USERNAME_RE)
 def get_user_about(username):
     try:
         resp = reddit_get(
@@ -1154,6 +1189,7 @@ def get_user_about(username):
 
 
 @app.route("/api/user/<username>/posts")
+@validate_params(username=USERNAME_RE)
 def get_user_posts_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
@@ -1179,6 +1215,7 @@ def get_user_posts_api(username):
 
 
 @app.route("/api/user/<username>/comments")
+@validate_params(username=USERNAME_RE)
 def get_user_comments_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
@@ -1219,6 +1256,7 @@ def get_user_comments_api(username):
 
 
 @app.route("/api/user/<username>/overview")
+@validate_params(username=USERNAME_RE)
 def get_user_overview_api(username):
     sort  = request.args.get("sort", "new")
     t     = request.args.get("t", "")
@@ -1263,10 +1301,11 @@ def get_user_overview_api(username):
         return jsonify({"error": str(e)}), 500
 
 
-WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-\/\.]+$')
+WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
 
 @app.route("/api/r/<subreddit>/wiki")
 @app.route("/api/r/<subreddit>/wiki/<path:page>")
+@validate_params(subreddit=SUBREDDIT_RE)
 def get_wiki(subreddit, page='index'):
     if not WIKI_PAGE_RE.match(page):
         return jsonify({"error": "Invalid page name"}), 400
@@ -1292,6 +1331,7 @@ def get_wiki(subreddit, page='index'):
 
 
 @app.route("/api/user/<username>/m/<multiname>")
+@validate_params(username=USERNAME_RE, multiname=MULTINAME_RE)
 def get_multireddit(username, multiname):
     sort  = request.args.get("sort", "hot")
     t     = request.args.get("t", "")
