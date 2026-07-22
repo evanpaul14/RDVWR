@@ -1,4 +1,4 @@
-import { escHtml, AUTOCOMPLETE_DEBOUNCE } from './utils.js';
+import { escHtml, fmtNum, AUTOCOMPLETE_DEBOUNCE } from './utils.js';
 
 const _acCancellers = [];
 
@@ -23,11 +23,15 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
     if (acAbort) { acAbort.abort(); acAbort = null; }
     hide();
   }
-  function show(names) {
-    if (!names.length) { hide(); return; }
+  function show(subs) {
+    if (!subs.length) { hide(); return; }
     acIdx = -1;
-    dropdownEl.innerHTML = names.map(n =>
-      `<div class="autocomplete-item" role="option" data-sub="${escHtml(n)}">${escHtml(n)}</div>`
+    dropdownEl.innerHTML = subs.map(s =>
+      `<div class="autocomplete-item" role="option" data-sub="${escHtml(s.name)}">`+
+      (s.icon ? `<img class="autocomplete-icon" src="${escHtml(s.icon)}" alt="" loading="lazy">` : `<span class="autocomplete-icon autocomplete-icon--blank"></span>`)+
+      `<span class="autocomplete-name">${escHtml(s.name)}</span>`+
+      (s.subscribers ? `<span class="autocomplete-subs">${fmtNum(s.subscribers)}</span>` : '')+
+      `</div>`
     ).join('');
     dropdownEl.classList.add('open');
     inputEl.setAttribute('aria-expanded', 'true');
@@ -46,7 +50,7 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
         const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
         const data = await res.json();
         acAbort = null;
-        show(data.names || []);
+        show(data.subs || []);
       } catch (err) {
         if (err.name !== 'AbortError') hide();
       }

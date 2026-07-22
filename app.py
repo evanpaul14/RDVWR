@@ -670,18 +670,93 @@ def get_imgur_album(album_id):
 def subreddit_search():
     q = request.args.get("q", "").strip()
     if len(q) < 2:
-        return jsonify({"names": []})
+        return jsonify({"subs": []})
     try:
         resp = reddit_get(
-            "https://www.reddit.com/api/search_reddit_names.json",
-            params={"query": q, "include_over_18": 0, "exact": 0},
+            "https://www.reddit.com/api/subreddit_autocomplete_v2.json",
+            params={"query": q, "include_over_18": "true", "include_profiles": "false", "limit": 8},
             timeout=5)
         if resp.status_code != 200:
-            return jsonify({"names": []})
-        return jsonify({"names": resp.json().get("names", [])[:8]})
+            return jsonify({"subs": []})
+        children = resp.json().get("data", {}).get("children", [])
+        subs = [{
+            "name":        c["data"].get("display_name", ""),
+            "icon":        clean_url(c["data"].get("icon_img") or c["data"].get("community_icon") or ""),
+            "subscribers": c["data"].get("subscribers", 0),
+            "over18":      bool(c["data"].get("over18")),
+        } for c in children if c.get("data", {}).get("display_name")]
+        return jsonify({"subs": subs[:8]})
     except Exception as e:
         log.warning("subreddit_search failed q=%r: %s", q, e)
-        return jsonify({"names": []})
+        return jsonify({"subs": []})
+
+
+_WIDGET_KINDS = {"community-list", "calendar", "image", "textarea", "button", "menu"}
+
+
+@app.route("/api/r/<subreddit>/widgets")
+@validate_params(subreddit=SUBREDDIT_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
+def get_widgets(subreddit):
+    try:
+        resp = reddit_get(
+            f"https://www.reddit.com/r/{subreddit}/api/widgets.json",
+            params={"progressive_images": "true", "raw_json": 1}, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"widgets": []})
+        d       = resp.json()
+        items   = d.get("items", {})
+        order   = (d.get("layout", {}).get("sidebar", {}) or {}).get("order", [])
+        topbar  = (d.get("layout", {}).get("topbar", {}) or {}).get("order", [])
+        widgets = []
+        for wid in [*topbar, *order]:
+            w = items.get(wid)
+            if not w or w.get("kind") not in _WIDGET_KINDS:
+                continue
+            kind = w["kind"]
+            entry = {"kind": kind, "name": w.get("shortName", "")}
+            if kind == "community-list":
+                entry["items"] = [{
+                    "name": c.get("name", ""),
+                    "icon": clean_url(c.get("communityIcon") or c.get("iconUrl") or ""),
+                    "subscribers": c.get("subscribers", 0),
+                    "over18": bool(c.get("isNSFW")),
+                } for c in w.get("data", [])]
+            elif kind == "calendar":
+                entry["events"] = [{
+                    "title": ev.get("title", ""),
+                    "startTime": ev.get("startTime"),
+                    "allDay": bool(ev.get("allDay")),
+                } for ev in w.get("data", [])][:8]
+            elif kind == "image":
+                entry["images"] = [{
+                    "url": clean_url(im.get("url") or ""),
+                    "linkUrl": im.get("linkUrl") or "",
+                } for im in w.get("data", []) if im.get("url")]
+            elif kind == "textarea":
+                entry["text"] = w.get("text", "")
+            elif kind == "button":
+                entry["buttons"] = [{
+                    "text": b.get("text", ""),
+                    "url": b.get("url", ""),
+                    "color": b.get("color", ""),
+                } for b in w.get("buttons", [])]
+            elif kind == "menu":
+                entry["links"] = [{
+                    "text": m.get("text", ""),
+                    "url": m.get("url", ""),
+                } for m in w.get("data", []) if m.get("url")]
+            content_key = {"community-list": "items", "calendar": "events", "image": "images",
+                           "button": "buttons", "menu": "links"}.get(kind)
+            if content_key is not None and not entry.get(content_key):
+                continue
+            if kind == "textarea" and not entry.get("text", "").strip():
+                continue
+            widgets.append(entry)
+        return cached_json({"widgets": widgets}, CACHE_TTL_SUBREDDIT)
+    except Exception as e:
+        log.warning("get_widgets failed sub=%s: %s", subreddit, e)
+        return jsonify({"widgets": []})
 
 
 # ── SPA catch-all routes ──────────────────────────────────────────────────────

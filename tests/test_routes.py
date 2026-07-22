@@ -345,23 +345,31 @@ class TestSearchUsers:
 
 # ── /api/subreddit-search ─────────────────────────────────────────────────────
 
+def _autocomplete_listing(names):
+    return {"data": {"children": [
+        {"kind": "t5", "data": {"display_name": n, "icon_img": "", "subscribers": 100, "over18": False}}
+        for n in names
+    ]}}
+
+
 class TestSubredditSearch:
     def test_short_query_returns_empty(self, client):
         resp = client.get("/api/subreddit-search?q=p")
         assert resp.status_code == 200
-        assert resp.get_json()["names"] == []
+        assert resp.get_json()["subs"] == []
 
     @patch.object(app_module.SESSION, "get")
     def test_happy_path(self, mock_get, client):
-        mock_get.return_value = _session_get({"names": ["python", "pythonista"]})
+        mock_get.return_value = _session_get(_autocomplete_listing(["python", "pythonista"]))
         resp = client.get("/api/subreddit-search?q=py")
-        assert resp.get_json()["names"] == ["python", "pythonista"]
+        names = [s["name"] for s in resp.get_json()["subs"]]
+        assert names == ["python", "pythonista"]
 
     @patch.object(app_module.SESSION, "get")
     def test_capped_at_eight(self, mock_get, client):
-        mock_get.return_value = _session_get({"names": [f"sub{i}" for i in range(20)]})
+        mock_get.return_value = _session_get(_autocomplete_listing([f"sub{i}" for i in range(20)]))
         resp = client.get("/api/subreddit-search?q=sub")
-        assert len(resp.get_json()["names"]) <= 8
+        assert len(resp.get_json()["subs"]) <= 8
 
 
 # ── /api/user/<username>/about ───────────────────────────────────────────────
