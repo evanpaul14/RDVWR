@@ -205,10 +205,10 @@ def process_post(p):
     edited_utc = edited if isinstance(edited, (int, float)) and edited else None
 
     return {
-        "id":             p["id"],
-        "title":          p["title"],
+        "id":             p.get("id", ""),
+        "title":          p.get("title", ""),
         "author":         p.get("author", "[deleted]"),
-        "subreddit":      p["subreddit"],
+        "subreddit":      p.get("subreddit", ""),
         "score":          p.get("score", 0),
         "upvote_ratio":   round(p.get("upvote_ratio", 0) * 100),
         "num_comments":   p.get("num_comments", 0),
@@ -254,5 +254,12 @@ def process_post(p):
 
 
 def extract_posts(listing):
-    return [process_post(c["data"]) for c in listing["children"]
-            if c.get("kind") == "t3" and not c.get("data", {}).get("promoted")]
+    posts = []
+    for c in listing["children"]:
+        if c.get("kind") != "t3" or c.get("data", {}).get("promoted"):
+            continue
+        try:
+            posts.append(process_post(c["data"]))
+        except (KeyError, TypeError) as e:
+            log.warning("extract_posts: skipping malformed post id=%s: %s", c.get("data", {}).get("id"), e)
+    return posts
