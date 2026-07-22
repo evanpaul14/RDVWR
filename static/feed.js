@@ -175,6 +175,7 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     }
     if (!append) feed.innerHTML = '';
     if (!data.posts.length && !append) {
+      if (!after) return { notFound: true };
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
