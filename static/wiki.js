@@ -11,6 +11,7 @@ export async function loadWikiPage(sub, page) {
   setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   sortBar.innerHTML = `<a class="sort-btn" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
+  sortBar.style.display = 'flex';
   document.title = `${page} — ${sub} wiki — RDVWR`;
   try {
     const res = await fetch(`/api/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
