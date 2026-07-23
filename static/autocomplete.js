@@ -30,7 +30,7 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
       `<div class="autocomplete-item" role="option" data-sub="${escHtml(s.name)}">`+
       (s.icon ? `<img class="autocomplete-icon" src="${escHtml(s.icon)}" alt="" loading="lazy">` : `<span class="autocomplete-icon autocomplete-icon--blank"></span>`)+
       `<span class="autocomplete-name">${escHtml(s.name)}</span>`+
-      (s.subscribers ? `<span class="autocomplete-subs">${fmtNum(s.subscribers)}</span>` : '')+
+      (s.subscribers ? `<span class="autocomplete-subs">${fmtNum(s.subscribers)} members</span>` : '')+
       `</div>`
     ).join('');
     dropdownEl.classList.add('open');
