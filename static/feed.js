@@ -119,6 +119,14 @@ export async function loadHome(sort='best', time='all', after=null) {
 // ── Subreddit feed ────────────────────────────────────────────────────────────
 const _aboutCache = new Map();
 const ABOUT_CACHE_TTL = 5 * 60 * 1000;
+const SUB_STATE_LABELS = {
+  restricted:      'restricted',
+  archived:        'archived',
+  quarantined:     'quarantined',
+  gold_restricted: 'coin-restricted',
+  employees_only:  'staff-only',
+  user:            'user profile',
+};
 
 export async function loadAbout(sub) {
   try {
@@ -142,19 +150,21 @@ export async function loadAbout(sub) {
       ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;
     const activePart = d.active ? ` · <span>${fmtNum(d.active)}</span> online` : '';
-    document.getElementById('ctx-stats').innerHTML = `<span>${fmtNum(d.subscribers)}</span> members${activePart}`;
+    const statePart = d.state ? ` · <span class="ctx-state">${escHtml(SUB_STATE_LABELS[d.state] || d.state)}</span>` : '';
+    document.getElementById('ctx-stats').innerHTML = `<span>${fmtNum(d.subscribers)}</span> members${activePart}${statePart}`;
     ctxInfo.classList.add('visible');
   } catch {}
 }
 
-async function fetchPosts(sub, sort, time, after) {
+async function fetchPosts(sub, sort, time, after, quarantineOptIn=false) {
   let url = `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
   if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${after}`;
+  if (quarantineOptIn) url += '&quarantine_opt_in=1';
   return fetch(url);
 }
 
-export async function loadSubFeed(sub, sort, time='all', after=null, append=false) {
+export async function loadSubFeed(sub, sort, time='all', after=null, append=false, quarantineOptIn=false) {
   if (append && state.loading) return;
   if (!append) state.feedGen++;
   const myGen = state.feedGen;
@@ -163,13 +173,13 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
   else sentinel.classList.add('loading');
   try {
     let data, ok, status;
-    const inj = !append && window.__INITIAL_DATA__;
+    const inj = !append && !quarantineOptIn && window.__INITIAL_DATA__;
     if (inj && inj._sub === sub.toLowerCase() && inj._sort === sort && inj._time === (time || 'all')) {
       window.__INITIAL_DATA__ = null;
       data = inj;
       ok = true;
     } else {
-      const res = await fetchPosts(sub, sort, time, after);
+      const res = await fetchPosts(sub, sort, time, after, quarantineOptIn);
       data = await res.json();
       ok = res.ok;
       status = res.status;
@@ -177,14 +187,22 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     if (myGen !== state.feedGen) return;
     if (!ok) {
       if (!append) {
-        if (status === 404) return { notFound: true };
-        feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+        if (data.state === 'not_found') return { notFound: true };
+        if (data.state === 'quarantined') {
+          feed.innerHTML = `<div class="state state-quarantine">
+            <div class="state-icon">⚠</div>
+            <div class="state-title">This subreddit is quarantined</div>
+            ${data.error ? `<div class="state-sub">${escHtml(data.error)}</div>` : ''}
+            <button class="state-continue-btn" data-sub="${escHtml(sub)}" data-sort="${escHtml(sort)}" data-time="${escHtml(time||'all')}">Continue</button>
+          </div>`;
+        } else {
+          feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+        }
       }
       return;
     }
     if (!append) feed.innerHTML = '';
     if (!data.posts.length && !append) {
-      if (!after) return { notFound: true };
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }

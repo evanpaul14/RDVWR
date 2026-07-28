@@ -90,8 +90,9 @@ export function renderAuthorFlair(c) {
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
 
-export function errState(msg, retryTarget) {
-  return `<div class="state"><div class="state-icon">⚠</div><div class="state-title">${msg}</div><button class="state-retry-btn" data-retry="${retryTarget}">Try again</button></div>`;
+export function errState(msg, retryTarget, sub='') {
+  const subHtml = sub ? `<div class="state-sub">${sub}</div>` : '';
+  return `<div class="state"><div class="state-icon">⚠</div><div class="state-title">${msg}</div>${subHtml}<button class="state-retry-btn" data-retry="${retryTarget}">Try again</button></div>`;
 }
 
 export function buildTimeFilterHtml(selected) {
