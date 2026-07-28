@@ -13,6 +13,7 @@ export const DEFAULTS = {
   redditCookies: '',
   theme: 'dark',
   pagination: false,
+  compact: false,
 };
 
 function _load() {
@@ -31,6 +32,7 @@ export function applySettings() {
   document.body.classList.toggle('nsfw-blur', settings.nsfwBlur);
   document.body.classList.toggle('nsfw-hide', settings.nsfwHide);
   document.body.classList.toggle('pagination-mode', !!settings.pagination);
+  document.body.classList.toggle('compact-mode', !!settings.compact);
   document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
   document.body.classList.add(`theme-${settings.theme || 'dark'}`);
   const popularBtn = document.getElementById('popular-btn');
