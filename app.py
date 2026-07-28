@@ -876,6 +876,76 @@ def search_posts():
 
 # ── Subreddit API ─────────────────────────────────────────────────────────────
 
+# Reddit's error responses for non-200 subreddit requests carry a "reason" field
+# identifying why access was blocked, distinct from a plain "doesn't exist" 404.
+_SUBREDDIT_ERROR_MESSAGES = {
+    "banned":      "This subreddit has been banned",
+    "private":     "This subreddit is private",
+    "quarantined": "This subreddit is quarantined",
+    "gated":       "This subreddit requires content-warning acknowledgement",
+}
+
+def _subreddit_error_state(resp):
+    """Classify a non-200 subreddit response. Returns (state, message)."""
+    try:
+        body = resp.json() or {}
+    except Exception:
+        body = {}
+    reason = body.get("reason")
+    if reason in _SUBREDDIT_ERROR_MESSAGES:
+        message = (body.get("quarantine_message") or body.get("interstitial_warning_message")
+                   or _SUBREDDIT_ERROR_MESSAGES[reason])
+        return reason, message
+    if resp.status_code == 404:
+        return "not_found", "Subreddit not found"
+    if resp.status_code == 403:
+        return "private", "Subreddit is private"
+    return "error", f"Reddit returned {resp.status_code}"
+
+
+def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
+    """Quarantined subreddit listings are blocked for anonymous sessions even after
+    opt-in. Fall back: paginate the comments feed (accessible) to collect post IDs,
+    then batch-fetch those posts via /by_id/."""
+    from reddit_client import _get_quarantine_session
+    s = _get_quarantine_session()
+    try:
+        seen, ids, cursor = set(), [], after
+        for _ in range(4):          # up to 4 pages of comments (400 comments max)
+            params = {"limit": 100, "raw_json": 1}
+            if cursor:
+                params["after"] = cursor
+            rc = s.get(
+                f"https://www.reddit.com/r/{subreddit}/comments.json",
+                params=params,
+                timeout=10,
+            )
+            if not rc.ok:
+                break
+            data = rc.json().get("data", {})
+            for c in data.get("children", []):
+                lid = c.get("data", {}).get("link_id", "")
+                if lid and lid not in seen:
+                    seen.add(lid)
+                    ids.append(lid)
+            cursor = data.get("after")
+            if not cursor or len(ids) >= target:
+                break
+        if not ids:
+            return [], None
+        rb = s.get(
+            f"https://www.reddit.com/by_id/{','.join(ids[:target])}.json",
+            params={"raw_json": 1},
+            timeout=10,
+        )
+        if not rb.ok:
+            return [], None
+        return extract_posts(rb.json()["data"]), cursor
+    except Exception as e:
+        log.debug("quarantine fallback failed sub=%s: %s", subreddit, e)
+        return [], None
+
+
 @app.route("/api/r/<subreddit>")
 @validate_params(subreddit=SUBREDDIT_RE)
 @server_cache(CACHE_TTL_FEED)
@@ -884,7 +954,8 @@ def get_posts(subreddit):
     if sort not in FEED_SORTS:
         sort = "top"
     t     = request.args.get("t", "")
-    after = request.args.get("after", "")
+    after             = request.args.get("after", "")
+    quarantine_opt_in = request.args.get("quarantine_opt_in", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
     if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
@@ -892,16 +963,17 @@ def get_posts(subreddit):
     if after:
         params["after"] = after
     try:
-        resp = reddit_get(url, params=params, timeout=10)
-        if resp.status_code == 404:
-            return jsonify({"error": "Subreddit not found"}), 404
-        if resp.status_code == 403:
-            return jsonify({"error": "Subreddit is private"}), 403
+        resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=10)
         if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
+            state, message = _subreddit_error_state(resp)
+            status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
+            return jsonify({"error": message, "state": state}), status
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
-        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
+        fallback_after = None
+        if not posts and quarantine_opt_in:
+            posts, fallback_after = _quarantine_fallback_posts(subreddit, after or None)
+        return cached_json({"posts": posts, "after": fallback_after or listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception as e:
@@ -1036,10 +1108,14 @@ def get_about(subreddit):
             f"https://www.reddit.com/r/{subreddit}/about.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
-            return jsonify({"error": "Not found"}), resp.status_code
+            state, message = _subreddit_error_state(resp)
+            status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
+            return jsonify({"error": message, "state": state}), status
         d      = resp.json()["data"]
         icon   = clean_url(d.get("icon_img") or d.get("community_icon") or "")
         active = d.get("active_user_count") or d.get("accounts_active") or 0
+        sub_type = d.get("subreddit_type", "public")
+        state = "quarantined" if d.get("quarantine") else (sub_type if sub_type != "public" else None)
         return cached_json({
             "title":       d.get("title", subreddit),
             "description": d.get("public_description", ""),
@@ -1047,6 +1123,7 @@ def get_about(subreddit):
             "subscribers": d.get("subscribers", 0),
             "active":      active,
             "icon":        icon or "",
+            "state":       state,
         }, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1198,6 +1275,12 @@ def get_comments(subreddit, post_id):
         resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
             params=params, timeout=12)
+        if resp.status_code == 403:
+            state, _ = _subreddit_error_state(resp)
+            if state == "quarantined":
+                resp = reddit_get(
+                    f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+                    quarantine=True, params=params, timeout=12)
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         data     = resp.json()

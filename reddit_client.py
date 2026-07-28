@@ -385,10 +385,47 @@ def _get_device() -> _OAuthDevice:
     return device
 
 
-def reddit_get(url, **kwargs):
-    """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation."""
-    if not REDDIT_OAUTH:
-        return SESSION.get(url, **kwargs)
+_quarantine_session: "requests.Session | None" = None
+_quarantine_session_lock = threading.Lock()
+
+
+def _get_quarantine_session() -> "requests.Session":
+    """Return a requests.Session pre-opted into quarantined subreddits.
+    Initialised once via old.reddit.com's form-based quarantine acceptance flow,
+    which sets the _options cookie with pref_quarantine_optin=true at the
+    reddit.com domain level (covers all quarantined subreddits)."""
+    global _quarantine_session
+    if _quarantine_session is not None:
+        return _quarantine_session
+    with _quarantine_session_lock:
+        if _quarantine_session is not None:
+            return _quarantine_session
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        try:
+            s.get(
+                "https://old.reddit.com/quarantine?dest=https%3A%2F%2Fold.reddit.com%2Fr%2FTheRedPill",
+                timeout=10,
+            )
+            s.post(
+                "https://old.reddit.com/quarantine",
+                data={"sr_name": "TheRedPill", "dest": "https://old.reddit.com/r/TheRedPill", "accept": "yes"},
+                allow_redirects=False,
+                timeout=10,
+            )
+            log.info("quarantine session initialised (pref_quarantine_optin=true)")
+        except Exception as e:
+            log.warning("quarantine session init failed: %s", e)
+        _quarantine_session = s
+    return _quarantine_session
+
+
+def reddit_get(url, *, quarantine=False, **kwargs):
+    """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
+    Pass quarantine=True to use the quarantine-opted-in session instead of OAuth."""
+    if not REDDIT_OAUTH or quarantine:
+        sess = _get_quarantine_session() if quarantine else SESSION
+        return sess.get(url, **kwargs)
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
     extra_headers = kwargs.pop("headers", {})
