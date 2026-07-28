@@ -252,6 +252,12 @@ feed.addEventListener('click', e => {
   if (e.defaultPrevented) return;
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
   if (retryBtn) { retryFeedLoad(); return; }
+  const continueBtn = e.target.closest('.state-continue-btn[data-sub]');
+  if (continueBtn) {
+    const { sub, sort, time } = continueBtn.dataset;
+    loadSubFeed(sub, sort, time, null, false, true);
+    return;
+  }
   const userBtn = e.target.closest('.post-author[data-user]');
   const liveAuthor = e.target.closest('.live-update-author[data-user]');
   if (userBtn) {
@@ -634,6 +640,7 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Appearance</div>
     <label class="settings-row"><span class="settings-label">Theme</span>${sel('s-theme', themeOpts, settings.theme || 'dark')}</label>
+    <label class="settings-row"><span class="settings-label">Compact mode</span>${chk('s-compact', settings.compact)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Feed</div>
@@ -674,6 +681,7 @@ function openSettingsPanel() {
 
 function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
+  settingsBody.querySelector('#s-compact').addEventListener('change', e => { settings.compact = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); });
