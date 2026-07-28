@@ -681,7 +681,7 @@ function openSettingsPanel() {
 
 function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-compact').addEventListener('change', e => { settings.compact = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-compact').addEventListener('change', e => { settings.compact = e.target.checked; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); });

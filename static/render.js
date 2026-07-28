@@ -1,6 +1,7 @@
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, nsfwWrap } from './media.js';
 import { isVisited } from './visited.js';
+import { settings } from './settings.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -158,6 +159,47 @@ function renderCrosspostEmbed(orig, full=false) {
 
 export function renderCrosspostFull(orig) { return renderCrosspostEmbed(orig, true); }
 
+// ── Compact mode row ─────────────────────────────────────────────────────────
+function _compactThumbSrc(m) {
+  return m.gallery?.[0]?.url ?? m.preview_img ?? m.thumb_url ?? null;
+}
+
+function _compactHasMedia(m) {
+  const isImageDomain = m.domain && (m.domain === 'i.redd.it' || m.domain === 'i.imgur.com' || /^i\.\w/.test(m.domain));
+  return !m.is_self && (m.is_video || m.youtube_id || m.tiktok_id || m.redgifs_id || m.imgur_album_id || m.streamable_id || m.embed_url || m.gif_url || m.gallery?.length > 0 || isImageDomain);
+}
+
+function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer }) {
+  const mediaSrc = p.crosspost_from || p;
+  const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
+  const imgSrc = _compactThumbSrc(mediaSrc);
+  const postNav = `/r/${sub}/comments/${id}`;
+  let thumbHtml = '';
+  if (imgSrc) {
+    const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
+    let thumbContent = thumbInner;
+    if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
+    if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
+    const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
+    thumbHtml = _compactHasMedia(mediaSrc)
+      ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
+      : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
+  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url)) {
+    thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
+  }
+  return `
+    <div class="post post-compact${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
+      <div class="post-compact-left">
+        <div class="post-header">
+          ${metaTop}
+          ${titleLink}
+        </div>
+        ${footer}
+      </div>
+      ${thumbHtml}
+    </div>`;
+}
+
 // ── Post card ─────────────────────────────────────────────────────────────────
 export function renderPost(p, idx, showSub=false) {
   const sub    = escHtml(p.subreddit);
@@ -204,6 +246,10 @@ export function renderPost(p, idx, showSub=false) {
 
   const nsfwAttr = p.over_18 ? ' data-nsfw="1"' : '';
   const visitedClass = isVisited(p.id) ? ' post-visited' : '';
+
+  if (settings.compact) {
+    return renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer });
+  }
 
   if (p.crosspost_from) {
     return `
