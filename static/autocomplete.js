@@ -28,8 +28,8 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
     acIdx = -1;
     dropdownEl.innerHTML = subs.map(s =>
       `<div class="autocomplete-item" role="option" data-sub="${escHtml(s.name)}">`+
-      (s.icon ? `<img class="autocomplete-icon" src="${escHtml(s.icon)}" alt="" loading="lazy">` : `<span class="autocomplete-icon autocomplete-icon--blank"></span>`)+
-      `<span class="autocomplete-name">${escHtml(s.name)}</span>`+
+      (s.icon ? `<img class="autocomplete-icon" src="${escHtml(s.icon)}" alt="" loading="lazy">` : `<span class="autocomplete-icon autocomplete-icon--placeholder">r/</span>`)+
+      `<span class="autocomplete-name"><span class="autocomplete-prefix">r/</span>${escHtml(s.name)}</span>`+
       (s.subscribers ? `<span class="autocomplete-subs">${fmtNum(s.subscribers)} members</span>` : '')+
       `</div>`
     ).join('');
