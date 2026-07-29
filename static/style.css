@@ -1488,3 +1488,84 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
   .skel { animation: none; opacity: 0.6; }
 }
 
+/* ── Minimal mode ────────────────────────────────────────────────────────── */
+.minimal-mode .post,
+.minimal-mode .post-compact,
+.minimal-mode .user-comment-card,
+.minimal-mode .community-card,
+.minimal-mode .user-card,
+.minimal-mode .comment,
+.minimal-mode .skel,
+.minimal-mode #scroll-sentinel::after {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+.minimal-mode .post-view { transition: none !important; }
+.minimal-mode #feed { gap:0; }
+.post-minimal {
+  flex-direction:row; align-items:flex-start; gap:8px;
+  padding:5px 8px;
+  background:transparent !important;
+  border:none !important; border-radius:0 !important; box-shadow:none !important;
+  border-bottom:1px solid var(--b) !important;
+}
+.post-minimal:hover { background:var(--bg2) !important; }
+.min-score {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  min-width:32px; padding-top:3px; flex-shrink:0;
+  font-size:11px; font-weight:700; color:var(--tx2);
+}
+.min-thumb {
+  position:relative; width:90px; flex-shrink:0;
+  background:var(--bg3); border-left:1px solid var(--b);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; text-decoration:none; color:inherit;
+}
+.min-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.min-body { flex:1; min-width:0; padding-top:2px; }
+.min-title-row { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px; line-height:1.35; }
+.min-title { font-size:14px; color:var(--tx); text-decoration:none; line-height:1.35; }
+.min-title:hover { color:var(--ac); text-decoration:underline; }
+.min-title-self { font-style:italic; }
+.post-minimal.post-visited .min-title { color:var(--tx3); }
+.post-minimal.post-visited .min-title:hover { color:var(--ac); }
+.min-domain { font-size:11px; color:var(--tx3); white-space:nowrap; }
+.min-meta {
+  margin-top:3px; font-size:11px; color:var(--tx3);
+  display:flex; align-items:center; flex-wrap:wrap; gap:0 3px; line-height:1.5;
+}
+.min-sub { font-size:11px; font-weight:600; color:var(--ac); text-decoration:none; }
+.min-sub:hover { text-decoration:underline; }
+.min-author { font-size:11px; color:var(--tx3); background:none; border:none; padding:0; cursor:pointer; font-family:inherit; }
+.min-author:hover { text-decoration:underline; color:var(--tx); }
+.min-comments { font-size:11px; color:var(--tx3); text-decoration:none; }
+.min-comments:hover { text-decoration:underline; }
+.post-minimal .share-btn { font-size:11px; padding:0; color:var(--tx3); background:none; border:none; cursor:pointer; font-family:inherit; }
+.post-minimal .share-btn svg { display:none; }
+.post-minimal .share-btn:hover { text-decoration:underline; color:var(--tx); }
+.post-minimal .awards { font-size:11px; }
+.minimal-media { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+.minimal-media img { max-width:100%; border-radius:4px; }
+.minimal-gallery-stack { display:flex; flex-direction:column; gap:6px; }
+.minimal-gallery-stack img { width:100%; height:auto; max-height:560px; object-fit:contain; border-radius:4px; background:var(--bg3); }
+.minimal-media-link {
+  font-family:var(--mono); font-size:12px; color:var(--ac);
+  border:1px solid var(--b2); border-radius:4px; padding:4px 9px;
+  text-decoration:none;
+}
+.minimal-media-link:hover { border-color:var(--ac); }
+
+/* Minimal mode post view */
+.minimal-mode .pv-title { font-size:17px; margin:3px 0 6px; }
+.minimal-mode .pv-meta { gap:2px 8px; padding-bottom:6px; font-size:12px; }
+.minimal-mode .pv-meta .up { font-size:12px; }
+.minimal-mode .pv-meta .min-share { font-size:12px; color:var(--tx3); background:none; border:none; padding:0; cursor:pointer; font-family:inherit; }
+.minimal-mode .pv-meta .min-share:hover { text-decoration:underline; color:var(--tx); }
+.minimal-mode .pv-divider { margin:10px 0 6px; }
+.minimal-mode .comment { padding:5px 6px; border-bottom:none; }
+.minimal-mode .comment-header { margin-bottom:2px; gap:4px; }
+.minimal-mode .comment-body { font-size:12px; line-height:1.5; }
+.minimal-mode .comment-replies { margin-left:8px; padding-left:6px; }
+.minimal-mode .more-comments-wrap { padding-left:6px; }

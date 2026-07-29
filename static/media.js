@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { settings } from './settings.js';
 import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
 function _trackVideoMute(v) {
@@ -346,6 +347,7 @@ export function initOgImages(container) {
 }
 
 export function initOgDescriptions(container) {
+  if (settings.layout === 'minimal') return;
   container.querySelectorAll('.pv-article-desc[data-og-url]:not([data-og-init])').forEach(el => {
     el.dataset.ogInit = '1';
     const url = el.dataset.ogUrl;
@@ -387,8 +389,41 @@ export function nsfwWrap(html) {
   return `<div class="nsfw-media-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="nsfw-veil-label">nsfw — click to reveal</span></div><div class="nsfw-content">${html}</div></div>`;
 }
 
+// ── Minimal mode: plain thumbnail + link, no video/iframe/gallery-nav embeds ──
+function _minimalMediaHtml(p, full) {
+  const ic = full ? 'pv-media' : 'post-media';
+  const thumb = p.gallery?.[0]?.url ?? p.preview_img ?? null;
+  const thumbHtml = thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : '';
+  let label = '', href = p.url || '';
+  if (p.is_video)                  { label = 'video ↗'; href = p.video_url || p.url; }
+  else if (p.youtube_id)           { label = 'YouTube video ↗'; href = `https://www.youtube.com/watch?v=${p.youtube_id}`; }
+  else if (p.tiktok_id)            { label = 'TikTok video ↗'; }
+  else if (p.redgifs_id)           { label = 'video ↗'; }
+  else if (p.imgur_album_id)       { label = 'Imgur album ↗'; }
+  else if (p.streamable_id)        { label = 'video ↗'; }
+  else if (p.embed_url)            { label = 'embedded media ↗'; }
+  else if (p.gif_url && p.gif_is_video) { label = 'gif ↗'; href = p.gif_url; }
+  else if (p.gif_url)              { return `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt=""></div>`; }
+  else if (p.gallery?.length > 1)  {
+    const imgs = p.gallery.map(img => `<img src="${escHtml(img.url)}" loading="lazy" alt="${escHtml(img.caption||'')}">`).join('');
+    return `<div class="${ic} minimal-gallery-stack">${imgs}</div>`;
+  }
+  else if (thumb)                  { return `<div class="${ic}">${thumbHtml}</div>`; }
+  else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) { label = `${(() => { try { return new URL(p.url).hostname; } catch { return 'link'; } })()} ↗`; }
+  else return '';
+  if (!href) return '';
+  return `<div class="${ic} minimal-media">${thumbHtml}<a class="minimal-media-link" href="${escHtml(href)}" target="_blank" rel="noopener">${escHtml(label)}</a></div>`;
+}
+
 export function mediaHtml(p, full = false) {
   if (p.poll) return renderPoll(p.poll);
+  if (settings.layout === 'minimal') {
+    let html = _minimalMediaHtml(p, full);
+    if (!html) return '';
+    if (p.is_spoiler) html = spoilerWrap(html);
+    if (p.over_18)   html = nsfwWrap(html);
+    return html;
+  }
   if (p.is_devvit) {
     const imgHtml = p.preview_img
       ? `<img class="devvit-preview" src="${escHtml(p.preview_img)}" loading="lazy" alt="">`

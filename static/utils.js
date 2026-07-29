@@ -1,3 +1,5 @@
+import { settings } from './settings.js';
+
 export const SKELETON_COUNT        = 5;
 export const ANIM_DELAY_STEP       = 40;
 export const ANIM_DELAY_MAX        = 400;
@@ -48,7 +50,7 @@ export function renderFlair(p, clickable=false) {
   if (p.flair_type === 'richtext' && p.flair_richtext?.length) {
     inner = p.flair_richtext.map(part => {
       if (part.e === 'text')  return escHtml(part.t || '');
-      if (part.e === 'emoji') return `<img class="flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
+      if (part.e === 'emoji') return settings.layout === 'minimal' ? escHtml(part.a || '') : `<img class="flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
       return '';
     }).join('');
   } else {
@@ -63,6 +65,10 @@ export function renderFlair(p, clickable=false) {
 
 export function renderAwards(awards) {
   if (!awards?.length) return '';
+  if (settings.layout === 'minimal') {
+    const total = awards.reduce((n, a) => n + (a.count > 1 ? a.count : 1), 0);
+    return `<span class="awards" title="${awards.map(a => escHtml(a.name)).join(', ')}">🏅${total}</span>`;
+  }
   return `<span class="awards">${awards.map(a =>
     `<span class="award-item" title="${escHtml(a.name)}${a.count > 1 ? ' ×'+a.count : ''}">` +
     `<img src="${escHtml(a.icon)}" alt="${escHtml(a.name)}" loading="lazy" width="16" height="16">` +
@@ -78,7 +84,7 @@ export function renderAuthorFlair(c) {
   if (hasRichtext) {
     inner = c.author_flair_richtext.map(part => {
       if (part.e === 'text')  return escHtml(part.t || '');
-      if (part.e === 'emoji') return `<img class="author-flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
+      if (part.e === 'emoji') return settings.layout === 'minimal' ? escHtml(part.a || '') : `<img class="author-flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
       return '';
     }).join('');
   } else {
