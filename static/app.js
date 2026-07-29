@@ -206,6 +206,8 @@ function retryFeedLoad() {
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
   } else if (state.multiMode) {
     loadMultiFeed(state.multiUsername, state.multiName, state.currentSort, state.currentTime);
+  } else if (state.homeMode) {
+    loadHomeFeed(state.currentSort, state.currentTime);
   } else {
     loadSubFeed(state.currentSub, state.currentSort, state.currentTime);
   }
@@ -640,7 +642,7 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Appearance</div>
     <label class="settings-row"><span class="settings-label">Theme</span>${sel('s-theme', themeOpts, settings.theme || 'dark')}</label>
-    <label class="settings-row"><span class="settings-label">Compact mode</span>${chk('s-compact', settings.compact)}</label>
+    <label class="settings-row"><span class="settings-label">Layout</span>${sel('s-layout', [['card','Card'],['compact','Compact'],['minimal','Minimal']], settings.layout || 'card')}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Feed</div>
@@ -681,7 +683,7 @@ function openSettingsPanel() {
 
 function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-compact').addEventListener('change', e => { settings.compact = e.target.checked; saveSettings(); retryFeedLoad(); });
+  settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); });

@@ -169,10 +169,17 @@ function _compactHasMedia(m) {
   return !m.is_self && (m.is_video || m.youtube_id || m.tiktok_id || m.redgifs_id || m.imgur_album_id || m.streamable_id || m.embed_url || m.gif_url || m.gallery?.length > 0 || isImageDomain);
 }
 
+// In minimal mode only show thumbnails for posts whose content IS an image/gallery.
+// Videos, embeds, and link posts skip the thumb entirely.
+function _isNativeImage(m) {
+  const isImageDomain = m.domain && (m.domain === 'i.redd.it' || m.domain === 'i.imgur.com' || /^i\.\w/.test(m.domain));
+  return !!(m.gallery?.length > 0 || isImageDomain || (m.gif_url && !m.gif_is_video));
+}
+
 function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer }) {
   const mediaSrc = p.crosspost_from || p;
   const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
-  const imgSrc = _compactThumbSrc(mediaSrc);
+  const imgSrc = settings.layout === 'minimal' ? (_isNativeImage(mediaSrc) ? _compactThumbSrc(mediaSrc) : null) : _compactThumbSrc(mediaSrc);
   const postNav = `/r/${sub}/comments/${id}`;
   let thumbHtml = '';
   if (imgSrc) {
@@ -184,7 +191,7 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     thumbHtml = _compactHasMedia(mediaSrc)
       ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
       : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url)) {
+  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && !settings.layout === 'minimal') {
     thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
   }
   return `
@@ -195,6 +202,50 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
           ${titleLink}
         </div>
         ${footer}
+      </div>
+      ${thumbHtml}
+    </div>`;
+}
+
+// ── Minimal mode row (old-reddit style flat list) ─────────────────────────────
+function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
+  const mediaSrc = p.crosspost_from || p;
+  const postNav  = `/r/${sub}/comments/${id}`;
+  const author   = escHtml(p.author);
+
+  let thumbHtml = '';
+  if (_isNativeImage(mediaSrc)) {
+    const imgSrc = _compactThumbSrc(mediaSrc);
+    if (imgSrc) {
+      const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
+      let thumbContent = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
+      if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
+      if (p.over_18)    thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
+      const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
+      thumbHtml = `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
+    }
+  }
+
+  let badges = '';
+  if (p.is_stickied) badges += `<span class="badge badge-sticky">📌</span>`;
+  if (p.over_18)     badges += `<span class="nsfw-tag">nsfw</span>`;
+  if (p.is_spoiler)  badges += `<span class="badge badge-spoiler">spoiler</span>`;
+  if (p.locked)      badges += `<span class="badge badge-locked">locked</span>`;
+  if (p.is_oc)       badges += `<span class="badge badge-oc">oc</span>`;
+  if (p.poll)        badges += `<span class="badge badge-poll">poll</span>`;
+  const flairHtml  = renderFlair(p, true);
+  const titleExtra = (p.is_self ? ' min-title-self' : '');
+  const domainHtml = !p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it')
+    ? `<span class="min-domain">(${escHtml(p.domain)})</span>` : '';
+  const editedHtml = p.edited_utc ? ` <span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
+  const subLink    = showSub ? `<a class="min-sub" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a> · ` : '';
+
+  return `
+    <div class="post post-minimal${visitedClass}"${nsfwAttr} data-post-id="${id}">
+      <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>${fmtNum(p.score)}</div>
+      <div class="min-body">
+        <div class="min-title-row">${badges}<a class="min-title${titleExtra}" href="${postNav}" data-nav="${postNav}">${escHtml(p.title)}</a>${domainHtml ? ' '+domainHtml : ''}${flairHtml ? ' '+flairHtml : ''}</div>
+        <div class="min-meta">${subLink}<button class="min-author" data-user="${author}">u/${author}</button> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button></div>
       </div>
       ${thumbHtml}
     </div>`;
@@ -247,7 +298,11 @@ export function renderPost(p, idx, showSub=false) {
   const nsfwAttr = p.over_18 ? ' data-nsfw="1"' : '';
   const visitedClass = isVisited(p.id) ? ' post-visited' : '';
 
-  if (settings.compact) {
+  if (settings.layout === 'minimal') {
+    return renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub });
+  }
+
+  if (settings.layout === 'compact') {
     return renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer });
   }
 
@@ -274,7 +329,7 @@ export function renderPost(p, idx, showSub=false) {
       if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
       if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-    } else if (p.url && /^https?:\/\//.test(p.url)) {
+    } else if (p.url && /^https?:\/\//.test(p.url) && !settings.layout === 'minimal') {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
     }
     return `
