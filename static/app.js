@@ -150,8 +150,8 @@ function interceptNavLink(a, e) {
 
   const redditLive = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/live\/([A-Za-z0-9_-]+)/);
   if (redditLive) { e.preventDefault(); navigateOrOpen(`/live/${redditLive[1]}`, e); return true; }
-  const redditPost = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-  if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}`, e); return true; }
+  const redditPost = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/]+)\/comments\/([^\/?\s#]+)(?:\/[^\/?\s#]*\/([a-z0-9]+))?/i);
+  if (redditPost) { e.preventDefault(); navigateOrOpen(`/r/${redditPost[1]}/comments/${redditPost[2]}${redditPost[3] ? '/comment/' + redditPost[3] : ''}`, e); return true; }
   const redditWiki = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/]+)\/wiki(?:\/([^\s#?]*))?/);
   if (redditWiki) { e.preventDefault(); navigateOrOpen(`/r/${redditWiki[1]}/wiki/${redditWiki[2]||'index'}`, e); return true; }
   const redditSub  = href.match(/(?:https?:\/\/(?:www\.|old\.|new\.|np\.)?reddit\.com)\/r\/([^\/?\s#]+)(\/[^?\s#]*)?/);
@@ -166,8 +166,8 @@ function interceptNavLink(a, e) {
       .then(r => r.json())
       .then(data => {
         if (!data.url) return;
-        const post = data.url.match(/\/r\/([^\/]+)\/comments\/([^\/?\s#]+)/);
-        if (post) { navigate(`/r/${post[1]}/comments/${post[2]}`); return; }
+        const post = data.url.match(/\/r\/([^\/]+)\/comments\/([^\/?\s#]+)(?:\/[^\/?\s#]*\/([a-z0-9]+))?/i);
+        if (post) { navigate(`/r/${post[1]}/comments/${post[2]}${post[3] ? '/comment/' + post[3] : ''}`); return; }
         const user = data.url.match(/\/u(?:ser)?\/([^\/?\s#]+)/);
         if (user) { navigate(`/user/${user[1]}`); return; }
         const sub = data.url.match(/\/r\/([^\/?\s#]+)/);
