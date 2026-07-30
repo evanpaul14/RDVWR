@@ -56,7 +56,7 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
       const posts = _getPostEls();
       const post = posts[state.selectedPostIdx];
       if (post) {
-        const link = post.querySelector('a.post-title[data-nav], a.is-italic[data-nav]');
+        const link = post.querySelector('a.post-title[data-nav], a.is-italic[data-nav], a.min-title[data-nav]');
         if (link) navigate(link.dataset.nav);
       }
     } else if (e.key === 'c' && state.selectedPostIdx >= 0) {
@@ -64,7 +64,7 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
       const posts = _getPostEls();
       const post = posts[state.selectedPostIdx];
       if (post) {
-        const link = post.querySelector('a.comments-link[data-nav]');
+        const link = post.querySelector('a.comments-link[data-nav], a.min-comments[data-nav]');
         if (link) navigate(link.dataset.nav);
       }
     } else if (e.key === 'l' && state.selectedPostIdx >= 0) {

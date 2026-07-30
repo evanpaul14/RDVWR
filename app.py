@@ -14,7 +14,7 @@ import threading
 import requests
 from functools import wraps
 from datetime import datetime, timezone
-from urllib.parse import urlparse, quote as url_quote, unquote as url_unquote
+from urllib.parse import urlparse, urlunparse, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
 from bs4 import BeautifulSoup
@@ -414,6 +414,7 @@ def resolve_url():
 def download_media():
     url = request.args.get('url', '').strip()
     filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'media'))[:128]
+    filename = re.sub(r'\.{2,}', '.', filename).lstrip('.') or 'media'
     try:
         parsed = urlparse(url)
     except Exception:
@@ -1069,8 +1070,8 @@ def get_home():
                                             posts[i]['preview_img'] = full['preview_img']
                     except Exception as ge:
                         log.warning("gallery batch-fetch failed: %s", ge)
-                m = re.search(r'[?&]after=([A-Za-z0-9%+/=_-]+)', resp.text)
-                next_after = url_unquote(m.group(1)) if m else None
+                m = re.search(r'"after"\s*:\s*"([A-Za-z0-9_-]+)"', resp.text)
+                next_after = m.group(1) if m else None
                 resp_out = make_response(jsonify({"posts": posts, "after": next_after, "via": "shreddit"}))
                 resp_out.headers['Cache-Control'] = 'private, no-store'
                 return resp_out
@@ -1165,6 +1166,7 @@ def get_moderators(subreddit):
 
 
 @app.route("/api/search/communities")
+@server_cache(CACHE_TTL_FEED)
 def search_communities():
     q = request.args.get("q", "").strip()
     after = request.args.get("after", "")
@@ -1199,6 +1201,7 @@ def search_communities():
 
 
 @app.route("/api/search/users")
+@server_cache(CACHE_TTL_FEED)
 def search_users():
     q = request.args.get("q", "").strip()
     after = request.args.get("after", "")
@@ -1284,7 +1287,10 @@ def get_comments(subreddit, post_id):
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         data     = resp.json()
-        post_raw = data[0]["data"]["children"][0]["data"]
+        children = data[0]["data"]["children"]
+        if not children:
+            return jsonify({"error": "Post not found"}), 404
+        post_raw = children[0]["data"]
         post     = process_post(post_raw)
         post["selftext"] = post_raw.get("selftext", "")   # full text in post view
 
@@ -1668,12 +1674,16 @@ _PRIVATE_NETS = [
     )
 ]
 
-def _is_ssrf_safe(hostname: str) -> bool:
+def _resolve_ssrf_safe(hostname: str):
+    """Resolve hostname to IP and verify it's not private. Returns IP string or None."""
     try:
-        addr = ipaddress.ip_address(socket.gethostbyname(hostname))
-        return not any(addr in net for net in _PRIVATE_NETS)
+        resolved = socket.gethostbyname(hostname)
+        addr = ipaddress.ip_address(resolved)
+        if any(addr in net for net in _PRIVATE_NETS):
+            return None
+        return resolved
     except Exception:
-        return False
+        return None
 
 
 @app.route("/api/og-image")
@@ -1682,15 +1692,28 @@ def get_og_image():
     if not url or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Invalid URL"}), 400
     try:
-        hostname = urlparse(url).hostname or ""
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
     except Exception:
         return jsonify({"error": "Invalid URL"}), 400
-    if not hostname or not _is_ssrf_safe(hostname):
+    if not hostname:
+        return jsonify({"error": "Invalid URL"}), 400
+    resolved_ip = _resolve_ssrf_safe(hostname)
+    if not resolved_ip:
         return jsonify({"error": "URL not allowed"}), 403
     if url in _og_cache:
         return cached_json(_og_cache[url], 3600)
+    # For HTTP, connect directly to the resolved IP to prevent DNS rebinding TOCTOU.
+    # For HTTPS, SSL certificate validation prevents rebinding (cert won't match a spoofed IP).
+    if parsed.scheme == "http":
+        safe_netloc = parsed.netloc.replace(hostname, resolved_ip, 1)
+        fetch_url = urlunparse(parsed._replace(netloc=safe_netloc))
+        fetch_headers = {**HEADERS, "Accept": "text/html", "Host": parsed.netloc}
+    else:
+        fetch_url = url
+        fetch_headers = {**HEADERS, "Accept": "text/html"}
     try:
-        r = SESSION.get(url, timeout=8, stream=True, headers={**HEADERS, "Accept": "text/html"})
+        r = SESSION.get(fetch_url, timeout=8, stream=True, headers=fetch_headers)
         # Read only the first 32 KB — enough for <head> tags
         chunk = next(r.iter_content(32768), b"")
         r.close()

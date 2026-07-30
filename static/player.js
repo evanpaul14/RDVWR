@@ -1,5 +1,25 @@
 import { state } from './state.js';
 
+// Track AbortControllers keyed by wrap element so we can abort document-level
+// listeners when the player element is removed from the DOM.
+const _vpControllers = new Map();
+const _vpRemovalObserver = new MutationObserver(mutations => {
+  for (const m of mutations) {
+    m.removedNodes.forEach(node => {
+      if (node.nodeType !== 1) return;
+      if (_vpControllers.has(node)) {
+        _vpControllers.get(node).abort();
+        _vpControllers.delete(node);
+      } else {
+        _vpControllers.forEach((ac, wrap) => {
+          if (node.contains(wrap)) { ac.abort(); _vpControllers.delete(wrap); }
+        });
+      }
+    });
+  }
+});
+_vpRemovalObserver.observe(document.body, { childList: true, subtree: true });
+
 const I_PLAY  = `<svg viewBox="0 0 16 16" fill="currentColor"><polygon points="3,1 14,8 3,15"/></svg>`;
 const I_PAUSE = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="1" width="5" height="14" rx="1"/><rect x="9" y="1" width="5" height="14" rx="1"/></svg>`;
 const I_VOL   = `<svg viewBox="0 0 16 16"><path fill="currentColor" d="M3 5H1a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h2l3 3V2L3 5z"/><path stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" d="M9 4.5a4.5 4.5 0 0 1 0 7"/></svg>`;
@@ -21,6 +41,10 @@ export function initCustomPlayer(videoEl) {
   const wrap = videoEl.parentElement;
   if (!wrap) return;
   wrap.classList.add('vp-wrap');
+
+  const _ac = new AbortController();
+  const { signal } = _ac;
+  _vpControllers.set(wrap, _ac);
 
   const overlay = document.createElement('div');
   overlay.className = 'vp-overlay';
@@ -169,17 +193,17 @@ export function initCustomPlayer(videoEl) {
   progEl.addEventListener('mousedown', e => {
     e.preventDefault(); seeking = true; doSeek(e.clientX); showCtrl();
   });
-  document.addEventListener('mousemove', e => { if (seeking) doSeek(e.clientX); });
-  document.addEventListener('mouseup',   e => { if (seeking) { seeking = false; doSeek(e.clientX); } });
+  document.addEventListener('mousemove', e => { if (seeking) doSeek(e.clientX); }, { signal });
+  document.addEventListener('mouseup',   e => { if (seeking) { seeking = false; doSeek(e.clientX); } }, { signal });
   progEl.addEventListener('touchstart', e => {
     e.stopPropagation(); seeking = true; doSeek(e.touches[0].clientX); showCtrl();
   }, { passive: true });
   document.addEventListener('touchmove', e => {
     if (seeking) doSeek(e.touches[0].clientX);
-  }, { passive: true });
+  }, { passive: true, signal });
   document.addEventListener('touchend', e => {
     if (seeking) { seeking = false; if (e.changedTouches[0]) doSeek(e.changedTouches[0].clientX); }
-  }, { passive: true });
+  }, { passive: true, signal });
 
   // Fullscreen
   function onFsChange() {
@@ -198,8 +222,8 @@ export function initCustomPlayer(videoEl) {
       else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     }
   });
-  document.addEventListener('fullscreenchange',       onFsChange);
-  document.addEventListener('webkitfullscreenchange', onFsChange);
+  document.addEventListener('fullscreenchange',       onFsChange, { signal });
+  document.addEventListener('webkitfullscreenchange', onFsChange, { signal });
 
   // Auto-hide controls
   let hideTimer;

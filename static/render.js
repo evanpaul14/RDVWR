@@ -87,10 +87,20 @@ export async function xlateText(text) {
   const d = await r.json();
   const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
   const result = { detected, translated: d.responseData?.translatedText || '' };
-  if (_xlateCache.size >= XLATE_CACHE_MAX) _xlateCache.delete(_xlateCache.keys().next().value);
+  if (_xlateCache.size >= XLATE_CACHE_MAX) {
+    const evictCount = Math.ceil(XLATE_CACHE_MAX / 5);
+    const it = _xlateCache.keys();
+    for (let i = 0; i < evictCount; i++) {
+      const { value, done } = it.next();
+      if (done) break;
+      _xlateCache.delete(value);
+    }
+  }
   _xlateCache.set(key, result);
   return result;
 }
+
+export function waitForMdLibs() { return _loadMdLibs(); }
 
 export function renderMd(text) {
   if (!text) return '';
@@ -191,7 +201,7 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     thumbHtml = _compactHasMedia(mediaSrc)
       ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
       : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && !settings.layout === 'minimal') {
+  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && settings.layout !== 'minimal') {
     thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
   }
   return `
@@ -329,7 +339,7 @@ export function renderPost(p, idx, showSub=false) {
       if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
       if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-    } else if (p.url && /^https?:\/\//.test(p.url) && !settings.layout === 'minimal') {
+    } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal') {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
     }
     return `
