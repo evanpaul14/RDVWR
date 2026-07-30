@@ -18,7 +18,7 @@ import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js'
 import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, searchTypeBar, SEARCH_SORT_BTN_HTML } from './search.js';
 import { loadWikiPage } from './wiki.js';
 import { loadLiveThread, loadMoreLiveUpdates, cancelLivePoll } from './live.js';
-import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments } from './postview.js';
+import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments, stepViewFullThread } from './postview.js';
 import { closeSidebar, toggleSidebar } from './sidebar.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -234,6 +234,8 @@ document.getElementById('post-view').addEventListener('click', e => {
 
 // pvContent: comment sort, load more, retry, user nav
 pvContent.addEventListener('click', e => {
+  const threadNavBtn = e.target.closest('[data-thread-nav]');
+  if (threadNavBtn) { e.preventDefault(); stepViewFullThread(); return; }
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
   if (retryBtn) {
     const t = retryBtn.dataset.retry;

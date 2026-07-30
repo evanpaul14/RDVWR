@@ -56,6 +56,7 @@ export const state = {
   _pvSub: '',
   _pvPostId: '',
   _pvCommentId: '',
+  _pvShowingContext: false,
   _pvData: null,
 
   // Keyboard navigation
