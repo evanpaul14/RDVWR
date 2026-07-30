@@ -97,7 +97,10 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
   return cancel;
 }
 
-export function initAutocomplete(subInput, pvSubInput, navigate) {
+export function initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput) {
   _acCancellers.push(setupAutocomplete(subInput, document.getElementById('autocomplete-dropdown'), navigate));
   _acCancellers.push(setupAutocomplete(pvSubInput, document.getElementById('pv-autocomplete-dropdown'), navigate));
+  if (mobileSearchInput) {
+    _acCancellers.push(setupAutocomplete(mobileSearchInput, document.getElementById('mobile-search-dropdown'), navigate));
+  }
 }

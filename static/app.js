@@ -22,13 +22,14 @@ import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreC
 import { closeSidebar, toggleSidebar } from './sidebar.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const feed       = document.getElementById('feed');
-const sentinel   = document.getElementById('scroll-sentinel');
-const subInput   = document.getElementById('subreddit-input');
-const pvSubInput = document.getElementById('pv-subreddit-input');
-const pvScroll   = document.getElementById('pv-scroll');
-const postView   = document.getElementById('post-view');
-const pvContent  = document.getElementById('pv-content');
+const feed              = document.getElementById('feed');
+const sentinel          = document.getElementById('scroll-sentinel');
+const subInput          = document.getElementById('subreddit-input');
+const pvSubInput        = document.getElementById('pv-subreddit-input');
+const mobileSearchInput = document.getElementById('mobile-search-input');
+const pvScroll          = document.getElementById('pv-scroll');
+const postView          = document.getElementById('post-view');
+const pvContent         = document.getElementById('pv-content');
 // ── Navigation ────────────────────────────────────────────────────────────────
 export function navigateOrOpen(path, e) {
   if (e && (e.ctrlKey || e.metaKey || e.button === 1)) { window.open(path, '_blank'); return; }
@@ -43,7 +44,37 @@ export function navigate(path, { replace=false }={}) {
   renderRoute(parseRoute(path));
 }
 
+// ── Bottom nav & mobile search ────────────────────────────────────────────────
+function updateBottomNav(route) {
+  const bnHome     = document.getElementById('bn-home');
+  const bnPopular  = document.getElementById('bn-popular');
+  const bnSearch   = document.getElementById('bn-search');
+  if (!bnHome) return;
+  [bnHome, bnPopular, bnSearch].forEach(b => b.classList.remove('active'));
+  if (document.body.classList.contains('mobile-search-open') || route.type === 'search') {
+    bnSearch.classList.add('active');
+  } else if (route.type === 'sub' && route.sub?.toLowerCase() === 'popular') {
+    bnPopular.classList.add('active');
+  } else {
+    bnHome.classList.add('active');
+  }
+}
+
+function openMobileSearch() {
+  document.body.classList.add('mobile-search-open');
+  document.getElementById('bn-search')?.classList.add('active');
+  mobileSearchInput?.focus();
+}
+
+function closeMobileSearch() {
+  document.body.classList.remove('mobile-search-open');
+  if (mobileSearchInput) mobileSearchInput.value = '';
+  hideAllAutocomplete();
+}
+
 async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
+  closeMobileSearch();
+  updateBottomNav(route);
   if (route.type !== 'search') {
     searchTypeBar.style.display = 'none';
     state.searchType = 'posts';
@@ -377,7 +408,14 @@ sortBar.addEventListener('change', e => {
 
 // Search input
 function handleSearchInput(e) {
-  const activeInput = (e?.currentTarget?.id === 'pv-search-btn' || e?.target === pvSubInput || document.activeElement === pvSubInput) ? pvSubInput : subInput;
+  let activeInput;
+  if (e?.currentTarget?.id === 'pv-search-btn' || e?.target === pvSubInput || document.activeElement === pvSubInput) {
+    activeInput = pvSubInput;
+  } else if (e?.currentTarget?.id === 'mobile-search-btn' || e?.target === mobileSearchInput || document.activeElement === mobileSearchInput) {
+    activeInput = mobileSearchInput;
+  } else {
+    activeInput = subInput;
+  }
   const val = activeInput.value.trim();
   if (!val) return;
   const mMultiInput = val.match(/^u(?:ser)?\/([^\/]+)\/m\/([^\/]+)/i);
@@ -399,6 +437,16 @@ document.getElementById('subreddit-input').addEventListener('keydown', e => {
 document.getElementById('pv-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
+});
+document.getElementById('mobile-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
+mobileSearchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
+  if (e.key === 'Escape') { closeMobileSearch(); }
+});
+mobileSearchInput.addEventListener('blur', () => {
+  setTimeout(() => {
+    if (!document.activeElement?.closest('#mobile-search-bar')) closeMobileSearch();
+  }, 200);
 });
 
 // Infinite scroll
@@ -533,6 +581,19 @@ feed.addEventListener('keydown', e => {
 // Logo
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
 document.getElementById('popular-btn').addEventListener('click', () => navigate('/r/popular'));
+
+// Bottom nav
+document.getElementById('bn-home').addEventListener('click', () => navigate('/'));
+document.getElementById('bn-popular').addEventListener('click', () => navigate('/r/popular'));
+document.getElementById('bn-search').addEventListener('click', () => {
+  if (document.body.classList.contains('mobile-search-open')) {
+    closeMobileSearch();
+    updateBottomNav(parseRoute());
+  } else {
+    openMobileSearch();
+  }
+});
+document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
 
 // Long-press on post card → open in new tab (mobile)
 let _longPressTimer = null;
@@ -785,8 +846,31 @@ function bindUpdateEvents() {
 function closeSettingsPanel() {
   settingsPanel.classList.remove('open');
   settingsOverlay.classList.remove('open');
-  document.body.style.overflow = '';
+  settingsPanel.style.transform = '';
+  settingsPanel.style.transition = '';
+  if (!postView.classList.contains('open')) document.body.style.overflow = '';
 }
+
+// Settings panel swipe-to-close
+let _settingsSwipeX = 0;
+settingsPanel.addEventListener('touchstart', e => {
+  _settingsSwipeX = e.touches[0].clientX;
+}, { passive: true });
+settingsPanel.addEventListener('touchmove', e => {
+  const dx = e.touches[0].clientX - _settingsSwipeX;
+  if (dx > 0) {
+    e.preventDefault();
+    settingsPanel.classList.add('settings-dragging');
+    settingsPanel.style.transform = `translateX(${dx}px)`;
+  }
+}, { passive: false });
+settingsPanel.addEventListener('touchend', e => {
+  settingsPanel.classList.remove('settings-dragging');
+  const dx = e.changedTouches[0].clientX - _settingsSwipeX;
+  _settingsSwipeX = 0;
+  settingsPanel.style.transform = '';
+  if (dx >= 100) closeSettingsPanel();
+}, { passive: true });
 
 document.getElementById('settings-btn').addEventListener('click', openSettingsPanel);
 document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
@@ -795,6 +879,6 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 // ── Boot ──────────────────────────────────────────────────────────────────────
 applySettings();
 state.currentCommentSort = settings.commentSort;
-initAutocomplete(subInput, pvSubInput, navigate);
+initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
 renderRoute(parseRoute());

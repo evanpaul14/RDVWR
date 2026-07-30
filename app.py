@@ -596,7 +596,8 @@ def _imgur_from_post_data_json(html_text):
             imgs = _imgur_items_to_images(data.get(key))
             if imgs:
                 return imgs
-    except Exception as e:
+    except Exception:
+        pass
     return None
 
 
@@ -622,7 +623,8 @@ def _scrape_imgur_album(album_id):
             imgs = _imgur_from_next_data(json.loads(m.group(1)))
             if imgs:
                 return imgs
-        except Exception as e:
+        except Exception:
+            pass
 
     imgs = _imgur_from_post_data_json(html_text)
     if imgs:

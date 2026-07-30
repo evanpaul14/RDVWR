@@ -17,6 +17,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.min.css') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#0c0c0c">
 <link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js') }}">
 </head>
 <body>
@@ -54,6 +56,20 @@
   </div>
 </header>
 
+<!-- ── Mobile search bar (outside header to avoid backdrop-filter containment) ── -->
+<div id="mobile-search-bar" class="mobile-search-bar" role="search">
+  <div class="search-wrap">
+    <span class="search-prefix" aria-hidden="true">r /</span>
+    <input id="mobile-search-input" type="text" placeholder="subreddit or search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search">
+    <button id="mobile-search-btn" aria-label="Search">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M10 10L14 14M11 6A5 5 0 1 1 1 6a5 5 0 0 1 10 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="autocomplete-dropdown" id="mobile-search-dropdown" role="listbox"></div>
+</div>
+
 <main>
 <!-- ── Context info (sub or user) ── -->
 <div class="ctx-info" id="ctx-info">
@@ -87,8 +103,40 @@
 <div id="scroll-sentinel"></div>
 </main>
 
+<!-- ── Bottom navigation bar (mobile) ── -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
+  <button class="bn-btn active" id="bn-home" aria-label="Home">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 21V13h6v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Home</span>
+  </button>
+  <button class="bn-btn" id="bn-popular" aria-label="Popular">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M2 20h20M6 20V10m4 10V4m4 16V8m4 12V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Popular</span>
+  </button>
+  <button class="bn-btn" id="bn-search" aria-label="Search">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5"/>
+      <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span>Search</span>
+  </button>
+  <button class="bn-btn" id="bn-settings" aria-label="Settings">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Settings</span>
+  </button>
+</nav>
+
 <!-- ── Full-screen Post View ── -->
 <div class="post-view" id="post-view" role="dialog" aria-modal="true" aria-label="Post">
+  <div class="pv-handle-bar"></div>
   <div class="pv-bar">
     <div class="pv-bar-left">
       <button class="pv-home" id="pv-home">home</button>

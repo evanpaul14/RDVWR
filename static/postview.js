@@ -117,9 +117,64 @@ export function openPostView() {
 
 export function closePostView() {
   postView.classList.remove('open');
-  document.body.style.overflow = '';
+  postView.style.transform = '';
+  postView.style.transition = '';
+  if (!document.getElementById('settings-panel')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
   if (_pvPrevFocus) { _pvPrevFocus.focus(); _pvPrevFocus = null; }
 }
+
+// ── Swipe-to-dismiss ──────────────────────────────────────────────────────────
+let _pvSwipeStartY = 0;
+let _pvSwipeArmed = false;
+let _pvSwipeDy = 0;
+
+postView.addEventListener('touchstart', e => {
+  _pvSwipeArmed = false;
+  _pvSwipeDy = 0;
+  if (pvScroll.scrollTop > 8) return;
+  if (e.target.closest('video, button, a, input, select, .gallery-stage')) return;
+  _pvSwipeStartY = e.touches[0].clientY;
+}, { passive: true });
+
+postView.addEventListener('touchmove', e => {
+  if (!_pvSwipeStartY) return;
+  if (pvScroll.scrollTop > 8) { _pvSwipeStartY = 0; return; }
+  const dy = e.touches[0].clientY - _pvSwipeStartY;
+  if (dy <= 0) { _pvSwipeArmed = false; return; }
+  _pvSwipeArmed = true;
+  _pvSwipeDy = dy;
+  e.preventDefault();
+  postView.classList.add('pv-dragging');
+  postView.style.transform = `translateY(${Math.round(dy * 0.55)}px)`;
+}, { passive: false });
+
+postView.addEventListener('touchend', () => {
+  postView.classList.remove('pv-dragging');
+  if (!_pvSwipeArmed) { _pvSwipeStartY = 0; return; }
+  const dy = _pvSwipeDy;
+  _pvSwipeArmed = false;
+  _pvSwipeStartY = 0;
+  _pvSwipeDy = 0;
+
+  if (dy >= 130) {
+    postView.style.transition = 'transform .2s ease-in';
+    postView.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      postView.style.transform = 'translateY(105vh)';
+    }));
+    postView.addEventListener('transitionend', function handler() {
+      postView.removeEventListener('transitionend', handler);
+      closePostView();
+      history.back();
+    }, { once: true });
+  } else {
+    postView.style.transition = 'transform .25s cubic-bezier(.4,0,.2,1)';
+    postView.style.transform = 'translateY(0)';
+    setTimeout(() => { postView.style.transition = ''; postView.style.transform = ''; }, 280);
+  }
+}, { passive: true });
 
 export async function changeCommentSort(sort) {
   state.currentCommentSort = sort;

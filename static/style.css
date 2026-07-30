@@ -1155,17 +1155,17 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width:680px) {
-  /* ── Header ── */
+  /* ── Header: only shows logo on mobile; nav moved to bottom bar ── */
   .header-inner { gap:10px; padding:0 12px; }
   #subreddit-input, #pv-subreddit-input { padding:12px 4px; }
-  /* Hide the reddit link in the main header — it's in the post view header too,
-     and removing it gives the settings button room to stay on-screen. */
   #main-open { display:none; }
+  .popular-btn { display:none; }
+  .settings-btn { display:none; }
+  .search-container { display:none; }
 
-  /* ── Feed ── */
-  #feed { padding:12px 12px 80px; gap:10px; }
-  /* iOS safe-area bottom padding */
-  #feed { padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px)); }
+  /* ── Feed: extra bottom padding for bottom nav ── */
+  #feed { padding:12px 12px 0; gap:10px; }
+  #feed { padding-bottom:calc(72px + env(safe-area-inset-bottom, 0px)); }
 
   /* ── Sort bar: scrollable so sidebar/scope chips never overflow viewport ── */
   .sort-bar {
@@ -1573,3 +1573,62 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .minimal-mode .comment-body { font-size:12px; line-height:1.5; }
 .minimal-mode .comment-replies { margin-left:8px; padding-left:6px; }
 .minimal-mode .more-comments-wrap { padding-left:6px; }
+
+/* ── Bottom navigation bar ───────────────────────────────────────────────── */
+.bottom-nav {
+  display:none; /* hidden on desktop */
+}
+@media (max-width:680px) {
+  .bottom-nav {
+    display:flex; align-items:stretch;
+    position:fixed; bottom:0; left:0; right:0; z-index:150;
+    height:56px;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:var(--hdr-bg); backdrop-filter:blur(12px);
+    border-top:1px solid var(--b);
+  }
+  .bn-btn {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:3px; background:none; border:none; cursor:pointer;
+    color:var(--tx3); transition:color .15s;
+    font-family:var(--mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase;
+    padding:0;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .bn-btn:active { background:var(--bg3); }
+  .bn-btn.active { color:var(--ac); }
+  .bn-btn span { line-height:1; }
+}
+
+/* ── Mobile search overlay ───────────────────────────────────────────────── */
+.mobile-search-bar {
+  display:none;
+  position:fixed; top:56px; left:0; right:0; z-index:101;
+  padding:8px 12px 10px;
+  background:var(--hdr-bg); backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--b);
+}
+body.mobile-search-open .mobile-search-bar { display:block; }
+
+/* ── Post-view drag handle ───────────────────────────────────────────────── */
+.pv-handle-bar {
+  display:none;
+  flex-shrink:0; height:20px;
+  align-items:center; justify-content:center;
+  cursor:grab;
+  background:var(--pvhdr-bg); backdrop-filter:blur(12px);
+}
+.pv-handle-bar::after {
+  content:''; display:block;
+  width:36px; height:4px; border-radius:2px;
+  background:var(--b2);
+}
+@media (max-width:680px) {
+  .pv-handle-bar { display:flex; }
+}
+
+/* ── Post-view swipe-to-dismiss: disable transition while dragging ─────── */
+.post-view.pv-dragging { transition:none !important; }
+
+/* ── Settings panel swipe-to-close: disable transition while dragging ────── */
+.settings-panel.settings-dragging { transition:none !important; }
