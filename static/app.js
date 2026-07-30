@@ -64,6 +64,7 @@ function openMobileSearch() {
   document.body.classList.add('mobile-search-open');
   document.getElementById('bn-search')?.classList.add('active');
   document.getElementById('header-search-btn')?.classList.add('active');
+  document.getElementById('pv-search-toggle')?.classList.add('active');
   mobileSearchInput?.focus();
 }
 
@@ -71,6 +72,7 @@ function closeMobileSearch() {
   document.body.classList.remove('mobile-search-open');
   document.getElementById('bn-search')?.classList.remove('active');
   document.getElementById('header-search-btn')?.classList.remove('active');
+  document.getElementById('pv-search-toggle')?.classList.remove('active');
   if (mobileSearchInput) mobileSearchInput.value = '';
   hideAllAutocomplete();
 }
@@ -596,6 +598,15 @@ document.getElementById('bn-search').addEventListener('click', () => {
   }
 });
 document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
+
+// Post-view search toggle (mobile)
+document.getElementById('pv-search-toggle')?.addEventListener('click', () => {
+  if (document.body.classList.contains('mobile-search-open')) {
+    closeMobileSearch();
+  } else {
+    openMobileSearch();
+  }
+});
 
 // Header search button (mobile)
 document.getElementById('header-search-btn').addEventListener('click', () => {
