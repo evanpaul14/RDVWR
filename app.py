@@ -273,6 +273,11 @@ def _parse_comment_fields(d):
 
 # ── RedGifs proxy ────────────────────────────────────────────────────────────
 
+def _redgifs_proxied(url):
+    if not url: return None
+    fname = url.rsplit("/", 1)[-1]
+    return f"/api/redgifs/media/{fname}"
+
 @app.route("/api/redgifs/<gif_id>")
 def get_redgifs(gif_id):
     if not REDGIFS_ID_VALID_RE.match(gif_id):
@@ -288,11 +293,7 @@ def get_redgifs(gif_id):
         if resp.status_code != 200:
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
         urls = resp.json()["gif"]["urls"]
-        def proxied(url):
-            if not url: return None
-            fname = url.rsplit("/", 1)[-1]
-            return f"/api/redgifs/media/{fname}"
-        return cached_json({"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}, 3600)
+        return cached_json({"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -318,11 +319,7 @@ def get_redgifs_batch():
             if not gid:
                 continue
             urls = gif.get("urls", {})
-            def proxied(url):
-                if not url: return None
-                fname = url.rsplit("/", 1)[-1]
-                return f"/api/redgifs/media/{fname}"
-            result[gid] = {"hd": proxied(urls.get("hd")), "sd": proxied(urls.get("sd"))}
+            result[gid] = {"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}
         return cached_json(result, 3600)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1598,16 +1595,20 @@ def get_live_thread(thread_id):
     if not LIVE_ID_RE.match(thread_id):
         return jsonify({"error": "Invalid thread ID"}), 400
     try:
-        info_resp = reddit_get(
-            f"https://www.reddit.com/live/{thread_id}.json",
-            params={"raw_json": 1}, timeout=10)
+        from concurrent.futures import ThreadPoolExecutor
+        def _fetch_info():
+            return reddit_get(f"https://www.reddit.com/live/{thread_id}.json", params={"raw_json": 1}, timeout=10)
+        def _fetch_updates():
+            return reddit_get(f"https://www.reddit.com/live/{thread_id}/updates.json", params={"raw_json": 1, "limit": 25}, timeout=10)
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_info = ex.submit(_fetch_info)
+            f_upd  = ex.submit(_fetch_updates)
+            info_resp = f_info.result()
+            upd_resp  = f_upd.result()
         if info_resp.status_code == 404:
             return jsonify({"error": "Live thread not found"}), 404
         if info_resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {info_resp.status_code}"}), info_resp.status_code
-        upd_resp = reddit_get(
-            f"https://www.reddit.com/live/{thread_id}/updates.json",
-            params={"raw_json": 1, "limit": 25}, timeout=10)
         d = info_resp.json()["data"]
         updates, after = [], None
         if upd_resp.status_code == 200:

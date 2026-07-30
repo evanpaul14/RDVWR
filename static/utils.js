@@ -111,6 +111,17 @@ export function buildTimeFilterHtml(selected) {
   </select></div>`;
 }
 
+export function evictMap(map, max) {
+  if (map.size < max) return;
+  const n = Math.ceil(max / 5);
+  const it = map.keys();
+  for (let i = 0; i < n; i++) {
+    const { value, done } = it.next();
+    if (done) break;
+    map.delete(value);
+  }
+}
+
 export function renderPoll(poll) {
   if (!poll?.options?.length) return '';
   const total = poll.total_votes || 0;

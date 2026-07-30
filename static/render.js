@@ -1,4 +1,4 @@
-import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
+import { escHtml, evictMap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, nsfwWrap } from './media.js';
 import { isVisited } from './visited.js';
 import { settings } from './settings.js';
@@ -87,15 +87,7 @@ export async function xlateText(text) {
   const d = await r.json();
   const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
   const result = { detected, translated: d.responseData?.translatedText || '' };
-  if (_xlateCache.size >= XLATE_CACHE_MAX) {
-    const evictCount = Math.ceil(XLATE_CACHE_MAX / 5);
-    const it = _xlateCache.keys();
-    for (let i = 0; i < evictCount; i++) {
-      const { value, done } = it.next();
-      if (done) break;
-      _xlateCache.delete(value);
-    }
-  }
+  evictMap(_xlateCache, XLATE_CACHE_MAX);
   _xlateCache.set(key, result);
   return result;
 }
@@ -125,10 +117,15 @@ export async function translatePost(p, container) {
 
   const bodyEl = container.querySelector('.pv-body');
   let bodyRes = null;
+  let mdTranslated = null;
+  let mdOrig = null;
   if (bodyEl && origBody.trim()) {
     bodyRes = await xlateText(origBody);
-    if (bodyRes?.translated && bodyRes.translated !== origBody)
-      bodyEl.innerHTML = renderMd(bodyRes.translated);
+    mdOrig = renderMd(origBody);
+    if (bodyRes?.translated && bodyRes.translated !== origBody) {
+      mdTranslated = renderMd(bodyRes.translated);
+      bodyEl.innerHTML = mdTranslated;
+    }
   }
 
   const bar = document.createElement('div');
@@ -136,18 +133,18 @@ export async function translatePost(p, container) {
   bar.innerHTML = `<span class="xlate-label">Translated from ${titleRes.detected}</span><button class="xlate-btn">View original</button>`;
   titleEl.after(bar);
 
+  const xlateBtn = bar.querySelector('.xlate-btn');
   let showingTranslation = true;
-  bar.querySelector('.xlate-btn').addEventListener('click', () => {
+  xlateBtn.addEventListener('click', () => {
     showingTranslation = !showingTranslation;
     if (showingTranslation) {
       titleEl.textContent = titleRes.translated;
-      if (bodyEl && bodyRes?.translated && bodyRes.translated !== origBody)
-        bodyEl.innerHTML = renderMd(bodyRes.translated);
-      bar.querySelector('.xlate-btn').textContent = 'View original';
+      if (bodyEl && mdTranslated) bodyEl.innerHTML = mdTranslated;
+      xlateBtn.textContent = 'View original';
     } else {
       titleEl.textContent = origTitle;
-      if (bodyEl) bodyEl.innerHTML = renderMd(origBody);
-      bar.querySelector('.xlate-btn').textContent = 'View translated';
+      if (bodyEl && mdOrig != null) bodyEl.innerHTML = mdOrig;
+      xlateBtn.textContent = 'View translated';
     }
   });
 }
@@ -186,6 +183,13 @@ function _isNativeImage(m) {
   return !!(m.gallery?.length > 0 || isImageDomain || (m.gif_url && !m.gif_is_video));
 }
 
+function _thumbSpoilerWrap(html) {
+  return `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${html}</div></div>`;
+}
+function _thumbNsfwWrap(html) {
+  return `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${html}</div></div>`;
+}
+
 function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer }) {
   const mediaSrc = p.crosspost_from || p;
   const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
@@ -195,8 +199,8 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
   if (imgSrc) {
     const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
     let thumbContent = thumbInner;
-    if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
-    if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
+    if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
+    if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
     const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
     thumbHtml = _compactHasMedia(mediaSrc)
       ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
@@ -229,8 +233,8 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
     if (imgSrc) {
       const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
       let thumbContent = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
-      if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
-      if (p.over_18)    thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
+      if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
+      if (p.over_18)    thumbContent = _thumbNsfwWrap(thumbContent);
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
       thumbHtml = `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
     }
@@ -336,8 +340,8 @@ export function renderPost(p, idx, showSub=false) {
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
       let thumbContent = thumbInner;
-      if (p.is_spoiler) thumbContent = `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${thumbContent}</div></div>`;
-      if (p.over_18) thumbContent = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${thumbContent}</div></div>`;
+      if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
+      if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
     } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal') {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
