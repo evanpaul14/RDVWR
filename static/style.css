@@ -1452,6 +1452,9 @@ a.comment-time:hover { color:var(--ac); }
   padding:4px 10px; cursor:pointer; transition:color .15s,border-color .15s;
 }
 .settings-action-btn:hover { color:var(--tx2); border-color:var(--tx3); }
+.settings-update-status { font-size:11px; color:var(--tx3); margin-top:6px; min-height:16px; font-family:var(--mono); }
+.settings-update-ok  { color:#4caf50; }
+.settings-update-err { color:#e57373; }
 
 /* ── NSFW feed filtering ─────────────────────────────────────────────────── */
 body.nsfw-hide [data-nsfw="1"] { display:none !important; }
