@@ -390,3 +390,10 @@ document.addEventListener('click', e => {
   const dlName = state._pvData?.post?.title || state._pvPostId || 'gallery';
   _showGalleryDlModal(gallery, dlName);
 });
+
+pvOpen.addEventListener('click', e => {
+  const href = pvOpen.getAttribute('href');
+  if (!href || href === '#') { e.preventDefault(); return; }
+  e.preventDefault();
+  window.open(href, '_blank', 'noopener');
+});

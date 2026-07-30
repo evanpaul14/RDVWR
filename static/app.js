@@ -69,6 +69,7 @@ function openMobileSearch() {
 
 function closeMobileSearch() {
   document.body.classList.remove('mobile-search-open');
+  document.getElementById('bn-search')?.classList.remove('active');
   document.getElementById('header-search-btn')?.classList.remove('active');
   if (mobileSearchInput) mobileSearchInput.value = '';
   hideAllAutocomplete();
@@ -767,11 +768,16 @@ function openSettingsPanel() {
   settingsPanel.classList.add('open');
   settingsOverlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+  settingsBody.innerHTML = _settingsHtml();
+  bindSettingEvents();
+  if (window._androidUpdate) bindUpdateEvents();
   getPlatform().then(p => {
-    window._androidUpdate = !!p.android;
-    settingsBody.innerHTML = _settingsHtml();
-    bindSettingEvents();
-    if (window._androidUpdate) bindUpdateEvents();
+    if (p.android && !window._androidUpdate) {
+      window._androidUpdate = true;
+      settingsBody.innerHTML = _settingsHtml();
+      bindSettingEvents();
+      bindUpdateEvents();
+    }
   });
 }
 
@@ -780,7 +786,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); });
+  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); updatePopularBtn(); });
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
@@ -887,9 +893,24 @@ document.getElementById('settings-btn').addEventListener('click', openSettingsPa
 document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
 settingsOverlay.addEventListener('click', closeSettingsPanel);
 
+// ── Popular button visibility ─────────────────────────────────────────────────
+function updatePopularBtn() {
+  const btn = document.getElementById('popular-btn');
+  if (btn) btn.hidden = !settings.redditCookies;
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 applySettings();
 state.currentCommentSort = settings.commentSort;
+updatePopularBtn();
 initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
 renderRoute(parseRoute());
+
+// Retry home feed when app returns to foreground with no posts loaded
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (state.homeMode && !feed.querySelector('.post') && !state.loading) {
+    loadHomeFeed(state.currentSort || 'best', state.currentTime || 'all');
+  }
+});
