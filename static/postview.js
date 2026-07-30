@@ -89,9 +89,15 @@ function buildCommentSortBar(active) {
 
 function buildCommentsHtml(data, commentId) {
   const p = data.post;
-  const threadBanner = commentId ? `<div class="thread-banner"><a href="javascript:;" data-back="true">← View full thread</a></div>` : '';
-  let rootComments = data.comments;
+  const showContext = state._pvShowingContext;
+  let threadBanner = '';
   if (commentId) {
+    const isTopLevel = data.comments.some(c => c.id === commentId);
+    const navType = (!showContext && !isTopLevel) ? 'context' : 'full';
+    threadBanner = `<div class="thread-banner"><a href="javascript:;" data-thread-nav="${navType}">← View full thread</a></div>`;
+  }
+  let rootComments = data.comments;
+  if (commentId && !showContext) {
     const target = findComment(data.comments, commentId);
     if (target) rootComments = [target];
   }
@@ -134,7 +140,7 @@ export async function changeCommentSort(sort) {
 }
 
 export async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
-  state._pvSub = sub; state._pvPostId = postId; state._pvCommentId = commentId;
+  state._pvSub = sub; state._pvPostId = postId; state._pvCommentId = commentId; state._pvShowingContext = false;
   state.currentCommentSort = settings.commentSort;
   pvContent.innerHTML = '<div class="pv-loader"></div>';
   document.dispatchEvent(new CustomEvent('pv-load'));
@@ -201,7 +207,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       </div>`}
       ${crosspostHtml}
       ${p.crosspost_from ? '' : mediaHtmlFull(p)}
-      ${!settings.layout === 'minimal' && !p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video) ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(p.url)}"></div></div>` : ''}
+      ${settings.layout !== 'minimal' && !p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video) ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(p.url)}"></div></div>` : ''}
       ${bodyHtml}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
@@ -217,6 +223,21 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
     translatePost(p, pvContent).catch(() => {});
   } catch {
     pvContent.innerHTML = errState('Network error', 'post');
+  }
+}
+
+export async function stepViewFullThread() {
+  const area = pvContent.querySelector('.pv-comments-area');
+  if (!area || !state._pvCommentId || !state._pvData) return;
+  if (!state._pvShowingContext && !state._pvData.comments.some(c => c.id === state._pvCommentId)) {
+    state._pvShowingContext = true;
+    area.innerHTML = buildCommentsHtml(state._pvData, state._pvCommentId);
+    initMedia(area);
+    initGifVideos(area);
+  } else {
+    state._pvShowingContext = false;
+    state._pvCommentId = '';
+    await changeCommentSort(state.currentCommentSort);
   }
 }
 
