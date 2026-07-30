@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
+import { escHtml, evictMap, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
@@ -141,26 +141,15 @@ const _gifObserver = new IntersectionObserver((entries) => {
 const _rgCache = new Map();
 const RG_CACHE_MAX = 500;
 
-function _rgCacheEvictIfFull() {
-  if (_rgCache.size < RG_CACHE_MAX) return;
-  const evictCount = Math.ceil(RG_CACHE_MAX / 5);
-  const it = _rgCache.keys();
-  for (let i = 0; i < evictCount; i++) {
-    const { value, done } = it.next();
-    if (done) break;
-    _rgCache.delete(value);
-  }
-}
-
 function _rgCacheSet(id, data) {
   if (_rgCache.has(id)) return;
-  _rgCacheEvictIfFull();
+  evictMap(_rgCache, RG_CACHE_MAX);
   _rgCache.set(id, Promise.resolve(data));
 }
 
 function _prefetchRedgifs(id) {
   if (_rgCache.has(id)) return;
-  _rgCacheEvictIfFull();
+  evictMap(_rgCache, RG_CACHE_MAX);
   _rgCache.set(id, fetch(`/api/redgifs/${id}`).then(r => r.ok ? r.json() : null).catch(() => null));
 }
 
@@ -307,15 +296,7 @@ const OG_FETCH_CACHE_MAX = 500;
 function fetchOg(url) {
   let p = _ogFetchCache.get(url);
   if (!p) {
-    if (_ogFetchCache.size >= OG_FETCH_CACHE_MAX) {
-      const evictCount = Math.ceil(OG_FETCH_CACHE_MAX / 5);
-      const it = _ogFetchCache.keys();
-      for (let i = 0; i < evictCount; i++) {
-        const { value, done } = it.next();
-        if (done) break;
-        _ogFetchCache.delete(value);
-      }
-    }
+    evictMap(_ogFetchCache, OG_FETCH_CACHE_MAX);
     p = fetch(`/api/og-image?url=${encodeURIComponent(url)}`).then(r => r.json());
     _ogFetchCache.set(url, p);
   }

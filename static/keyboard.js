@@ -8,6 +8,9 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
   function _getPostEls() {
     return [...feed.querySelectorAll('.post, .post-compact')];
   }
+  function _getSelectedPost() {
+    return _getPostEls()[state.selectedPostIdx] ?? null;
+  }
   function _selectPost(idx) {
     const posts = _getPostEls();
     if (!posts.length) return;
@@ -53,24 +56,21 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
       e.preventDefault();
       _selectPost(Math.max(0, state.selectedPostIdx - 1));
     } else if ((e.key === 'o' || e.key === 'Enter') && state.selectedPostIdx >= 0) {
-      const posts = _getPostEls();
-      const post = posts[state.selectedPostIdx];
+      const post = _getSelectedPost();
       if (post) {
         const link = post.querySelector('a.post-title[data-nav], a.is-italic[data-nav], a.min-title[data-nav]');
         if (link) navigate(link.dataset.nav);
       }
     } else if (e.key === 'c' && state.selectedPostIdx >= 0) {
       e.preventDefault();
-      const posts = _getPostEls();
-      const post = posts[state.selectedPostIdx];
+      const post = _getSelectedPost();
       if (post) {
         const link = post.querySelector('a.comments-link[data-nav], a.min-comments[data-nav]');
         if (link) navigate(link.dataset.nav);
       }
     } else if (e.key === 'l' && state.selectedPostIdx >= 0) {
       e.preventDefault();
-      const posts = _getPostEls();
-      const post = posts[state.selectedPostIdx];
+      const post = _getSelectedPost();
       if (post) {
         const ext = post.querySelector('a.ext-link');
         if (ext) window.open(ext.href, '_blank', 'noopener');
