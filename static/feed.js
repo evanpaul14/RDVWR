@@ -17,7 +17,7 @@ export function setMainOpen(href) { mainOpen.href = href || '#'; }
 
 // ── Sort bar builders ─────────────────────────────────────────────────────────
 export function buildSubSortHtml(sort='top', time='all', sub='') {
-  const btns = ['hot','new','top','rising','controversial'].map(s =>
+  const btns = ['best','hot','new','top','rising','controversial'].map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-sort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';

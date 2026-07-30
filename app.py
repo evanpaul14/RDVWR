@@ -41,7 +41,7 @@ SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
-FEED_SORTS   = {'hot', 'new', 'top', 'rising', 'controversial'}
+FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
 
 def validate_params(**patterns):
     """Route decorator: 400 if a path/view param doesn't match its allowlist regex."""
