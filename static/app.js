@@ -46,28 +46,30 @@ export function navigate(path, { replace=false }={}) {
 
 // ── Bottom nav & mobile search ────────────────────────────────────────────────
 function updateBottomNav(route) {
-  const bnHome     = document.getElementById('bn-home');
-  const bnPopular  = document.getElementById('bn-popular');
-  const bnSearch   = document.getElementById('bn-search');
+  const bnHome   = document.getElementById('bn-home');
+  const bnSearch = document.getElementById('bn-search');
   if (!bnHome) return;
-  [bnHome, bnPopular, bnSearch].forEach(b => b.classList.remove('active'));
+  [bnHome, bnSearch].forEach(b => b.classList.remove('active'));
+  const headerSearchBtn = document.getElementById('header-search-btn');
   if (document.body.classList.contains('mobile-search-open') || route.type === 'search') {
-    bnSearch.classList.add('active');
-  } else if (route.type === 'sub' && route.sub?.toLowerCase() === 'popular') {
-    bnPopular.classList.add('active');
+    bnSearch?.classList.add('active');
+    headerSearchBtn?.classList.add('active');
   } else {
     bnHome.classList.add('active');
+    headerSearchBtn?.classList.remove('active');
   }
 }
 
 function openMobileSearch() {
   document.body.classList.add('mobile-search-open');
   document.getElementById('bn-search')?.classList.add('active');
+  document.getElementById('header-search-btn')?.classList.add('active');
   mobileSearchInput?.focus();
 }
 
 function closeMobileSearch() {
   document.body.classList.remove('mobile-search-open');
+  document.getElementById('header-search-btn')?.classList.remove('active');
   if (mobileSearchInput) mobileSearchInput.value = '';
   hideAllAutocomplete();
 }
@@ -584,7 +586,6 @@ document.getElementById('popular-btn').addEventListener('click', () => navigate(
 
 // Bottom nav
 document.getElementById('bn-home').addEventListener('click', () => navigate('/'));
-document.getElementById('bn-popular').addEventListener('click', () => navigate('/r/popular'));
 document.getElementById('bn-search').addEventListener('click', () => {
   if (document.body.classList.contains('mobile-search-open')) {
     closeMobileSearch();
@@ -594,6 +595,16 @@ document.getElementById('bn-search').addEventListener('click', () => {
   }
 });
 document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
+
+// Header search button (mobile)
+document.getElementById('header-search-btn').addEventListener('click', () => {
+  if (document.body.classList.contains('mobile-search-open')) {
+    closeMobileSearch();
+    updateBottomNav(parseRoute());
+  } else {
+    openMobileSearch();
+  }
+});
 
 // Long-press on post card → open in new tab (mobile)
 let _longPressTimer = null;
