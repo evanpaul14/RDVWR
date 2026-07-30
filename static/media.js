@@ -96,7 +96,12 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
       wrap.addEventListener('mouseenter', () => { btn.style.opacity = '1'; }, { passive: true });
       wrap.addEventListener('mouseleave', hideBtn, { passive: true });
       btn.addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
-      document.addEventListener('click', () => { menu.classList.remove('open'); hideBtn(); }, { passive: true });
+      const onDocClick = () => {
+        if (!document.body.contains(menu)) { document.removeEventListener('click', onDocClick); return; }
+        menu.classList.remove('open');
+        hideBtn();
+      };
+      document.addEventListener('click', onDocClick, { passive: true });
       menu.addEventListener('click', e => {
         const ql = e.target.closest('.hls-ql');
         if (!ql) return;

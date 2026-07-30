@@ -12,8 +12,7 @@ export function markVisited(id) {
   if (!id || _visited.has(id)) return false;
   _visited.add(id);
   if (_visited.size > MAX) {
-    const arr = [..._visited];
-    _visited = new Set(arr.slice(arr.length - MAX));
+    _visited.delete(_visited.values().next().value);
   }
   localStorage.setItem(KEY, JSON.stringify([..._visited]));
   return true;

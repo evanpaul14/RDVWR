@@ -1,5 +1,5 @@
 import { escHtml, fmtNum, timeAgo } from './utils.js';
-import { renderMd } from './render.js';
+import { renderMd, waitForMdLibs } from './render.js';
 
 function renderWidget(w) {
   const title = w.name ? `<div class="sidebar-section-title">${escHtml(w.name)}</div>` : '';
@@ -73,7 +73,7 @@ export async function toggleSidebar(sub) {
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
   try {
-    const [aboutRes, rulesRes, modsRes, widgetsRes] = await Promise.all([
+    const [, aboutRes, rulesRes, modsRes, widgetsRes] = await Promise.all([waitForMdLibs(),
       fetch(`/api/r/${encodeURIComponent(sub)}/about`),
       fetch(`/api/r/${encodeURIComponent(sub)}/rules`),
       fetch(`/api/r/${encodeURIComponent(sub)}/about/moderators`),
