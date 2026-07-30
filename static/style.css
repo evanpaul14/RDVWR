@@ -97,12 +97,18 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 #subreddit-input::placeholder, #pv-subreddit-input::placeholder { color:var(--tx3); }
 .pv-search-wrap { width:100%; }
-#search-btn, #pv-search-btn {
+#search-btn, #pv-search-btn, #mobile-search-btn {
   background:transparent; border:none; border-left:1px solid var(--b2);
   cursor:pointer; padding:0 14px; height:100%; color:var(--tx2);
   transition:color .15s,background .15s; display:flex; align-items:center;
 }
-#search-btn:hover, #pv-search-btn:hover { color:var(--ac); background:var(--bg3); }
+#search-btn:hover, #pv-search-btn:hover, #mobile-search-btn:hover { color:var(--ac); background:var(--bg3); }
+#mobile-search-input {
+  flex:1; background:transparent; border:none; outline:none;
+  font-family:var(--mono); font-size:13px; color:var(--tx);
+  padding:10px 4px; min-width:0;
+}
+#mobile-search-input::placeholder { color:var(--tx3); }
 
 /* ── Time filter (search) ───────────────────────────────────────────────── */
 .time-filter-wrap { display:flex; align-items:center; padding:0 12px; border-left:1px solid var(--b); }
@@ -1601,14 +1607,33 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 }
 
 /* ── Mobile search overlay ───────────────────────────────────────────────── */
-.mobile-search-bar {
-  display:none;
-  position:fixed; top:56px; left:0; right:0; z-index:101;
-  padding:8px 12px 10px;
-  background:var(--hdr-bg); backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--b);
+/* Hidden everywhere by default; only shown on ≤680px when search is open */
+.mobile-search-bar { display:none; }
+
+@media (max-width:680px) {
+  .mobile-search-bar {
+    position:fixed; top:56px; left:0; right:0; z-index:101;
+    padding:8px 12px 10px;
+    background:var(--hdr-bg); backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--b);
+  }
+  .mobile-search-bar .search-wrap { width:100%; }
+  body.mobile-search-open .mobile-search-bar { display:block; }
 }
-body.mobile-search-open .mobile-search-bar { display:block; }
+
+/* ── Header search button (mobile only) ─────────────────────────────────── */
+.header-search-btn { display:none; }
+@media (max-width:680px) {
+  .header-search-btn {
+    display:flex; align-items:center; justify-content:center;
+    background:none; border:none; cursor:pointer; color:var(--tx2);
+    padding:6px; border-radius:6px; margin-left:auto;
+    transition:color .15s, background .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .header-search-btn:hover, .header-search-btn.active { color:var(--ac); }
+  .header-search-btn.active { background:var(--bg3); }
+}
 
 /* ── Post-view drag handle ───────────────────────────────────────────────── */
 .pv-handle-bar {
