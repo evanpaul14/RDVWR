@@ -15,6 +15,13 @@ const mainOpen    = document.getElementById('main-open');
 
 export function setMainOpen(href) { mainOpen.href = href || '#'; }
 
+mainOpen.addEventListener('click', e => {
+  const href = mainOpen.getAttribute('href');
+  if (!href || href === '#') { e.preventDefault(); return; }
+  e.preventDefault();
+  window.open(href, '_blank', 'noopener');
+});
+
 // ── Sort bar builders ─────────────────────────────────────────────────────────
 export function buildSubSortHtml(sort='top', time='all', sub='') {
   const btns = ['best','hot','new','top','rising','controversial'].map(s =>
