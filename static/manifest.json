@@ -1,0 +1,27 @@
+{
+  "name": "RDVWR",
+  "short_name": "RDVWR",
+  "description": "A clean Reddit viewer",
+  "display": "standalone",
+  "start_url": "/",
+  "theme_color": "#0c0c0c",
+  "background_color": "#0c0c0c",
+  "icons": [
+    {
+      "src": "/static/apple-touch-icon-120x120.png",
+      "sizes": "120x120",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/apple-touch-icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
