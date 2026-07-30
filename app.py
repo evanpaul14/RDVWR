@@ -34,6 +34,7 @@ app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 Compress(app)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger("werkzeug").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 _SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
@@ -156,7 +157,6 @@ def _parse_shreddit_post(el):
             for a in body_el.find_all('a'):
                 a.unwrap()
             inner = body_el.decode_contents().strip()
-            log.debug("shreddit selftext_html sample: %.200s", inner)
             if inner:
                 selftext_html = inner
                 selftext = body_el.get_text(separator=' ').strip()
@@ -193,7 +193,6 @@ def _parse_shreddit_post(el):
                             'caption': cap_el.get_text().strip() if cap_el else ''})
         if gallery and not preview_img:
             preview_img = gallery[0]['url']
-        log.info("shreddit gallery id=%s images=%d post_type=%s", post_id, len(gallery), post_type)
 
     is_video = post_type in ('video', 'gif')
     video_url = hls_url = audio_url = None
@@ -598,7 +597,6 @@ def _imgur_from_post_data_json(html_text):
             if imgs:
                 return imgs
     except Exception as e:
-        log.debug("_imgur_from_post_data_json parse failed: %s", e)
     return None
 
 
@@ -625,7 +623,6 @@ def _scrape_imgur_album(album_id):
             if imgs:
                 return imgs
         except Exception as e:
-            log.debug("_scrape_imgur_album next-data parse failed: %s", e)
 
     imgs = _imgur_from_post_data_json(html_text)
     if imgs:
@@ -940,7 +937,6 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
             return [], None
         return extract_posts(rb.json()["data"]), cursor
     except Exception as e:
-        log.debug("quarantine fallback failed sub=%s: %s", subreddit, e)
         return [], None
 
 
@@ -1014,7 +1010,6 @@ def get_home():
                 impersonate="firefox133",
                 timeout=15,
             )
-            log.info("shreddit home-feed status=%s", resp.status_code)
             if resp.ok:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 posts = []
@@ -1046,7 +1041,6 @@ def get_home():
                         txt = child.get_text(separator=' ', strip=True)
                         if txt and len(txt) < 300:
                             current_label = txt
-                log.info("shreddit home-feed parsed %d posts", len(posts))
                 # Batch-fetch gallery data for gallery posts where HTML parsing found no images
                 missing = [(i, p['id']) for i, p in enumerate(posts)
                            if p['post_hint'] == 'gallery' and not p['gallery']]
@@ -1784,6 +1778,7 @@ def _proxy_reddit(reddit_path):
         return jsonify({"error": "upstream request failed"}), 502
     content_type = resp.headers.get("Content-Type", "application/json")
     return Response(resp.content, status=resp.status_code, content_type=content_type)
+
 
 
 @app.route("/<path:reddit_path>")

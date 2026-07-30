@@ -328,7 +328,6 @@ def _cffi_post(url, device, **kwargs):
         return cffi_requests.post(url, impersonate=device.impersonate, **kwargs)
     except Exception as e:
         # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
-        log.debug("cffi POST TLS fallback url=%s: %s", url, e)
         kwargs.pop("impersonate", None)
         if "content" in kwargs:
             kwargs["data"] = kwargs.pop("content")
@@ -413,7 +412,6 @@ def _get_quarantine_session() -> "requests.Session":
                 allow_redirects=False,
                 timeout=10,
             )
-            log.info("quarantine session initialised (pref_quarantine_optin=true)")
         except Exception as e:
             log.warning("quarantine session init failed: %s", e)
         _quarantine_session = s
@@ -437,7 +435,6 @@ def reddit_get(url, *, quarantine=False, **kwargs):
             resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
         except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
-            log.debug("cffi GET TLS fallback url=%s: %s", url, e)
             return SESSION.get(url, headers=headers, **kwargs)
         if resp.status_code == 429:
             time.sleep(min(int(resp.headers.get("Retry-After", 5)), 5))

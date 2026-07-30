@@ -194,7 +194,6 @@ def process_post(p):
         try:
             crosspost_from = process_post(orig)
         except Exception as e:
-            log.debug("crosspost_from parse failed id=%s: %s", orig.get("id"), e)
             crosspost_from = {
                 "subreddit": orig.get("subreddit", ""),
                 "id":        orig.get("id", ""),
