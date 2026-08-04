@@ -1359,6 +1359,71 @@ def get_morechildren(subreddit, post_id):
 
 # ── User API ──────────────────────────────────────────────────────────────────
 
+ARCTIC_SHIFT_BASE = "https://arctic-shift.photon-reddit.com/api"
+
+
+def arctic_shift_get(path, params, timeout=10):
+    return SESSION.get(f"{ARCTIC_SHIFT_BASE}{path}", params=params, timeout=timeout)
+
+
+def _normalize_comment(d):
+    link_permalink = d.get("link_permalink", "") or d.get("permalink", "") or ""
+    if link_permalink and not link_permalink.startswith("http"):
+        link_permalink = f"https://www.reddit.com{link_permalink}"
+    return {
+        "id":             d.get("id", ""),
+        "author":         d.get("author", "[deleted]"),
+        "body":           d.get("body", ""),
+        "score":          d.get("score", 0),
+        "created_utc":    d.get("created_utc", 0),
+        "subreddit":      d.get("subreddit", ""),
+        "link_title":     d.get("link_title", ""),
+        "link_permalink": link_permalink,
+        "link_id":        (d.get("link_id") or "").replace("t3_", ""),
+    }
+
+
+def _backfill_comment_titles(comments):
+    """Arctic Shift comments lack link_title/link_permalink; batch-fetch parent posts."""
+    link_ids = sorted({c["link_id"] for c in comments if c["link_id"] and not c["link_title"]})
+    if not link_ids:
+        return
+    try:
+        resp = arctic_shift_get("/posts/ids", {"ids": ",".join(link_ids[:500])})
+        resp.raise_for_status()
+        posts = {p["id"]: p for p in resp.json().get("data", [])}
+        for c in comments:
+            p = posts.get(c["link_id"])
+            if p:
+                if not c["link_title"]:
+                    c["link_title"] = p.get("title", "")
+                if not c["link_permalink"]:
+                    permalink = p.get("permalink", "")
+                    c["link_permalink"] = f"https://www.reddit.com{permalink}" if permalink else ""
+    except Exception as e:
+        log.warning("archived comment link_title backfill failed: %s", e)
+
+
+def _fetch_archived_posts(username, limit):
+    resp = arctic_shift_get("/posts/search", {"author": username, "sort": "desc", "limit": limit})
+    resp.raise_for_status()
+    posts = []
+    for d in resp.json().get("data", []):
+        try:
+            posts.append(process_post(d))
+        except Exception as e:
+            log.warning("archived process_post failed id=%s: %s", d.get("id"), e)
+    return posts
+
+
+def _fetch_archived_comments(username, limit):
+    resp = arctic_shift_get("/comments/search", {"author": username, "sort": "desc", "limit": limit})
+    resp.raise_for_status()
+    comments = [_normalize_comment(d) for d in resp.json().get("data", [])]
+    _backfill_comment_titles(comments)
+    return comments
+
+
 @app.route("/api/user/<username>/about")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
@@ -1401,7 +1466,13 @@ def get_user_posts_api(username):
         resp = reddit_get(
             f"https://www.reddit.com/user/{username}/submitted.json",
             params=params, timeout=10)
-        if resp.status_code == 404:
+        if resp.status_code in (403, 404):
+            try:
+                posts = _fetch_archived_posts(username, FEED_LIMIT)
+                if posts:
+                    return cached_json({"posts": posts, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived posts fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
@@ -1428,7 +1499,13 @@ def get_user_comments_api(username):
         resp = reddit_get(
             f"https://www.reddit.com/user/{username}/comments.json",
             params=params, timeout=10)
-        if resp.status_code == 404:
+        if resp.status_code in (403, 404):
+            try:
+                comments = _fetch_archived_comments(username, FEED_LIMIT)
+                if comments:
+                    return cached_json({"comments": comments, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived comments fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
@@ -1437,18 +1514,7 @@ def get_user_comments_api(username):
         for c in listing["children"]:
             if c.get("kind") != "t1":
                 continue
-            d = c["data"]
-            comments.append({
-                "id":             d["id"],
-                "author":         d.get("author", "[deleted]"),
-                "body":           d.get("body", ""),
-                "score":          d.get("score", 0),
-                "created_utc":    d.get("created_utc", 0),
-                "subreddit":      d.get("subreddit", ""),
-                "link_title":     d.get("link_title", ""),
-                "link_permalink": d.get("link_permalink", "") if d.get("link_permalink", "").startswith("http") else f"https://www.reddit.com{d.get('link_permalink', '')}",
-                "link_id":        d.get("link_id", "").replace("t3_", ""),
-            })
+            comments.append(_normalize_comment(c["data"]))
         return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1470,7 +1536,19 @@ def get_user_overview_api(username):
         resp = reddit_get(
             f"https://www.reddit.com/user/{username}/overview.json",
             params=params, timeout=10)
-        if resp.status_code == 404:
+        if resp.status_code in (403, 404):
+            try:
+                posts    = _fetch_archived_posts(username, FEED_LIMIT)
+                comments = _fetch_archived_comments(username, FEED_LIMIT)
+                items = (
+                    [{"type": "post", "data": p} for p in posts]
+                    + [{"type": "comment", "data": c} for c in comments]
+                )
+                if items:
+                    items.sort(key=lambda i: i["data"].get("created_utc", 0), reverse=True)
+                    return cached_json({"items": items, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived overview fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
@@ -1485,17 +1563,7 @@ def get_user_overview_api(username):
                 except Exception as e:
                     log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
             elif kind == "t1":
-                items.append({"type": "comment", "data": {
-                    "id":             d.get("id", ""),
-                    "author":         d.get("author", "[deleted]"),
-                    "body":           d.get("body", ""),
-                    "score":          d.get("score", 0),
-                    "created_utc":    d.get("created_utc", 0),
-                    "subreddit":      d.get("subreddit", ""),
-                    "link_title":     d.get("link_title", ""),
-                    "link_permalink": d.get("link_permalink", "") if d.get("link_permalink", "").startswith("http") else f"https://www.reddit.com{d.get('link_permalink', '')}",
-                    "link_id":        d.get("link_id", "").replace("t3_", ""),
-                }})
+                items.append({"type": "comment", "data": _normalize_comment(d)})
         return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
