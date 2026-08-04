@@ -411,6 +411,29 @@ class TestUserPosts:
         resp = client.get("/api/user/gone/posts")
         assert resp.status_code == 404
 
+    @patch.object(app_module.SESSION, "get")
+    def test_falls_back_to_arctic_shift_on_404(self, mock_get, client):
+        def side_effect(url, **kw):
+            if "arctic-shift" in url:
+                return _session_get({"data": [_make_post(post_id="archived1")]})
+            return _session_get(status_code=404)
+        mock_get.side_effect = side_effect
+        resp = client.get("/api/user/suspendeduser/posts")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["archived"] is True
+        assert data["posts"][0]["id"] == "archived1"
+
+    @patch.object(app_module.SESSION, "get")
+    def test_404_when_arctic_shift_also_empty(self, mock_get, client):
+        def side_effect(url, **kw):
+            if "arctic-shift" in url:
+                return _session_get({"data": []})
+            return _session_get(status_code=404)
+        mock_get.side_effect = side_effect
+        resp = client.get("/api/user/gone/posts")
+        assert resp.status_code == 404
+
 
 # ── /api/user/<username>/comments ────────────────────────────────────────────
 
@@ -444,6 +467,29 @@ class TestUserComments:
         resp = client.get("/api/user/testuser/comments")
         comment = resp.get_json()["comments"][0]
         assert comment["link_permalink"].startswith("https://www.reddit.com")
+
+    @patch.object(app_module.SESSION, "get")
+    def test_falls_back_to_arctic_shift_with_title_backfill(self, mock_get, client):
+        def side_effect(url, **kw):
+            if url.endswith("/comments/search"):
+                return _session_get({"data": [{
+                    "id": "c1", "author": "suspendeduser", "body": "archived comment",
+                    "score": 3, "created_utc": 0, "subreddit": "python", "link_id": "t3_xyz",
+                }]})
+            if url.endswith("/posts/ids"):
+                return _session_get({"data": [{
+                    "id": "xyz", "title": "Archived Post Title", "permalink": "/r/python/comments/xyz/",
+                }]})
+            return _session_get(status_code=404)
+        mock_get.side_effect = side_effect
+        resp = client.get("/api/user/suspendeduser/comments")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["archived"] is True
+        comment = data["comments"][0]
+        assert comment["body"] == "archived comment"
+        assert comment["link_title"] == "Archived Post Title"
+        assert comment["link_permalink"] == "https://www.reddit.com/r/python/comments/xyz/"
 
 
 # ── /api/user/<username>/overview ────────────────────────────────────────────
