@@ -758,18 +758,18 @@ def get_widgets(subreddit):
 
 # ── SPA catch-all routes ──────────────────────────────────────────────────────
 
-@app.route("/")
-@app.route("/home")
-@app.route("/home/<sort>")
-@app.route("/user/<username>")
-@app.route("/user/<username>/m/<multiname>")
-@app.route("/user/<username>/m/<multiname>/<path:rest>")
-@app.route("/u/<username>")
-@app.route("/search")
-@app.route("/r/<subreddit>/duplicates/<post_id>")
-@app.route("/r/<subreddit>/wiki")
-@app.route("/r/<subreddit>/wiki/<path:page>")
-@app.route("/live/<path:path>")
+@app.route("/", strict_slashes=False)
+@app.route("/home", strict_slashes=False)
+@app.route("/home/<sort>", strict_slashes=False)
+@app.route("/user/<username>", strict_slashes=False)
+@app.route("/user/<username>/m/<multiname>", strict_slashes=False)
+@app.route("/user/<username>/m/<multiname>/<path:rest>", strict_slashes=False)
+@app.route("/u/<username>", strict_slashes=False)
+@app.route("/search", strict_slashes=False)
+@app.route("/r/<subreddit>/duplicates/<post_id>", strict_slashes=False)
+@app.route("/r/<subreddit>/wiki", strict_slashes=False)
+@app.route("/r/<subreddit>/wiki/<path:page>", strict_slashes=False)
+@app.route("/live/<path:path>", strict_slashes=False)
 def spa(**kwargs):
     resp = render_template("index.html")
     return resp, 200, {'Cache-Control': 'no-store'}
