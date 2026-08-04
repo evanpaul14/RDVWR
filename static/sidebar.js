@@ -145,12 +145,14 @@ export async function toggleUserSidebar(username) {
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
   try {
-    const [, aboutRes, overviewRes] = await Promise.all([waitForMdLibs(),
+    const [, aboutRes, overviewRes, trophiesRes] = await Promise.all([waitForMdLibs(),
       fetch(`/api/user/${encodeURIComponent(username)}/about`),
       fetch(`/api/user/${encodeURIComponent(username)}/overview?sort=new`),
+      fetch(`/api/user/${encodeURIComponent(username)}/trophies`),
     ]);
     const about = aboutRes.ok ? await aboutRes.json() : {};
     const overviewData = overviewRes.ok ? await overviewRes.json() : { items: [] };
+    const trophiesData = trophiesRes.ok ? await trophiesRes.json() : { trophies: [] };
 
     let html = '';
     if (about.description) {
@@ -191,15 +193,25 @@ export async function toggleUserSidebar(username) {
     }
     const activeSubs = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
     if (activeSubs.length) {
-      const items = activeSubs.map(([s, count]) =>
+      const items = activeSubs.map(([s]) =>
         `<a class="sidebar-community" href="/r/${escHtml(s)}" data-nav="/r/${escHtml(s)}">`+
-        `<span class="sidebar-community-icon sidebar-community-icon--blank"></span>`+
         `<span class="sidebar-community-name">r/${escHtml(s)}</span>`+
-        `<span class="sidebar-community-subs">${count}</span>`+
         `</a>`).join('');
       html += `<div class="sidebar-section">
         <div class="sidebar-section-title">Active Subreddits</div>
         <div class="sidebar-community-list">${items}</div>
+      </div>`;
+    }
+    if (trophiesData.trophies?.length) {
+      const items = trophiesData.trophies.map(t =>
+        `<div class="sidebar-trophy" title="${escHtml(t.description)}">`+
+        (t.icon ? `<img class="sidebar-trophy-icon" src="${escHtml(t.icon)}" alt="" loading="lazy">`
+                : `<span class="sidebar-trophy-icon sidebar-trophy-icon--blank"></span>`)+
+        `<span class="sidebar-trophy-name">${escHtml(t.name)}</span>`+
+        `</div>`).join('');
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Trophies</div>
+        <div class="sidebar-trophies">${items}</div>
       </div>`;
     }
     if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No profile info available.</div>';
