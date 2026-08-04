@@ -1,4 +1,4 @@
-import { escHtml, fmtNum, timeAgo } from './utils.js';
+import { escHtml, fmtNum, fmtDate, timeAgo } from './utils.js';
 import { renderMd, waitForMdLibs } from './render.js';
 
 function renderWidget(w) {
@@ -45,20 +45,22 @@ const sidebarPanel = document.getElementById('sidebar-panel');
 const sidebarInner = document.getElementById('sidebar-inner');
 
 let sidebarOpen   = false;
-let sidebarSub    = '';
+let sidebarKey    = '';
 let _sidebarCache = new Map();
 const SIDEBAR_CACHE_TTL = 5 * 60 * 1000;
 
 export function closeSidebar() {
   sidebarOpen = false;
+  sidebarKey  = '';
   sidebarPanel.classList.remove('open');
   const btn = document.getElementById('sidebar-toggle-btn');
   if (btn) { btn.classList.remove('active'); btn.setAttribute('aria-expanded', 'false'); }
 }
 
 export async function toggleSidebar(sub) {
-  if (sidebarOpen && sidebarSub === sub) { closeSidebar(); return; }
-  sidebarSub = sub;
+  const key = `r:${sub}`;
+  if (sidebarOpen && sidebarKey === key) { closeSidebar(); return; }
+  sidebarKey = key;
   sidebarOpen = true;
   sidebarPanel.classList.add('open');
   const btn = document.getElementById('sidebar-toggle-btn');
@@ -117,6 +119,91 @@ export async function toggleSidebar(sub) {
     }
     if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No sidebar content.</div>';
     _sidebarCache.set(sub, { html, ts: Date.now() });
+    sidebarInner.innerHTML = html;
+  } catch {
+    sidebarInner.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">Failed to load sidebar.</div>';
+  }
+}
+
+let _userSidebarCache = new Map();
+
+export async function toggleUserSidebar(username) {
+  const key = `u:${username}`;
+  if (sidebarOpen && sidebarKey === key) { closeSidebar(); return; }
+  sidebarKey = key;
+  sidebarOpen = true;
+  sidebarPanel.classList.add('open');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  if (btn) { btn.classList.add('active'); btn.setAttribute('aria-expanded', 'true'); }
+
+  const cached = _userSidebarCache.get(username);
+  if (cached && Date.now() - cached.ts < SIDEBAR_CACHE_TTL) {
+    sidebarInner.innerHTML = cached.html;
+    return;
+  }
+
+  sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
+
+  try {
+    const [, aboutRes, overviewRes] = await Promise.all([waitForMdLibs(),
+      fetch(`/api/user/${encodeURIComponent(username)}/about`),
+      fetch(`/api/user/${encodeURIComponent(username)}/overview?sort=new`),
+    ]);
+    const about = aboutRes.ok ? await aboutRes.json() : {};
+    const overviewData = overviewRes.ok ? await overviewRes.json() : { items: [] };
+
+    let html = '';
+    if (about.description) {
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">About</div>
+        <div class="sidebar-desc md">${renderMd(about.description)}</div>
+      </div>`;
+    }
+    if (about.created_utc) {
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Cake day</div>
+        <div class="sidebar-desc">${fmtDate(about.created_utc)}</div>
+      </div>`;
+    }
+    const badges = [
+      about.is_employee        && ['Reddit Admin', 'badge-sticky'],
+      about.is_mod              && ['Moderator', 'badge-oc'],
+      about.is_premium          && ['Reddit Premium', 'badge-poll'],
+      about.verified             && ['Verified', 'badge-oc'],
+      about.has_verified_email  && ['Verified Email', 'badge-spoiler'],
+    ].filter(Boolean);
+    if (badges.length) {
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Contributor Status</div>
+        <div class="sidebar-badges">${badges.map(([label, cls]) => `<span class="badge ${cls}">${escHtml(label)}</span>`).join('')}</div>
+      </div>`;
+    }
+    if (about.karma_total !== undefined) {
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Karma</div>
+        <div class="sidebar-desc">${fmtNum(about.karma_total)} total · ${fmtNum(about.karma_post)} post · ${fmtNum(about.karma_comment)} comment${about.karma_award ? ` · ${fmtNum(about.karma_award)} award` : ''}</div>
+      </div>`;
+    }
+    const counts = new Map();
+    for (const item of overviewData.items || []) {
+      const s = item.data?.subreddit;
+      if (s) counts.set(s, (counts.get(s) || 0) + 1);
+    }
+    const activeSubs = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (activeSubs.length) {
+      const items = activeSubs.map(([s, count]) =>
+        `<a class="sidebar-community" href="/r/${escHtml(s)}" data-nav="/r/${escHtml(s)}">`+
+        `<span class="sidebar-community-icon sidebar-community-icon--blank"></span>`+
+        `<span class="sidebar-community-name">r/${escHtml(s)}</span>`+
+        `<span class="sidebar-community-subs">${count}</span>`+
+        `</a>`).join('');
+      html += `<div class="sidebar-section">
+        <div class="sidebar-section-title">Active Subreddits</div>
+        <div class="sidebar-community-list">${items}</div>
+      </div>`;
+    }
+    if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No profile info available.</div>';
+    _userSidebarCache.set(username, { html, ts: Date.now() });
     sidebarInner.innerHTML = html;
   } catch {
     sidebarInner.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">Failed to load sidebar.</div>';

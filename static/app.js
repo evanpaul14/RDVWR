@@ -19,7 +19,7 @@ import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, s
 import { loadWikiPage } from './wiki.js';
 import { loadLiveThread, loadMoreLiveUpdates, cancelLivePoll } from './live.js';
 import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments, stepViewFullThread } from './postview.js';
-import { closeSidebar, toggleSidebar } from './sidebar.js';
+import { closeSidebar, toggleSidebar, toggleUserSidebar } from './sidebar.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed              = document.getElementById('feed');
@@ -331,7 +331,8 @@ function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.s
 // Sort bar click
 sortBar.addEventListener('click', e => {
   if (e.target.closest('#sidebar-toggle-btn')) {
-    toggleSidebar(state.currentSub);
+    if (state.profileMode) toggleUserSidebar(state.profileUser);
+    else toggleSidebar(state.currentSub);
     return;
   }
   const ssortBtn = e.target.closest('.sort-btn[data-ssort]');
