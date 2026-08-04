@@ -21,7 +21,8 @@ export function buildProfileSortHtml(tab='overview', sort='new', time='all') {
   const sortBtns = sorts.map(s =>
     `<button class="sort-btn${s===sort?' active':''}" data-psort="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
   ).join('');
-  return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '');
+  const sidebarBtn = `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">about</button>`;
+  return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 
 export async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false) {

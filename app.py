@@ -1475,13 +1475,21 @@ def get_user_about(username):
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         d    = resp.json()["data"]
         icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
+        sub  = d.get("subreddit") or {}
         return cached_json({
-            "name":           d["name"],
-            "icon":           icon or "",
-            "karma_post":     d.get("link_karma", 0),
-            "karma_comment":  d.get("comment_karma", 0),
-            "created_utc":    d.get("created_utc", 0),
-            "is_premium":     d.get("is_gold", False),
+            "name":                d["name"],
+            "icon":                icon or "",
+            "description":         sub.get("public_description", "") or "",
+            "karma_post":          d.get("link_karma", 0),
+            "karma_comment":       d.get("comment_karma", 0),
+            "karma_award":         d.get("awarder_karma", 0),
+            "karma_total":         d.get("total_karma", d.get("link_karma", 0) + d.get("comment_karma", 0)),
+            "created_utc":         d.get("created_utc", 0),
+            "is_premium":          d.get("is_gold", False),
+            "is_mod":              d.get("is_mod", False),
+            "is_employee":         d.get("is_employee", False),
+            "verified":            d.get("verified", False),
+            "has_verified_email":  d.get("has_verified_email", False),
         }, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
