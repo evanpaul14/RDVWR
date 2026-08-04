@@ -1404,8 +1404,11 @@ def _backfill_comment_titles(comments):
         log.warning("archived comment link_title backfill failed: %s", e)
 
 
-def _fetch_archived_posts(username, limit):
-    resp = arctic_shift_get("/posts/search", {"author": username, "sort": "desc", "limit": limit})
+def _fetch_archived_posts(username, limit, before=None):
+    params = {"author": username, "sort": "desc", "limit": limit}
+    if before:
+        params["before"] = before
+    resp = arctic_shift_get("/posts/search", params)
     resp.raise_for_status()
     posts = []
     for d in resp.json().get("data", []):
@@ -1416,12 +1419,46 @@ def _fetch_archived_posts(username, limit):
     return posts
 
 
-def _fetch_archived_comments(username, limit):
-    resp = arctic_shift_get("/comments/search", {"author": username, "sort": "desc", "limit": limit})
+def _fetch_archived_comments(username, limit, before=None):
+    params = {"author": username, "sort": "desc", "limit": limit}
+    if before:
+        params["before"] = before
+    resp = arctic_shift_get("/comments/search", params)
     resp.raise_for_status()
     comments = [_normalize_comment(d) for d in resp.json().get("data", [])]
     _backfill_comment_titles(comments)
     return comments
+
+
+def _arc_cursor(items, limit):
+    """Next-page cursor for archived (Arctic Shift) listings: 'arc:<created_utc>'
+    of the oldest item, only offered when the page was full (may be more)."""
+    if len(items) < limit:
+        return None
+    return f"arc:{items[-1]['created_utc']}"
+
+
+def _refresh_live_scores(posts):
+    """Arctic Shift's score is a snapshot from whenever it first crawled the post,
+    which for recently-posted content is often just the author's initial upvote.
+    Overwrite with the current score fetched live from Reddit by id."""
+    ids = [p["id"] for p in posts if p.get("id")]
+    if not ids:
+        return
+    try:
+        resp = reddit_get(
+            "https://www.reddit.com/api/info.json",
+            params={"id": ",".join(f"t3_{i}" for i in ids[:100]), "raw_json": 1},
+            timeout=8)
+        if not resp.ok:
+            return
+        live = {c["data"]["id"]: c["data"].get("score", 0)
+                for c in resp.json().get("data", {}).get("children", [])}
+        for p in posts:
+            if p["id"] in live:
+                p["score"] = live[p["id"]]
+    except Exception as e:
+        log.warning("archived score refresh failed: %s", e)
 
 
 @app.route("/api/user/<username>/about")
@@ -1457,6 +1494,15 @@ def get_user_posts_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
     after  = request.args.get("after", "")
+
+    if after.startswith("arc:"):
+        try:
+            posts = _fetch_archived_posts(username, FEED_LIMIT, before=int(after[4:]))
+            _refresh_live_scores(posts)
+            return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
@@ -1470,7 +1516,8 @@ def get_user_posts_api(username):
             try:
                 posts = _fetch_archived_posts(username, FEED_LIMIT)
                 if posts:
-                    return cached_json({"posts": posts, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    _refresh_live_scores(posts)
+                    return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived posts fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
@@ -1482,7 +1529,8 @@ def get_user_posts_api(username):
             try:
                 archived = _fetch_archived_posts(username, FEED_LIMIT)
                 if archived:
-                    return cached_json({"posts": archived, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    _refresh_live_scores(archived)
+                    return cached_json({"posts": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived posts fallback failed for %s: %s", username, e)
         return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
@@ -1497,6 +1545,14 @@ def get_user_comments_api(username):
     sort   = request.args.get("sort", "new")
     t      = request.args.get("t", "")
     after  = request.args.get("after", "")
+
+    if after.startswith("arc:"):
+        try:
+            comments = _fetch_archived_comments(username, FEED_LIMIT, before=int(after[4:]))
+            return cached_json({"comments": comments, "after": _arc_cursor(comments, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
@@ -1510,7 +1566,7 @@ def get_user_comments_api(username):
             try:
                 comments = _fetch_archived_comments(username, FEED_LIMIT)
                 if comments:
-                    return cached_json({"comments": comments, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    return cached_json({"comments": comments, "after": _arc_cursor(comments, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived comments fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
@@ -1526,12 +1582,27 @@ def get_user_comments_api(username):
             try:
                 archived = _fetch_archived_comments(username, FEED_LIMIT)
                 if archived:
-                    return cached_json({"comments": archived, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    return cached_json({"comments": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived comments fallback failed for %s: %s", username, e)
         return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _fetch_archived_overview(username, before=None):
+    posts    = _fetch_archived_posts(username, FEED_LIMIT, before=before)
+    comments = _fetch_archived_comments(username, FEED_LIMIT, before=before)
+    _refresh_live_scores(posts)
+    items = (
+        [{"type": "post", "data": p} for p in posts]
+        + [{"type": "comment", "data": c} for c in comments]
+    )
+    items.sort(key=lambda i: i["data"].get("created_utc", 0), reverse=True)
+    next_after = None
+    if len(posts) == FEED_LIMIT or len(comments) == FEED_LIMIT:
+        next_after = f"arc:{items[-1]['data']['created_utc']}" if items else None
+    return items, next_after
 
 
 @app.route("/api/user/<username>/overview")
@@ -1541,6 +1612,14 @@ def get_user_overview_api(username):
     sort  = request.args.get("sort", "new")
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
+
+    if after.startswith("arc:"):
+        try:
+            items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
+            return cached_json({"items": items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
         params["t"] = t
@@ -1552,15 +1631,9 @@ def get_user_overview_api(username):
             params=params, timeout=10)
         if resp.status_code in (403, 404):
             try:
-                posts    = _fetch_archived_posts(username, FEED_LIMIT)
-                comments = _fetch_archived_comments(username, FEED_LIMIT)
-                items = (
-                    [{"type": "post", "data": p} for p in posts]
-                    + [{"type": "comment", "data": c} for c in comments]
-                )
+                items, next_after = _fetch_archived_overview(username)
                 if items:
-                    items.sort(key=lambda i: i["data"].get("created_utc", 0), reverse=True)
-                    return cached_json({"items": items, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    return cached_json({"items": items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived overview fallback failed for %s: %s", username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
@@ -1580,15 +1653,9 @@ def get_user_overview_api(username):
                 items.append({"type": "comment", "data": _normalize_comment(d)})
         if not items and not after:
             try:
-                arc_posts    = _fetch_archived_posts(username, FEED_LIMIT)
-                arc_comments = _fetch_archived_comments(username, FEED_LIMIT)
-                arc_items = (
-                    [{"type": "post", "data": p} for p in arc_posts]
-                    + [{"type": "comment", "data": c} for c in arc_comments]
-                )
+                arc_items, next_after = _fetch_archived_overview(username)
                 if arc_items:
-                    arc_items.sort(key=lambda i: i["data"].get("created_utc", 0), reverse=True)
-                    return cached_json({"items": arc_items, "after": None, "archived": True}, CACHE_TTL_FEED)
+                    return cached_json({"items": arc_items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived overview fallback failed for %s: %s", username, e)
         return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
