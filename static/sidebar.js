@@ -207,7 +207,10 @@ export async function toggleUserSidebar(username) {
         `<div class="sidebar-trophy" title="${escHtml(t.description)}">`+
         (t.icon ? `<img class="sidebar-trophy-icon" src="${escHtml(t.icon)}" alt="" loading="lazy">`
                 : `<span class="sidebar-trophy-icon sidebar-trophy-icon--blank"></span>`)+
+        `<span class="sidebar-trophy-meta">`+
         `<span class="sidebar-trophy-name">${escHtml(t.name)}</span>`+
+        (t.granted_at ? `<span class="sidebar-trophy-date">${fmtDate(t.granted_at)}</span>` : '')+
+        `</span>`+
         `</div>`).join('');
       html += `<div class="sidebar-section">
         <div class="sidebar-section-title">Trophies</div>

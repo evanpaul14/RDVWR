@@ -1515,6 +1515,7 @@ def get_user_trophies(username):
                 "name":        td.get("name", ""),
                 "description": td.get("description") or "",
                 "icon":        clean_url(td.get("icon_40") or td.get("icon_70") or ""),
+                "granted_at":  td.get("granted_at") or 0,
             })
         return cached_json({"trophies": out}, CACHE_TTL_SUBREDDIT)
     except Exception as e:
