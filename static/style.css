@@ -1078,6 +1078,11 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 
 .sidebar-badges { display:flex; flex-wrap:wrap; gap:6px; }
 
+.sidebar-trophies { display:flex; flex-direction:column; gap:8px; }
+.sidebar-trophy { display:flex; align-items:center; gap:8px; font-family:var(--sans); font-size:12px; color:var(--tx2); }
+.sidebar-trophy-icon { width:24px; height:24px; flex:none; object-fit:contain; }
+.sidebar-trophy-icon--blank { border-radius:50%; background:var(--bg3); }
+
 .sidebar-events { list-style:none; display:flex; flex-direction:column; gap:8px; }
 .sidebar-event { display:flex; justify-content:space-between; gap:8px; font-family:var(--sans); font-size:12px; color:var(--tx2); }
 .sidebar-event-time { font-family:var(--mono); font-size:10px; color:var(--tx3); flex:none; }

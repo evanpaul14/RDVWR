@@ -1495,6 +1495,33 @@ def get_user_about(username):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/user/<username>/trophies")
+@validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
+def get_user_trophies(username):
+    try:
+        resp = reddit_get(
+            f"https://www.reddit.com/api/v1/user/{username}/trophies.json",
+            params={"raw_json": 1}, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({"trophies": []})
+        trophies = resp.json().get("data", {}).get("trophies", [])
+        out = []
+        for t in trophies:
+            td = t.get("data", {})
+            if not td.get("name"):
+                continue
+            out.append({
+                "name":        td.get("name", ""),
+                "description": td.get("description") or "",
+                "icon":        clean_url(td.get("icon_40") or td.get("icon_70") or ""),
+            })
+        return cached_json({"trophies": out}, CACHE_TTL_SUBREDDIT)
+    except Exception as e:
+        log.warning("get_user_trophies failed user=%s: %s", username, e)
+        return jsonify({"trophies": []})
+
+
 @app.route("/api/user/<username>/posts")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
