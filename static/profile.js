@@ -53,7 +53,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
 
     if (!append && data.archived) {
       feed.insertAdjacentHTML('beforeend',
-        `<div class="thread-banner">u/${escHtml(username)}'s live history is unavailable (deleted, suspended, or hidden) — showing archived posts/comments from <a href="https://arctic-shift.photon-reddit.com/" target="_blank" rel="noopener">Arctic Shift</a>. May be incomplete or out of date.</div>`);
+        `<div class="thread-banner">u/${escHtml(username)}'s post history is not available. Data is from Arctic Shift</div>`);
     }
 
     if (tab === 'overview') {

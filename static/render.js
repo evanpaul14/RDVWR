@@ -190,6 +190,10 @@ function _thumbNsfwWrap(html) {
   return `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${html}</div></div>`;
 }
 
+function _isVReddIt(url) {
+  try { return new URL(url).hostname === 'v.redd.it'; } catch { return false; }
+}
+
 function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer }) {
   const mediaSrc = p.crosspost_from || p;
   const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
@@ -205,7 +209,7 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     thumbHtml = _compactHasMedia(mediaSrc)
       ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
       : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && settings.layout !== 'minimal') {
+  } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && settings.layout !== 'minimal' && !_isVReddIt(mediaSrc.url)) {
     thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
   }
   return `
@@ -343,7 +347,7 @@ export function renderPost(p, idx, showSub=false) {
       if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
       if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-    } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal') {
+    } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal' && !_isVReddIt(p.url)) {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
     }
     return `
