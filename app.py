@@ -1478,6 +1478,13 @@ def get_user_posts_api(username):
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
+        if not posts and not after:
+            try:
+                archived = _fetch_archived_posts(username, FEED_LIMIT)
+                if archived:
+                    return cached_json({"posts": archived, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived posts fallback failed for %s: %s", username, e)
         return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1515,6 +1522,13 @@ def get_user_comments_api(username):
             if c.get("kind") != "t1":
                 continue
             comments.append(_normalize_comment(c["data"]))
+        if not comments and not after:
+            try:
+                archived = _fetch_archived_comments(username, FEED_LIMIT)
+                if archived:
+                    return cached_json({"comments": archived, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived comments fallback failed for %s: %s", username, e)
         return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1564,6 +1578,19 @@ def get_user_overview_api(username):
                     log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
             elif kind == "t1":
                 items.append({"type": "comment", "data": _normalize_comment(d)})
+        if not items and not after:
+            try:
+                arc_posts    = _fetch_archived_posts(username, FEED_LIMIT)
+                arc_comments = _fetch_archived_comments(username, FEED_LIMIT)
+                arc_items = (
+                    [{"type": "post", "data": p} for p in arc_posts]
+                    + [{"type": "comment", "data": c} for c in arc_comments]
+                )
+                if arc_items:
+                    arc_items.sort(key=lambda i: i["data"].get("created_utc", 0), reverse=True)
+                    return cached_json({"items": arc_items, "after": None, "archived": True}, CACHE_TTL_FEED)
+            except Exception as e:
+                log.warning("archived overview fallback failed for %s: %s", username, e)
         return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
