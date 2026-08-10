@@ -18,7 +18,7 @@ from urllib.parse import urlparse, urlunparse, quote as url_quote, unquote as ur
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
 from bs4 import BeautifulSoup
-from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE
+from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE
 from reddit_client import reddit_get, SESSION, HEADERS, _get_device
 from curl_cffi import requests as cffi_requests
 
@@ -43,6 +43,31 @@ USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
 FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
+
+
+def hydrate_linked_posts(posts):
+    """Batch-fetch full data (title/media) for plain link-posts that point at another
+    Reddit post, so they can be rendered with the same embed as real crossposts."""
+    targets = [p for p in posts if p.get('linked_post')][:100]
+    if not targets:
+        return
+    ids_str = ','.join(f"t3_{p['linked_post']['id']}" for p in targets)
+    try:
+        resp = reddit_get('https://www.reddit.com/api/info.json',
+                           params={'id': ids_str, 'raw_json': 1}, timeout=8)
+        if not resp.ok:
+            return
+        by_id = {c['data']['id']: c['data'] for c in resp.json()['data']['children']}
+        for p in targets:
+            raw = by_id.get(p['linked_post']['id'])
+            if raw:
+                try:
+                    p['linked_post'] = process_post(raw)
+                except Exception:
+                    pass
+    except Exception as e:
+        log.warning("linked-post batch-fetch failed: %s", e)
+
 
 def validate_params(**patterns):
     """Route decorator: 400 if a path/view param doesn't match its allowlist regex."""
@@ -212,6 +237,16 @@ def _parse_shreddit_post(el):
     devvit_url = (f'https://sh.reddit.com/r/{el.get("subreddit-name", "")}/comments/{post_id}'
                   if is_devvit else None)
 
+    linked_post = None
+    if not is_self:
+        lm = LINK_POST_RE.match(url)
+        if lm:
+            linked_post = {
+                'subreddit': lm.group(1),
+                'id':        lm.group(2),
+                'title':     lm.group(3).replace('_', ' ').strip() if lm.group(3) else '',
+            }
+
     awards = []
     icon = el.get('award-icon-url', '')
     if icon:
@@ -239,7 +274,7 @@ def _parse_shreddit_post(el):
         'flair': '', 'flair_richtext': [], 'flair_type': 'text',
         'flair_bg': '', 'flair_tc': 'dark',
         'domain': domain_str, 'poll': None,
-        'crosspost_from': None, 'is_stickied': False,
+        'crosspost_from': None, 'linked_post': linked_post, 'is_stickied': False,
         'is_oc': False, 'is_spoiler': el.has_attr('is-spoiler') or el.has_attr('spoiler'), 'locked': False,
         'edited_utc': None, 'awards': awards,
         'recommendation_source': el.get('recommendation-source', ''),
@@ -864,6 +899,7 @@ def search_posts():
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
+        hydrate_linked_posts(posts)
         return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
@@ -969,6 +1005,7 @@ def get_posts(subreddit):
         fallback_after = None
         if not posts and quarantine_opt_in:
             posts, fallback_after = _quarantine_fallback_posts(subreddit, after or None)
+        hydrate_linked_posts(posts)
         return cached_json({"posts": posts, "after": fallback_after or listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
@@ -1063,6 +1100,7 @@ def get_home():
                                             posts[i]['preview_img'] = full['preview_img']
                     except Exception as ge:
                         log.warning("gallery batch-fetch failed: %s", ge)
+                hydrate_linked_posts(posts)
                 m = re.search(r'"after"\s*:\s*"([A-Za-z0-9_-]+)"', resp.text)
                 next_after = m.group(1) if m else None
                 resp_out = make_response(jsonify({"posts": posts, "after": next_after, "via": "shreddit"}))
@@ -1086,6 +1124,7 @@ def get_home():
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
+        hydrate_linked_posts(posts)
         return cached_json({"posts": posts, "after": listing.get("after"), "via": "anonymous"}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
@@ -1248,6 +1287,7 @@ def get_duplicates(subreddit, post_id):
             post["selftext"] = orig_children[0]["data"].get("selftext", "")
         listing = data[1]["data"]
         posts = extract_posts(listing)
+        hydrate_linked_posts(([post] if post else []) + posts)
         return cached_json({"post": post, "posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1286,6 +1326,7 @@ def get_comments(subreddit, post_id):
         post_raw = children[0]["data"]
         post     = process_post(post_raw)
         post["selftext"] = post_raw.get("selftext", "")   # full text in post view
+        hydrate_linked_posts([post])
 
         def parse_comment(c):
             if c["kind"] == "more":
@@ -1535,6 +1576,7 @@ def get_user_posts_api(username):
         try:
             posts = _fetch_archived_posts(username, FEED_LIMIT, before=int(after[4:]))
             _refresh_live_scores(posts)
+            hydrate_linked_posts(posts)
             return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -1553,6 +1595,7 @@ def get_user_posts_api(username):
                 posts = _fetch_archived_posts(username, FEED_LIMIT)
                 if posts:
                     _refresh_live_scores(posts)
+                    hydrate_linked_posts(posts)
                     return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived posts fallback failed for %s: %s", username, e)
@@ -1566,9 +1609,11 @@ def get_user_posts_api(username):
                 archived = _fetch_archived_posts(username, FEED_LIMIT)
                 if archived:
                     _refresh_live_scores(archived)
+                    hydrate_linked_posts(archived)
                     return cached_json({"posts": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
                 log.warning("archived posts fallback failed for %s: %s", username, e)
+        hydrate_linked_posts(posts)
         return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1630,6 +1675,7 @@ def _fetch_archived_overview(username, before=None):
     posts    = _fetch_archived_posts(username, FEED_LIMIT, before=before)
     comments = _fetch_archived_comments(username, FEED_LIMIT, before=before)
     _refresh_live_scores(posts)
+    hydrate_linked_posts(posts)
     items = (
         [{"type": "post", "data": p} for p in posts]
         + [{"type": "comment", "data": c} for c in comments]
@@ -1687,6 +1733,7 @@ def get_user_overview_api(username):
                     log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
             elif kind == "t1":
                 items.append({"type": "comment", "data": _normalize_comment(d)})
+        hydrate_linked_posts([i["data"] for i in items if i["type"] == "post"])
         if not items and not after:
             try:
                 arc_items, next_after = _fetch_archived_overview(username)
@@ -1761,7 +1808,9 @@ def get_multireddit(username, multiname):
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
         display = meta_data.get("display_name") or meta_data.get("name") or multiname
-        return cached_json({"posts": extract_posts(listing), "after": listing.get("after"), "title": display}, CACHE_TTL_FEED)
+        posts   = extract_posts(listing)
+        hydrate_linked_posts(posts)
+        return cached_json({"posts": posts, "after": listing.get("after"), "title": display}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -163,16 +163,18 @@ export async function translatePost(p, container) {
 }
 
 // ── Crosspost embed ───────────────────────────────────────────────────────────
-function renderCrosspostEmbed(orig, full=false) {
+function renderCrosspostEmbed(orig, full=false, headerHtml=null) {
   const sub  = escHtml(orig.subreddit || '');
   const id   = escHtml(orig.id || '');
   const nav  = `/r/${sub}/comments/${id}`;
   const mediaHtml = orig.id ? (full ? mediaHtmlFull(orig) : mediaHtmlCard(orig)) : '';
   const excerptHtml = orig.selftext?.trim()
     ? `<div class="xp-excerpt md${full ? ' xp-excerpt-full' : ''}">${renderMd(orig.selftext)}</div>` : '';
+  const header = headerHtml || `↪ crossposted from <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
+  const title  = orig.title || (headerHtml ? 'View post' : '');
   return `<div class="crosspost-embed${full ? ' crosspost-embed-full' : ''}">
-    <div class="crosspost-embed-header">↪ crossposted from <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a></div>
-    <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${escHtml(orig.title || '')}</a>
+    <div class="crosspost-embed-header">${header}</div>
+    <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${escHtml(title)}</a>
     ${mediaHtml}${excerptHtml}
   </div>`;
 }
@@ -180,17 +182,13 @@ function renderCrosspostEmbed(orig, full=false) {
 export function renderCrosspostFull(orig) { return renderCrosspostEmbed(orig, true); }
 
 // ── Link-to-post embed (plain link posts pointing at another Reddit post) ──────
-function renderLinkedPostEmbed(linked) {
-  const sub  = escHtml(linked.subreddit || '');
-  const id   = escHtml(linked.id || '');
-  const nav  = `/r/${sub}/comments/${id}`;
-  return `<div class="crosspost-embed">
-    <div class="crosspost-embed-header">↪ links to a post in <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a></div>
-    <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${linked.title ? escHtml(linked.title) : 'View post'}</a>
-  </div>`;
+function renderLinkedPostEmbed(linked, full=false) {
+  const sub    = escHtml(linked.subreddit || '');
+  const header = `↪ links to a post in <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
+  return renderCrosspostEmbed(linked, full, header);
 }
 
-export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(linked); }
+export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(linked, true); }
 
 // ── Compact mode row ─────────────────────────────────────────────────────────
 function _compactThumbSrc(m) {
