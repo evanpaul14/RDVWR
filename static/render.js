@@ -179,6 +179,19 @@ function renderCrosspostEmbed(orig, full=false) {
 
 export function renderCrosspostFull(orig) { return renderCrosspostEmbed(orig, true); }
 
+// ── Link-to-post embed (plain link posts pointing at another Reddit post) ──────
+function renderLinkedPostEmbed(linked) {
+  const sub  = escHtml(linked.subreddit || '');
+  const id   = escHtml(linked.id || '');
+  const nav  = `/r/${sub}/comments/${id}`;
+  return `<div class="crosspost-embed">
+    <div class="crosspost-embed-header">↪ links to a post in <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a></div>
+    <a class="crosspost-embed-title" href="${escHtml(nav)}" data-nav="${escHtml(nav)}">${linked.title ? escHtml(linked.title) : 'View post'}</a>
+  </div>`;
+}
+
+export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(linked); }
+
 // ── Compact mode row ─────────────────────────────────────────────────────────
 function _compactThumbSrc(m) {
   return m.gallery?.[0]?.url ?? m.preview_img ?? m.thumb_url ?? null;
@@ -337,14 +350,14 @@ export function renderPost(p, idx, showSub=false) {
     return renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer });
   }
 
-  if (p.crosspost_from) {
+  if (p.crosspost_from || p.linked_post) {
     return `
     <div class="post${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-header">
         ${metaTop}
         ${titleLink}
       </div>
-      ${renderCrosspostEmbed(p.crosspost_from)}
+      ${p.crosspost_from ? renderCrosspostEmbed(p.crosspost_from) : renderLinkedPostEmbed(p.linked_post)}
       ${footer}
     </div>`;
   }

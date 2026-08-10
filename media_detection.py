@@ -16,6 +16,7 @@ IMGUR_ALBUM_RE  = re.compile(r'imgur\.com/(?:a|gallery)/([a-zA-Z0-9]+)', re.I)
 IMGUR_DIRECT_RE = re.compile(r'(?:^|/)imgur\.com/([a-zA-Z0-9]{5,9})(?:[?#]|$)', re.I)
 STREAMABLE_RE   = re.compile(r'streamable\.com/(?:e/)?([a-zA-Z0-9]+)', re.I)
 DEVVIT_RE       = re.compile(r'content not supported on old Reddit.*?\((https?://sh\.reddit\.com/[^\)]+)\)', re.I | re.S)
+LINK_POST_RE    = re.compile(r'^https?://(?:www\.|old\.|np\.|new\.)?reddit\.com/r/([A-Za-z0-9_]+)/comments/([a-z0-9]+)(?:/([^/?#]+))?', re.I)
 
 
 def clean_url(url):
@@ -200,6 +201,16 @@ def process_post(p):
                 "author":    orig.get("author", "[deleted]"),
             }
 
+    linked_post = None
+    if not crosspost_from and not p.get("is_self"):
+        m = LINK_POST_RE.match(p.get("url", ""))
+        if m:
+            linked_post = {
+                "subreddit": m.group(1),
+                "id":        m.group(2),
+                "title":     m.group(3).replace("_", " ").strip() if m.group(3) else "",
+            }
+
     edited = p.get("edited")
     edited_utc = edited if isinstance(edited, (int, float)) and edited else None
 
@@ -241,6 +252,7 @@ def process_post(p):
         "domain":         p.get("domain", ""),
         "poll":           poll,
         "crosspost_from": crosspost_from,
+        "linked_post":    linked_post,
         "is_stickied":    p.get("stickied", False),
         "is_oc":          p.get("is_original_content", False),
         "is_spoiler":     p.get("spoiler", False),
