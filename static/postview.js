@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState } from './utils.js';
 import { initMedia, initGifVideos, mediaHtmlFull } from './media.js';
-import { renderCommentTree, renderMd, translatePost, renderCrosspostFull } from './render.js';
+import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
 const _PV_DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
@@ -231,7 +231,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
     const bodyHtml = (bodyInner && p.over_18)
       ? `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${bodyInner}</div></div>`
       : bodyInner;
-    const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : '';
+    const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : (p.linked_post ? renderLinkedPostFull(p.linked_post) : '');
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
@@ -252,7 +252,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
-        ${!p.is_self && !p.crosspost_from ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
+        ${!p.is_self && !p.crosspost_from && !p.linked_post ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
         <button class="share-btn" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           share
@@ -261,8 +261,8 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
         ${renderAwards(p.awards)}
       </div>`}
       ${crosspostHtml}
-      ${p.crosspost_from ? '' : mediaHtmlFull(p)}
-      ${settings.layout !== 'minimal' && !p.is_self && !p.crosspost_from && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video) ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(p.url)}"></div></div>` : ''}
+      ${p.crosspost_from || p.linked_post ? '' : mediaHtmlFull(p)}
+      ${settings.layout !== 'minimal' && !p.is_self && !p.crosspost_from && !p.linked_post && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video) ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(p.url)}"></div></div>` : ''}
       ${bodyHtml}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
