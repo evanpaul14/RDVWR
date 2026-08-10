@@ -94,14 +94,25 @@ export async function xlateText(text) {
 
 export function waitForMdLibs() { return _loadMdLibs(); }
 
+// Nests chained bare-caret superscripts (^a^b^c -> a<sup>b<sup>c</sup></sup>), matching Reddit's scoping.
+function _nestSup(chain) {
+  const parts = chain.split('^');
+  let html = parts[parts.length - 1];
+  for (let i = parts.length - 2; i >= 0; i--) html = `${parts[i]}<sup>${html}</sup>`;
+  return html;
+}
+
+const _CODE_SKIP = '```[\\s\\S]*?```|`[^`]*`';
+
 export function renderMd(text) {
   if (!text) return '';
   if (!_mdLibsReady) return '';
   _initMarked();
-  const processed = embedRedditCommentVideos(linkifyReddit(text)).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
-    `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
-    .replace(/\^\(([^)]*)\)/g, (_, inner) => `<sup>${inner}</sup>`)
-    .replace(/\^(\S+)/g, (_, inner) => `<sup>${inner}</sup>`);
+  const processed = embedRedditCommentVideos(linkifyReddit(text))
+    .replace(new RegExp(`(${_CODE_SKIP})|>!([\\s\\S]*?)(?:!<|$)`, 'g'), (m, skip, inner) =>
+      skip ? skip : `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
+    .replace(new RegExp(`(${_CODE_SKIP})|\\^\\(([^)]*)\\)`, 'g'), (m, skip, inner) => skip ? skip : `<sup>${inner}</sup>`)
+    .replace(new RegExp(`(${_CODE_SKIP})|\\^(\\S+)`, 'g'), (m, skip, inner) => skip ? skip : `<sup>${_nestSup(inner)}</sup>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
