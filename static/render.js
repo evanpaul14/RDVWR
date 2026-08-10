@@ -99,7 +99,9 @@ export function renderMd(text) {
   if (!_mdLibsReady) return '';
   _initMarked();
   const processed = embedRedditCommentVideos(linkifyReddit(text)).replace(/>!([\s\S]*?)(?:!<|$)/g, (_, inner) =>
-    `<span class="spoiler" role="button" tabindex="0">${inner}</span>`);
+    `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
+    .replace(/\^\(([^)]*)\)/g, (_, inner) => `<sup>${inner}</sup>`)
+    .replace(/\^(\S+)/g, (_, inner) => `<sup>${inner}</sup>`);
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
