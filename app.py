@@ -14,7 +14,7 @@ import threading
 import requests
 from functools import wraps
 from datetime import datetime, timezone
-from urllib.parse import urlparse, urlunparse, quote as url_quote, unquote as url_unquote
+from urllib.parse import urlparse, urlunparse, parse_qs, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
 from bs4 import BeautifulSoup
@@ -1101,8 +1101,14 @@ def get_home():
                     except Exception as ge:
                         log.warning("gallery batch-fetch failed: %s", ge)
                 hydrate_linked_posts(posts)
-                m = re.search(r'"after"\s*:\s*"([A-Za-z0-9_-]+)"', resp.text)
-                next_after = m.group(1) if m else None
+                next_after = None
+                next_partial = soup.find('faceplate-partial', id='feed-next-page-partial')
+                if next_partial and next_partial.get('src'):
+                    qs = parse_qs(urlparse(next_partial['src']).query)
+                    next_after = (qs.get('after') or qs.get('cursor') or [None])[0]
+                if not next_after:
+                    m = re.search(r'"after"\s*:\s*"([A-Za-z0-9_-]+)"', resp.text)
+                    next_after = m.group(1) if m else None
                 resp_out = make_response(jsonify({"posts": posts, "after": next_after, "via": "shreddit"}))
                 resp_out.headers['Cache-Control'] = 'private, no-store'
                 return resp_out
