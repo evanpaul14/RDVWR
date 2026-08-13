@@ -811,7 +811,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   transition:color .12s,border-color .12s;
 }
 .comment-collapse:hover { color:var(--ac); border-color:var(--ac); }
-.comment-author { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--ac); cursor:pointer; }
+.comment-author { font-family:var(--mono); font-size:10px; font-weight:500; color:var(--ac); cursor:pointer; text-decoration:none; }
 .comment-author:hover { text-decoration:underline; }
 .comment-score  { font-family:var(--mono); font-size:10px; color:var(--up); }
 .comment-time   { font-family:var(--mono); font-size:10px; color:var(--tx3); }
