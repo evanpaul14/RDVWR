@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState } from './utils.js';
+import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit } from './utils.js';
 import { initMedia, initGifVideos, mediaHtmlFull } from './media.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull } from './render.js';
 
@@ -395,5 +395,5 @@ pvOpen.addEventListener('click', e => {
   const href = pvOpen.getAttribute('href');
   if (!href || href === '#') { e.preventDefault(); return; }
   e.preventDefault();
-  window.open(href, '_blank', 'noopener');
+  openOnReddit(href);
 });
