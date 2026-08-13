@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT } from './utils.js';
+import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
 import { renderPost } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 
@@ -19,7 +19,7 @@ mainOpen.addEventListener('click', e => {
   const href = mainOpen.getAttribute('href');
   if (!href || href === '#') { e.preventDefault(); return; }
   e.preventDefault();
-  window.open(href, '_blank', 'noopener');
+  openOnReddit(href);
 });
 
 // ── Sort bar builders ─────────────────────────────────────────────────────────
