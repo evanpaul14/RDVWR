@@ -287,7 +287,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>${fmtNum(p.score)}</div>
       <div class="min-body">
         <div class="min-title-row">${badges}<a class="min-title${titleExtra}" href="${postNav}" data-nav="${postNav}">${escHtml(p.title)}</a>${domainHtml ? ' '+domainHtml : ''}${flairHtml ? ' '+flairHtml : ''}</div>
-        <div class="min-meta">${subLink}<button class="min-author" data-user="${author}">u/${author}</button> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button></div>
+        <div class="min-meta">${subLink}<a class="min-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button></div>
       </div>
       ${thumbHtml}
     </div>`;
@@ -321,7 +321,7 @@ export function renderPost(p, idx, showSub=false) {
             <span class="score-num">${fmtNum(p.score)}</span>
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
-          <button class="post-author" data-user="${author}">u/${author}</button>
+          <a class="post-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a>
           <span class="meta-item" title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
           ${renderAwards(p.awards)}
         </div>
@@ -443,7 +443,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
-        <span class="comment-author${isMod?' is-mod':''}" data-user="${escHtml(c.author)}">${escHtml(c.author)}</span>
+        <a class="comment-author${isMod?' is-mod':''}" href="/user/${escHtml(c.author)}" data-user="${escHtml(c.author)}" data-nav="/user/${escHtml(c.author)}">${escHtml(c.author)}</a>
         ${isMod      ? '<span class="comment-mod">MOD</span>'        : ''}
         ${isAdmin    ? '<span class="comment-admin">ADMIN</span>'    : ''}
         ${isOP       ? '<span class="comment-op">OP</span>'         : ''}
@@ -501,7 +501,7 @@ export function renderUserCard(u, idx) {
   const iconHtml = u.icon
     ? `<img src="${escHtml(u.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
     : `<span>${letter}</span>`;
-  return `<div class="user-card" tabindex="0" role="button" style="animation-delay:${delay}ms" data-nav="/user/${escHtml(u.name)}">
+  return `<a class="user-card" style="animation-delay:${delay}ms" href="/user/${escHtml(u.name)}" data-nav="/user/${escHtml(u.name)}">
     <div class="user-card-icon">${iconHtml}</div>
     <div class="user-card-body">
       <div class="user-card-name">u/${escHtml(u.name)}</div>
@@ -510,7 +510,7 @@ export function renderUserCard(u, idx) {
         ${u.created_utc ? ` · joined ${fmtDate(u.created_utc)}` : ''}
       </div>
     </div>
-  </div>`;
+  </a>`;
 }
 
 export function renderLiveUpdate(u, isNew=false) {
@@ -520,7 +520,7 @@ export function renderLiveUpdate(u, isNew=false) {
   return `<div class="live-update${u.stricken ? ' live-update-stricken' : ''}${isNew ? ' live-update-new' : ''}">
     <div class="live-update-meta">
       <span class="live-update-time" title="${new Date(u.created_utc * 1000).toISOString()}">${timeAgo(u.created_utc)}</span>
-      <button class="live-update-author" data-user="${escHtml(u.author)}">u/${escHtml(u.author)}</button>
+      <a class="live-update-author" href="/user/${escHtml(u.author)}" data-user="${escHtml(u.author)}" data-nav="/user/${escHtml(u.author)}">u/${escHtml(u.author)}</a>
       ${u.stricken ? '<span class="live-update-retracted">retracted</span>' : ''}
     </div>
     ${body}

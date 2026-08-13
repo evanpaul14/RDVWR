@@ -1123,7 +1123,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .community-card, .user-card {
   background:var(--bg2); border:1px solid var(--b); border-radius:8px;
   padding:14px 16px; display:flex; align-items:center; gap:14px;
-  cursor:pointer; transition:border-color .15s;
+  cursor:pointer; transition:border-color .15s; text-decoration:none;
   opacity:0; transform:translateY(8px); animation:fadeUp .3s ease forwards;
 }
 .community-card:hover, .user-card:hover { border-color:var(--b2); }

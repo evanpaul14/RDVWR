@@ -260,8 +260,6 @@ document.getElementById('pv-home').addEventListener('click', () => {
 document.getElementById('post-view').addEventListener('click', e => {
   const header = e.target.closest('.comment-header');
   if (!header || e.target.tagName==='A') return;
-  const authorEl = e.target.closest('.comment-author[data-user]');
-  if (authorEl) { navigateOrOpen(`/user/${authorEl.dataset.user}`, e); return; }
   const comment   = header.closest('.comment');
   const collapsed = comment.classList.toggle('collapsed');
   const btn = comment.querySelector(':scope > .comment-header > .comment-collapse');
@@ -283,11 +281,9 @@ pvContent.addEventListener('click', e => {
   if (csort) { e.preventDefault(); changeCommentSort(csort.dataset.csort); return; }
   const moreBtn = e.target.closest('.load-more-btn');
   if (moreBtn) { e.preventDefault(); loadMoreComments(moreBtn); return; }
-  const btn = e.target.closest('[data-user]');
-  if (btn && !e.target.closest('a')) { e.preventDefault(); navigateOrOpen(`/user/${btn.dataset.user}`, e); }
 });
 
-// Feed clicks: comments, author, retry
+// Feed clicks: retry
 feed.addEventListener('click', e => {
   if (e.defaultPrevented) return;
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
@@ -297,13 +293,6 @@ feed.addEventListener('click', e => {
     const { sub, sort, time } = continueBtn.dataset;
     loadSubFeed(sub, sort, time, null, false, true);
     return;
-  }
-  const userBtn = e.target.closest('.post-author[data-user]');
-  const liveAuthor = e.target.closest('.live-update-author[data-user]');
-  if (userBtn) {
-    navigateOrOpen(`/user/${userBtn.dataset.user}`, e);
-  } else if (liveAuthor) {
-    navigateOrOpen(`/user/${liveAuthor.dataset.user}`, e);
   }
 });
 
@@ -571,14 +560,14 @@ feed.addEventListener('click', e => {
     if (sub && flair) navigateOrOpen(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`, e);
     return;
   }
-  const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
+  const card = e.target.closest('.community-card[data-nav]');
   if (card) { navigateOrOpen(card.dataset.nav, e); return; }
   const commentCard = e.target.closest('.user-comment-card[data-nav]');
   if (commentCard && !e.target.closest('a')) { navigateOrOpen(commentCard.dataset.nav, e); return; }
 });
 feed.addEventListener('keydown', e => {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  const card = e.target.closest('.community-card[data-nav], .user-card[data-nav]');
+  const card = e.target.closest('.community-card[data-nav]');
   if (card) { e.preventDefault(); navigateOrOpen(card.dataset.nav, e); return; }
   const commentCard = e.target.closest('.user-comment-card[data-nav]');
   if (commentCard) { e.preventDefault(); navigateOrOpen(commentCard.dataset.nav, e); }
