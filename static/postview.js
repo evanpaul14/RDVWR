@@ -240,7 +240,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       ${settings.layout === 'minimal' ? `
       <div class="pv-meta">
         <span class="up">▲ ${fmtNum(p.score)}</span>
-        <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
+        <a class="meta-item link" href="/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         <button class="share-btn min-share" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">share</button>
@@ -249,7 +249,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0)
       <div class="pv-meta">
         <span class="up">▲ ${fmtNum(p.score)}</span>
         <span>${p.upvote_ratio}% upvoted</span>
-        <button class="meta-item link" data-user="${escHtml(p.author)}">u/${escHtml(p.author)}</button>
+        <a class="meta-item link" href="/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && !p.crosspost_from && !p.linked_post ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
