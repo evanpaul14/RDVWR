@@ -112,7 +112,12 @@ export function renderMd(text) {
     .replace(new RegExp(`(${_CODE_SKIP})|>!([\\s\\S]*?)(?:!<|$)`, 'g'), (m, skip, inner) =>
       skip ? skip : `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
     .replace(new RegExp(`(${_CODE_SKIP})|\\^\\(([^)]*)\\)`, 'g'), (m, skip, inner) => skip ? skip : `<sup>${inner}</sup>`)
-    .replace(new RegExp(`(${_CODE_SKIP})|\\^(\\S+)`, 'g'), (m, skip, inner) => skip ? skip : `<sup>${_nestSup(inner)}</sup>`);
+    .replace(new RegExp(`(${_CODE_SKIP})|\\^(\\S+)`, 'g'), (m, skip, inner) => {
+      if (skip) return skip;
+      // Bare carets with nothing to superscript (e.g. trailing "^^") render literally, matching Reddit.
+      if (/^\^*$/.test(inner)) return m;
+      return `<sup>${_nestSup(inner)}</sup>`;
+    });
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
