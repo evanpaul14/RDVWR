@@ -915,6 +915,68 @@ class TestParseCommentFields:
         assert result["edited_utc"] == 1700000000.0
 
 
+class TestParseShredditCrosspost:
+    def _post_el(self, inner_html, **attrs):
+        from bs4 import BeautifulSoup
+        attr_str = " ".join(f'{k}="{v}"' for k, v in attrs.items())
+        html = f'''<shreddit-post permalink="/r/dest/comments/xpid/some_title/"
+            content-href="/r/orig/comments/origid/orig_title/" post-type="crosspost"
+            is-crosspost domain="v.redd.it" id="t3_xpid" post-title="some title"
+            subreddit-name="dest" author="poster" score="10" comment-count="2"
+            created-timestamp="2026-01-01T00:00:00.000000+0000" {attr_str}>
+            {inner_html}
+        </shreddit-post>'''
+        return BeautifulSoup(html, 'html.parser').find('shreddit-post')
+
+    def test_video_crosspost_media_populated(self):
+        from app import _parse_shreddit_post
+        inner = '''
+        <div slot="post-media-container">
+          <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
+          <div class="crosspost-title"><a href="/r/orig/comments/origid/orig_title/">Orig Title</a></div>
+          <shreddit-player src="https://v.redd.it/abc123/HLSPlaylist.m3u8?f=sd" poster="https://external-preview.redd.it/x.png?s=1"></shreddit-player>
+        </div>'''
+        post = _parse_shreddit_post(self._post_el(inner))
+        assert post["crosspost_from"] is not None
+        xp = post["crosspost_from"]
+        assert xp["subreddit"] == "orig"
+        assert xp["id"] == "origid"
+        assert xp["title"] == "Orig Title"
+        assert xp["is_video"] is True
+        assert xp["hls_url"] == "https://v.redd.it/abc123/HLSPlaylist.m3u8"
+        assert xp["audio_url"] == "https://v.redd.it/abc123/DASH_audio.mp4"
+        assert xp["preview_img"].startswith("/api/img?url=")
+        # outer post's own url/linked_post must not be corrupted by the crosspost link
+        assert post["url"] == "https://www.reddit.com/r/dest/comments/xpid/some_title/"
+        assert post["linked_post"] is None
+
+    def test_image_crosspost_media_populated(self):
+        from app import _parse_shreddit_post
+        inner = '''
+        <div slot="post-media-container">
+          <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
+          <div class="crosspost-title"><a href="/r/orig/comments/origid/orig_title/">Orig Title</a></div>
+          <img data-post-media-primary src="https://preview.redd.it/y.jpeg?s=2">
+        </div>'''
+        post = _parse_shreddit_post(self._post_el(inner, domain="i.redd.it"))
+        xp = post["crosspost_from"]
+        assert xp is not None
+        assert xp["is_video"] is False
+        assert xp["preview_img"].startswith("/api/img?url=")
+        assert xp["gallery"] == []
+
+    def test_non_crosspost_untouched(self):
+        from app import _parse_shreddit_post
+        from bs4 import BeautifulSoup
+        html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="text"
+            domain="self.dest" id="t3_id1" post-title="t" subreddit-name="dest"
+            author="a" score="1" comment-count="0"
+            created-timestamp="2026-01-01T00:00:00.000000+0000"></shreddit-post>'''
+        el = BeautifulSoup(html, 'html.parser').find('shreddit-post')
+        post = _parse_shreddit_post(el)
+        assert post["crosspost_from"] is None
+
+
 class TestParseLiveUpdates:
     def test_filters_non_live_update(self):
         from app import _parse_live_updates

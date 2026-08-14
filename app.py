@@ -147,6 +147,93 @@ def get_redgifs_token():
         return _rg_token
 
 
+def _parse_shreddit_crosspost(el):
+    """Extract the original post's subreddit/title/media from a crosspost shreddit-post
+    element's embedded 'post-media-container' block (the original media is inlined there)."""
+    container = el.find('div', {'slot': 'post-media-container'})
+    if not container:
+        return None
+
+    orig_sub = ''
+    orig_id = ''
+    orig_title = ''
+    credit_bar = container.find(class_='crosspost-credit-bar')
+    if credit_bar:
+        a = credit_bar.find('a', href=True)
+        if a:
+            m = re.match(r'^/r/([^/]+)/?$', a['href'])
+            if m:
+                orig_sub = m.group(1)
+    title_div = container.find(class_='crosspost-title')
+    if title_div:
+        a = title_div.find('a', href=True)
+        if a:
+            orig_title = a.get_text(strip=True)
+            pm = re.match(r'^/r/([^/]+)/comments/([A-Za-z0-9]+)', a['href'])
+            if pm:
+                orig_sub = orig_sub or pm.group(1)
+                orig_id = pm.group(2)
+
+    preview_img = None
+    gallery = []
+    is_video = False
+    video_url = hls_url = audio_url = None
+
+    player = container.find('shreddit-player')
+    if player:
+        src = player.get('src', '') or ''
+        m = VREDDDIT_RE.match(src)
+        base = m.group(1) if m else None
+        if base:
+            is_video = True
+            hls_url = base + '/HLSPlaylist.m3u8'
+            video_url = base + '/DASH_480.mp4'
+            audio_url = base + '/DASH_audio.mp4'
+        poster = player.get('poster', '') or ''
+        if poster:
+            h = urlparse(poster).hostname or ''
+            preview_img = (f'/api/img?url={url_quote(poster, safe="")}'
+                           if h in ('preview.redd.it', 'external-preview.redd.it') else poster)
+    else:
+        seen = set()
+        for img in container.find_all('img'):
+            src = img.get('src', '') or img.get('data-lazy-src', '') or img.get('data-src', '') or ''
+            if not src or src in seen:
+                continue
+            h = urlparse(src).hostname or ''
+            if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
+                continue
+            seen.add(src)
+            proxied = f'/api/img?url={url_quote(src, safe="")}' if h != 'i.redd.it' else src
+            if img.has_attr('data-post-media-primary') or not gallery:
+                gallery.append({'url': proxied, 'width': 0, 'height': 0, 'caption': ''})
+        if len(gallery) == 1:
+            preview_img = gallery[0]['url']
+            gallery = []
+        elif gallery:
+            preview_img = gallery[0]['url']
+
+    if not orig_id and not preview_img and not is_video and not gallery:
+        return None
+
+    return {
+        'id': orig_id, 'title': orig_title, 'author': '[deleted]', 'subreddit': orig_sub,
+        'score': 0, 'upvote_ratio': 0, 'num_comments': 0, 'created_utc': 0,
+        'url': f'https://www.reddit.com/r/{orig_sub}/comments/{orig_id}' if orig_id else '',
+        'permalink': f'https://www.reddit.com/r/{orig_sub}/comments/{orig_id}' if orig_id else '',
+        'is_self': False, 'selftext': '', 'selftext_html': None,
+        'preview_img': preview_img, 'gallery': gallery,
+        'is_video': is_video, 'video_url': video_url, 'hls_url': hls_url, 'audio_url': audio_url,
+        'youtube_id': None, 'tiktok_id': None, 'streamable_id': None, 'embed_url': None,
+        'redgifs_id': None, 'gif_url': None, 'gif_is_video': False, 'imgur_album_id': None,
+        'post_hint': '', 'is_devvit': False, 'devvit_url': None, 'over_18': el.has_attr('is-nsfw'),
+        'flair': '', 'flair_richtext': [], 'flair_type': 'text', 'flair_bg': '', 'flair_tc': 'dark',
+        'domain': el.get('domain', ''), 'poll': None, 'crosspost_from': None, 'linked_post': None,
+        'is_stickied': False, 'is_oc': False, 'is_spoiler': False, 'locked': False,
+        'edited_utc': None, 'awards': [],
+    }
+
+
 def _parse_shreddit_post(el):
     raw_id  = el.get('id', '')
     post_id = raw_id[3:] if raw_id.startswith('t3_') else raw_id
@@ -170,7 +257,8 @@ def _parse_shreddit_post(el):
 
     domain_str = el.get('domain', '')
     is_self = post_type in ('self', 'text', 'poll') or domain_str.startswith('self.')
-    url = content_href if (content_href and not is_self) else f'https://www.reddit.com{permalink}'
+    is_crosspost = post_type == 'crosspost' or el.has_attr('is-crosspost')
+    url = content_href if (content_href and not is_self and not is_crosspost) else f'https://www.reddit.com{permalink}'
 
     selftext = ''
     selftext_html = None
@@ -238,7 +326,7 @@ def _parse_shreddit_post(el):
                   if is_devvit else None)
 
     linked_post = None
-    if not is_self:
+    if not is_self and not is_crosspost:
         lm = LINK_POST_RE.match(url)
         if lm:
             linked_post = {
@@ -253,6 +341,8 @@ def _parse_shreddit_post(el):
         try: cnt = int(el.get('award-count', 1))
         except Exception: cnt = 1
         awards = [{'name': '', 'count': cnt, 'icon': icon}]
+
+    crosspost_from = _parse_shreddit_crosspost(el) if is_crosspost else None
 
     return {
         'id': post_id, 'title': el.get('post-title', ''),
@@ -274,7 +364,7 @@ def _parse_shreddit_post(el):
         'flair': '', 'flair_richtext': [], 'flair_type': 'text',
         'flair_bg': '', 'flair_tc': 'dark',
         'domain': domain_str, 'poll': None,
-        'crosspost_from': None, 'linked_post': linked_post, 'is_stickied': False,
+        'crosspost_from': crosspost_from, 'linked_post': linked_post, 'is_stickied': False,
         'is_oc': False, 'is_spoiler': el.has_attr('is-spoiler') or el.has_attr('spoiler'), 'locked': False,
         'edited_utc': None, 'awards': awards,
         'recommendation_source': el.get('recommendation-source', ''),
