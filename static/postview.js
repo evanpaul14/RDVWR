@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit } from './utils.js';
 import { initMedia, initGifVideos, mediaHtmlFull } from './media.js';
-import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull } from './render.js';
+import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
 const _PV_DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
@@ -225,6 +225,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       if (!res.ok) { pvContent.innerHTML = errState(escHtml(resData.error||'Failed to load'), 'post'); return; }
       data = resData;
     }
+    await waitForMdLibs();
     state._pvData = data;
 
     const p = data.post;
