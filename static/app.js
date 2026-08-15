@@ -77,7 +77,11 @@ function closeMobileSearch() {
   hideAllAutocomplete();
 }
 
+let _isBootRender = true;
+
 async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
+  const isBoot = _isBootRender;
+  _isBootRender = false;
   closeMobileSearch();
   updateBottomNav(route);
   if (route.type !== 'search') {
@@ -113,9 +117,9 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       await loadMultireddit(route.username, route.multiname, route.sort, route.time || 'all', route.after || null);
       break;
     case 'post':
-      if (!feed.querySelector('.post')) await loadSubreddit(route.sub, state.currentSort);
+      if (!feed.querySelector('.post')) loadSubreddit(route.sub, state.currentSort);
       _markPostVisited(route.postId);
-      await loadPostView(route.sub, route.postId, route.commentId||'', restorePvScroll);
+      await loadPostView(route.sub, route.postId, route.commentId||'', restorePvScroll, isBoot);
       break;
     case 'user':
       closePostView();

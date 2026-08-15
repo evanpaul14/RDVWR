@@ -106,10 +106,17 @@ function buildCommentsHtml(data, commentId) {
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────
-export function openPostView() {
+export function openPostView(skipAnim=false) {
   document.getElementById('feed')?.querySelectorAll('video').forEach(v => { if (!v.paused) v.pause(); });
   _pvPrevFocus = document.activeElement;
-  postView.classList.add('open');
+  if (skipAnim) {
+    postView.style.transition = 'none';
+    postView.classList.add('open');
+    postView.offsetHeight; // force reflow before restoring the transition
+    postView.style.transition = '';
+  } else {
+    postView.classList.add('open');
+  }
   document.body.style.overflow = 'hidden';
   const focusEl = document.getElementById('pv-home');
   if (focusEl) focusEl.focus();
@@ -194,22 +201,30 @@ export async function changeCommentSort(sort) {
   }
 }
 
-export async function loadPostView(sub, postId, commentId='', restorePvScroll=0) {
+export async function loadPostView(sub, postId, commentId='', restorePvScroll=0, skipAnim=false) {
   state._pvSub = sub; state._pvPostId = postId; state._pvCommentId = commentId; state._pvShowingContext = false;
   state.currentCommentSort = settings.commentSort;
   pvContent.innerHTML = '<div class="pv-loader"></div>';
   document.dispatchEvent(new CustomEvent('pv-load'));
   pvScroll.scrollTop = 0;
-  openPostView();
+  openPostView(skipAnim);
 
   pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`;
   pvOpen.href = '#';
 
   try {
-    const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
-    const res  = await fetch(apiUrl);
-    const data = await res.json();
-    if (!res.ok) { pvContent.innerHTML = errState(escHtml(data.error||'Failed to load'), 'post'); return; }
+    let data;
+    const inj = window.__INITIAL_POST__;
+    if (inj && inj._sub === sub.toLowerCase() && inj._post_id === postId && state.currentCommentSort === 'confidence' && inj._comment_id === (commentId || '')) {
+      window.__INITIAL_POST__ = null;
+      data = inj;
+    } else {
+      const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
+      const res  = await fetch(apiUrl);
+      const resData = await res.json();
+      if (!res.ok) { pvContent.innerHTML = errState(escHtml(resData.error||'Failed to load'), 'post'); return; }
+      data = resData;
+    }
     state._pvData = data;
 
     const p = data.post;
