@@ -282,6 +282,15 @@ def _parse_shreddit_post(el):
         else:
             preview_img = content_href
 
+    if not preview_img and post_type == 'link':
+        thumb_div = el.find('div', {'slot': 'thumbnail'})
+        thumb_img = thumb_div.find('img') if thumb_div else None
+        thumb_src = thumb_img.get('src', '') if thumb_img else ''
+        if thumb_src:
+            h = urlparse(thumb_src).hostname or ''
+            preview_img = (f'/api/img?url={url_quote(thumb_src, safe="")}'
+                           if h in ('preview.redd.it', 'external-preview.redd.it') else thumb_src)
+
     is_gallery_url = content_href and '/gallery/' in content_href
     gallery = []
     if post_type == 'gallery' or is_gallery_url:

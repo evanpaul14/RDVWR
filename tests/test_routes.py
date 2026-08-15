@@ -977,6 +977,36 @@ class TestParseShredditCrosspost:
         assert post["crosspost_from"] is None
 
 
+class TestParseShredditPostLinkThumbnail:
+    def test_link_post_thumbnail_proxied(self):
+        from app import _parse_shreddit_post
+        from bs4 import BeautifulSoup
+        html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
+            content-href="https://example.com/article" domain="example.com"
+            id="t3_id1" post-title="t" subreddit-name="dest"
+            author="a" score="1" comment-count="0"
+            created-timestamp="2026-01-01T00:00:00.000000+0000">
+            <div slot="thumbnail"><a href="https://example.com/article">
+                <img src="https://external-preview.redd.it/thumb.png?s=1">
+            </a></div>
+        </shreddit-post>'''
+        el = BeautifulSoup(html, 'html.parser').find('shreddit-post')
+        post = _parse_shreddit_post(el)
+        assert post["preview_img"].startswith("/api/img?url=")
+
+    def test_link_post_no_thumbnail(self):
+        from app import _parse_shreddit_post
+        from bs4 import BeautifulSoup
+        html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
+            content-href="https://example.com/article" domain="example.com"
+            id="t3_id1" post-title="t" subreddit-name="dest"
+            author="a" score="1" comment-count="0"
+            created-timestamp="2026-01-01T00:00:00.000000+0000"></shreddit-post>'''
+        el = BeautifulSoup(html, 'html.parser').find('shreddit-post')
+        post = _parse_shreddit_post(el)
+        assert post["preview_img"] is None
+
+
 class TestParseLiveUpdates:
     def test_filters_non_live_update(self):
         from app import _parse_live_updates
