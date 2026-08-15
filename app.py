@@ -38,6 +38,7 @@ logging.getLogger("werkzeug").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 _SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
+_POST_PERMALINK_RE = re.compile(r'^([A-Za-z0-9_]+)/comments/([A-Za-z0-9]+)(?:/[^/]*(?:/([A-Za-z0-9]+))?)?/?$')
 SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
@@ -956,14 +957,27 @@ def _try_inject_subreddit(sub, sort, time):
 def r_json_or_spa(reddit_path):
     if reddit_path.endswith(".json"):
         return _proxy_reddit(f"r/{reddit_path}")
-    initial_data = initial_about = None
+    initial_data = initial_about = initial_post = None
     m = _SUB_FEED_RE.match(reddit_path)
     if m:
         sub  = m.group(1)
         sort = m.group(2) or ('hot' if sub.lower() == 'popular' else 'top')
         time = request.args.get('t', 'all')
         initial_data, initial_about = _try_inject_subreddit(sub, sort, time)
-    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about)
+    else:
+        mp = _POST_PERMALINK_RE.match(reddit_path)
+        if mp:
+            sub, post_id, comment_id = mp.group(1), mp.group(2), mp.group(3)
+            try:
+                data, err = _fetch_comments_data(sub, post_id, comment_id, timeout=6)
+                if not err:
+                    data["_sub"] = sub.lower()
+                    data["_post_id"] = post_id
+                    data["_comment_id"] = comment_id or ''
+                    initial_post = data
+            except Exception as e:
+                log.warning("inject post sub=%s post=%s: %s", sub, post_id, e)
+    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post)
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
@@ -1400,6 +1414,59 @@ def get_duplicates(subreddit, post_id):
 
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
+def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence', timeout=12):
+    """Fetch + parse a post's comments. Returns (data_dict, None) or (None, (error_msg, status))."""
+    if sort not in COMMENT_SORTS:
+        sort = 'confidence'
+    params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
+    if comment_id:
+        params["comment"] = comment_id
+        params["context"] = 8
+    resp = reddit_get(
+        f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+        params=params, timeout=timeout)
+    if resp.status_code == 403:
+        state, _ = _subreddit_error_state(resp)
+        if state == "quarantined":
+            resp = reddit_get(
+                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+                quarantine=True, params=params, timeout=timeout)
+    if resp.status_code != 200:
+        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+    data     = resp.json()
+    children = data[0]["data"]["children"]
+    if not children:
+        return None, ("Post not found", 404)
+    post_raw = children[0]["data"]
+    post     = process_post(post_raw)
+    post["selftext"] = post_raw.get("selftext", "")   # full text in post view
+    hydrate_linked_posts([post])
+
+    def parse_comment(c):
+        if c["kind"] == "more":
+            d = c["data"]
+            return {
+                "kind":     "more",
+                "id":       d.get("id", ""),
+                "children": d.get("children", [])[:100],
+                "count":    d.get("count", 0),
+                "depth":    d.get("depth", 0),
+            }
+        d       = c["data"]
+        replies = []
+        if d.get("replies") and isinstance(d["replies"], dict):
+            for r in d["replies"]["data"]["children"]:
+                parsed = parse_comment(r)
+                if parsed:
+                    replies.append(parsed)
+        comment = _parse_comment_fields(d)
+        comment["replies"] = replies
+        return comment
+
+    comments = [parse_comment(c) for c in data[1]["data"]["children"]]
+    return {"post": post, "comments": [c for c in comments if c]}, None
+
+
 @app.route("/api/r/<subreddit>/comments/<post_id>")
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 @server_cache(CACHE_TTL_FEED)
@@ -1407,55 +1474,11 @@ def get_comments(subreddit, post_id):
     try:
         comment_id = request.args.get('comment')
         sort = request.args.get('sort', 'confidence')
-        if sort not in COMMENT_SORTS:
-            sort = 'confidence'
-        params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
-        if comment_id:
-            params["comment"] = comment_id
-            params["context"] = 8
-        resp = reddit_get(
-            f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-            params=params, timeout=12)
-        if resp.status_code == 403:
-            state, _ = _subreddit_error_state(resp)
-            if state == "quarantined":
-                resp = reddit_get(
-                    f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-                    quarantine=True, params=params, timeout=12)
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        data     = resp.json()
-        children = data[0]["data"]["children"]
-        if not children:
-            return jsonify({"error": "Post not found"}), 404
-        post_raw = children[0]["data"]
-        post     = process_post(post_raw)
-        post["selftext"] = post_raw.get("selftext", "")   # full text in post view
-        hydrate_linked_posts([post])
-
-        def parse_comment(c):
-            if c["kind"] == "more":
-                d = c["data"]
-                return {
-                    "kind":     "more",
-                    "id":       d.get("id", ""),
-                    "children": d.get("children", [])[:100],
-                    "count":    d.get("count", 0),
-                    "depth":    d.get("depth", 0),
-                }
-            d       = c["data"]
-            replies = []
-            if d.get("replies") and isinstance(d["replies"], dict):
-                for r in d["replies"]["data"]["children"]:
-                    parsed = parse_comment(r)
-                    if parsed:
-                        replies.append(parsed)
-            comment = _parse_comment_fields(d)
-            comment["replies"] = replies
-            return comment
-
-        comments = [parse_comment(c) for c in data[1]["data"]["children"]]
-        return cached_json({"post": post, "comments": [c for c in comments if c]}, CACHE_TTL_FEED)
+        data, err = _fetch_comments_data(subreddit, post_id, comment_id, sort)
+        if err:
+            msg, status = err
+            return jsonify({"error": msg}), status
+        return cached_json(data, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
