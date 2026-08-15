@@ -10,12 +10,13 @@ export const GALLERY_SWIPE_MIN     = 40;
 // Opens a real reddit.com URL in a new tab. Tags the URL so the rdvwr browser
 // extension's redirect-to-rdvwr logic (background.js) knows not to bounce
 // this navigation straight back — otherwise clicking "open in reddit" from
-// inside the app would just redirect back to the app.
+// inside the app would just redirect back to the app. Uses a URL fragment
+// (not a query param) so the tag stays client-side and is never sent to Reddit.
 export function openOnReddit(href) {
   let target = href;
   try {
     const u = new URL(href);
-    u.searchParams.set('rdvwr_bypass', '1');
+    u.hash = 'rdvwr_bypass';
     target = u.toString();
   } catch {}
   window.open(target, '_blank', 'noopener');
