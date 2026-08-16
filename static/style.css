@@ -558,6 +558,8 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .md .md-video-embed video { max-height:480px; }
 .spoiler { background:var(--tx); color:var(--tx); border-radius:3px; cursor:pointer; padding:0 2px; user-select:none; transition:background .15s,color .15s; }
 .spoiler.revealed { background:var(--bg3); color:var(--tx); }
+.spoiler a { color:inherit; }
+.spoiler.revealed a { color:var(--ac); }
 .redgifs-wrap video { width:100%; display:block; border-radius:inherit; }
 .rg-loading { width:100%; aspect-ratio:16/9; background:var(--bg2); display:flex; align-items:center; justify-content:center; color:var(--tx3); font-size:.85em; }
 .rg-loading::after { content:'Loading…'; }
