@@ -517,7 +517,7 @@ def proxy_img():
             return ('', upstream.status_code)
         content_type = upstream.headers.get('Content-Type', 'image/jpeg')
         resp = Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), content_type=content_type)
-        resp.headers['Cache-Control'] = 'public, max-age=3600'
+        resp.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return resp
     except Exception as e:
         log.warning("proxy_img fetch failed url=%s: %s", url, e)

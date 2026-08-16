@@ -349,12 +349,12 @@ export function initOgDescriptions(container) {
 export function renderGallery(images) {
   if (!images?.length) return '';
   const thumbsHtml = images.map((img,i) =>
-    `<img class="gallery-thumb${i===0?' active':''}" src="${escHtml(img.url)}" data-idx="${i}" data-caption="${escHtml(img.caption||'')}" loading="lazy" alt="${escHtml(img.caption||'')}">`
+    `<img class="gallery-thumb${i===0?' active':''}" src="${escHtml(img.url)}" data-idx="${i}" data-caption="${escHtml(img.caption||'')}" data-w="${img.width||''}" data-h="${img.height||''}" loading="lazy" alt="${escHtml(img.caption||'')}">`
   ).join('');
   return `
     <div class="gallery">
       <div class="gallery-stage">
-        <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}">
+        <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}"${images[0].width ? ` width="${images[0].width}" height="${images[0].height}"` : ''}>
         ${images.length > 1 ? `
           <div class="gallery-nav">
             <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
@@ -494,6 +494,8 @@ document.addEventListener('click', e => {
 
   const t = thumbs[idx];
   mainImg.src = t.src; mainImg.alt = t.alt;
+  if (t.dataset.w) { mainImg.width = t.dataset.w; mainImg.height = t.dataset.h; }
+  else { mainImg.removeAttribute('width'); mainImg.removeAttribute('height'); }
   if (counter) counter.textContent = `${idx+1} / ${thumbs.length}`;
   if (prevBtn) prevBtn.disabled = idx === 0;
   if (nextBtn) nextBtn.disabled = idx === thumbs.length - 1;
