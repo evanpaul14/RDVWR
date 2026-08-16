@@ -543,6 +543,7 @@ sentinel.addEventListener('click', e => {
 document.addEventListener('click', e => {
   const spoiler = e.target.closest('.spoiler');
   if (!spoiler) return;
+  if (e.target.closest('a')) return; // let a click on a revealed link's <a> navigate instead of re-hiding
   e.stopPropagation();
   spoiler.classList.toggle('revealed');
 });
@@ -649,6 +650,7 @@ document.addEventListener('touchend', e => {
   const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
   if (dx > TOUCH_MOVE_THRESHOLD || dy > TOUCH_MOVE_THRESHOLD) return;
   if (e.target.tagName === 'IMG' && e.target.closest('.md, .pv-media, .post-media')) return;
+  if (e.target.closest('.spoiler:not(.revealed)')) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
   if (interceptNavLink(a, e)) _navFromTouch = true;
@@ -658,6 +660,8 @@ document.addEventListener('touchend', e => {
 document.addEventListener('click', e => {
   if (_navFromTouch) { _navFromTouch = false; return; }
   if (e.target.tagName === 'IMG' && e.target.closest('.md, .pv-media, .post-media')) return;
+  const unrevealedSpoiler = e.target.closest('.spoiler:not(.revealed)');
+  if (unrevealedSpoiler) { e.preventDefault(); e.stopPropagation(); unrevealedSpoiler.classList.add('revealed'); return; }
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
@@ -666,6 +670,7 @@ document.addEventListener('click', e => {
 // Middle-click
 document.addEventListener('auxclick', e => {
   if (e.button !== 1) return;
+  if (e.target.closest('.spoiler:not(.revealed)')) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
