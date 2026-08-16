@@ -104,11 +104,20 @@ function _nestSup(chain) {
 
 const _CODE_SKIP = '```[\\s\\S]*?```|`[^`]*`';
 
+// Reddit escapes underscores in raw markdown (e.g. "foo\_bar") to stop them
+// triggering italics. Marked unescapes this within [text](url) links, but not
+// inside bare autolinked URLs — so bare-URL underscores stay literally
+// backslash-escaped in the output. Strip those escapes before parsing.
+function unescapeBareUrlUnderscores(text) {
+  return text.replace(new RegExp(`(${_CODE_SKIP})|(https?:\\/\\/\\S+)`, 'g'),
+    (m, skip, url) => skip ? skip : url.replace(/\\_/g, '_'));
+}
+
 export function renderMd(text) {
   if (!text) return '';
   if (!_mdLibsReady) return '';
   _initMarked();
-  const processed = embedRedditCommentVideos(linkifyReddit(text))
+  const processed = embedRedditCommentVideos(linkifyReddit(unescapeBareUrlUnderscores(text)))
     .replace(new RegExp(`(${_CODE_SKIP})|>!([\\s\\S]*?)(?:!<|$)`, 'g'), (m, skip, inner) =>
       skip ? skip : `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
     // Backslash-escaped carets (e.g. "\^\^") are left alone so marked's own escape
