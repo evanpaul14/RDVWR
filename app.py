@@ -928,7 +928,7 @@ def _try_inject_profile(username):
 
     def _overview():
         try:
-            data, err = _fetch_user_overview(username, timeout=6)
+            data, err = _fetch_user_overview(username, timeout=6, allow_archive=False)
             return None if err else data
         except Exception as e:
             log.warning("inject profile overview user=%s: %s", username, e)
@@ -1860,8 +1860,14 @@ def _fetch_archived_overview(username, before=None):
     return items, next_after
 
 
-def _fetch_user_overview(username, sort='new', t='', after='', timeout=10):
-    """Returns (data_dict, None) or (None, (error_msg, status))."""
+def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
+    """Returns (data_dict, None) or (None, (error_msg, status)).
+
+    allow_archive=False skips the Arctic Shift fallback entirely (which does
+    two sequential slow third-party API calls) and just reports the failure,
+    so a caller that can't afford to block on it — namely SSR page injection —
+    gets a fast answer and leaves the archive fetch to a later, non-blocking
+    client-side request instead."""
     if after.startswith("arc:"):
         items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
         return {"items": items, "after": next_after, "archived": True}, None
@@ -1875,12 +1881,13 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10):
         f"https://www.reddit.com/user/{username}/overview.json",
         params=params, timeout=timeout)
     if resp.status_code in (403, 404):
-        try:
-            items, next_after = _fetch_archived_overview(username)
-            if items:
-                return {"items": items, "after": next_after, "archived": True}, None
-        except Exception as e:
-            log.warning("archived overview fallback failed for %s: %s", username, e)
+        if allow_archive:
+            try:
+                items, next_after = _fetch_archived_overview(username)
+                if items:
+                    return {"items": items, "after": next_after, "archived": True}, None
+            except Exception as e:
+                log.warning("archived overview fallback failed for %s: %s", username, e)
         return None, ("User not found or profile is private", 404)
     if resp.status_code != 200:
         return None, (f"Reddit returned {resp.status_code}", resp.status_code)
@@ -1897,7 +1904,7 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10):
         elif kind == "t1":
             items.append({"type": "comment", "data": _normalize_comment(d)})
     hydrate_linked_posts([i["data"] for i in items if i["type"] == "post"])
-    if not items and not after:
+    if not items and not after and allow_archive:
         try:
             arc_items, next_after = _fetch_archived_overview(username)
             if arc_items:
