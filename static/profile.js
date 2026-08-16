@@ -25,12 +25,28 @@ export function buildProfileSortHtml(tab='overview', sort='new', time='all') {
   return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 
+// Archived (Arctic Shift) fetches go through a slower third-party API than a
+// normal Reddit call. If a fresh profile load is still pending after this long,
+// assume that's what's happening and say so, rather than leaving skeletons up
+// with no explanation.
+const ARCHIVE_NOTICE_DELAY = 700;
+
 export async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false, injectedData=null) {
   if (append && state.loading) return;
   if (!append) state.feedGen++;
   const myGen = state.feedGen;
   state.loading = true;
-  if (!append) { showSkeletons(); state.profileAfter = null; }
+  let noticeTimer = null;
+  if (!append) {
+    showSkeletons();
+    state.profileAfter = null;
+    noticeTimer = setTimeout(() => {
+      if (myGen === state.feedGen) {
+        feed.insertAdjacentHTML('afterbegin',
+          `<div class="thread-banner archive-loading-notice">Taking a moment — checking archived history for u/${escHtml(username)}…</div>`);
+      }
+    }, ARCHIVE_NOTICE_DELAY);
+  }
   else sentinel.classList.add('loading');
   try {
     let data, res;
@@ -51,6 +67,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
       res  = await fetch(url);
       data = await res.json();
     }
+    clearTimeout(noticeTimer);
     if (myGen !== state.feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
@@ -81,6 +98,10 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
       initMedia(tmp);
       while (tmp.firstChild) feed.appendChild(tmp.firstChild);
       initGifVideos(feed);
+      if (data.archived) {
+        const postIds = items.filter(i => i.type === 'post').map(i => i.data.id);
+        refreshArchivedLiveInfo(postIds, myGen);
+      }
     } else {
       const items = tab === 'posts' ? data.posts : data.comments;
       if (!items?.length && !append) {
@@ -94,6 +115,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
         initMedia(tmp);
         while (tmp.firstChild) feed.appendChild(tmp.firstChild);
         initGifVideos(feed);
+        if (data.archived) refreshArchivedLiveInfo(items.map(p => p.id), myGen);
       } else {
         feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
       }
@@ -101,7 +123,39 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
     state.profileAfter = data.after;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
-  finally  { if (myGen === state.feedGen) state.loading = false; }
+  finally  { clearTimeout(noticeTimer); if (myGen === state.feedGen) state.loading = false; }
+}
+
+// Arctic Shift's score/comment-count is a stale snapshot from whenever it first
+// crawled the post. Fetch current numbers from Reddit in the background and
+// patch cards in place, instead of blocking the (already slow) archived load on it.
+async function refreshArchivedLiveInfo(postIds, myGen) {
+  if (!postIds.length) return;
+  try {
+    const res = await fetch(`/api/posts/live-info?ids=${postIds.map(encodeURIComponent).join(',')}`);
+    if (!res.ok || myGen !== state.feedGen) return;
+    const info = await res.json();
+    for (const [id, live] of Object.entries(info)) applyLiveInfo(id, live);
+  } catch {}
+}
+
+function applyLiveInfo(id, live) {
+  const card = feed.querySelector(`[data-post-id="${id}"]`);
+  if (!card) return;
+  const scoreNum = card.querySelector('.score-num');
+  if (scoreNum) scoreNum.textContent = fmtNum(live.score);
+  const minScore = card.querySelector('.min-score');
+  if (minScore) {
+    const svg = minScore.querySelector('svg');
+    minScore.innerHTML = (svg ? svg.outerHTML : '') + fmtNum(live.score);
+  }
+  const commentsLink = card.querySelector('.comments-link');
+  if (commentsLink) {
+    const svg = commentsLink.querySelector('svg');
+    commentsLink.innerHTML = (svg ? svg.outerHTML : '') + ` ${fmtNum(live.num_comments)} comments`;
+  }
+  const minComments = card.querySelector('.min-comments');
+  if (minComments) minComments.textContent = `${fmtNum(live.num_comments)} comments`;
 }
 
 function _renderProfileAbout(d) {

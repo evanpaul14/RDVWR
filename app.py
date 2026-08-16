@@ -1642,27 +1642,32 @@ def _arc_cursor(items, limit):
     return f"arc:{items[-1]['created_utc']}"
 
 
-def _refresh_live_scores(posts):
-    """Arctic Shift's score is a snapshot from whenever it first crawled the post,
-    which for recently-posted content is often just the author's initial upvote.
-    Overwrite with the current score fetched live from Reddit by id."""
-    ids = [p["id"] for p in posts if p.get("id")]
+@app.route("/api/posts/live-info")
+@server_cache(30)
+def get_posts_live_info():
+    """Arctic Shift's score/comment-count is a snapshot from whenever it first
+    crawled the post, which for recently-posted content is often just the
+    author's initial upvote. Lets the frontend lazily refresh archived post
+    cards with current numbers from Reddit, without blocking the initial
+    (already-slow) archived-feed response on it."""
+    ids = [i for i in request.args.get("ids", "").split(",") if POST_ID_RE.match(i)][:100]
     if not ids:
-        return
+        return jsonify({})
     try:
         resp = reddit_get(
             "https://www.reddit.com/api/info.json",
-            params={"id": ",".join(f"t3_{i}" for i in ids[:100]), "raw_json": 1},
+            params={"id": ",".join(f"t3_{i}" for i in ids), "raw_json": 1},
             timeout=8)
         if not resp.ok:
-            return
-        live = {c["data"]["id"]: c["data"].get("score", 0)
-                for c in resp.json().get("data", {}).get("children", [])}
-        for p in posts:
-            if p["id"] in live:
-                p["score"] = live[p["id"]]
+            return jsonify({})
+        out = {}
+        for c in resp.json().get("data", {}).get("children", []):
+            d = c["data"]
+            out[d["id"]] = {"score": d.get("score", 0), "num_comments": d.get("num_comments", 0)}
+        return cached_json(out, 30)
     except Exception as e:
-        log.warning("archived score refresh failed: %s", e)
+        log.warning("live-info fetch failed: %s", e)
+        return jsonify({})
 
 
 def _fetch_user_about(username, timeout=10):
@@ -1747,7 +1752,6 @@ def get_user_posts_api(username):
     if after.startswith("arc:"):
         try:
             posts = _fetch_archived_posts(username, FEED_LIMIT, before=int(after[4:]))
-            _refresh_live_scores(posts)
             hydrate_linked_posts(posts)
             return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
         except Exception as e:
@@ -1766,7 +1770,6 @@ def get_user_posts_api(username):
             try:
                 posts = _fetch_archived_posts(username, FEED_LIMIT)
                 if posts:
-                    _refresh_live_scores(posts)
                     hydrate_linked_posts(posts)
                     return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
@@ -1780,7 +1783,6 @@ def get_user_posts_api(username):
             try:
                 archived = _fetch_archived_posts(username, FEED_LIMIT)
                 if archived:
-                    _refresh_live_scores(archived)
                     hydrate_linked_posts(archived)
                     return cached_json({"posts": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
@@ -1846,7 +1848,6 @@ def get_user_comments_api(username):
 def _fetch_archived_overview(username, before=None):
     posts    = _fetch_archived_posts(username, FEED_LIMIT, before=before)
     comments = _fetch_archived_comments(username, FEED_LIMIT, before=before)
-    _refresh_live_scores(posts)
     hydrate_linked_posts(posts)
     items = (
         [{"type": "post", "data": p} for p in posts]

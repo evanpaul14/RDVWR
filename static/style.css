@@ -914,6 +914,8 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 }
 .thread-banner a { color:inherit; text-decoration:none; }
 .thread-banner a:hover { text-decoration:underline; }
+.archive-loading-notice { animation:archive-notice-pulse 1.4s ease-in-out infinite; }
+@keyframes archive-notice-pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
 
 /* ── States ──────────────────────────────────────────────────────────────── */
 .state { padding:80px 24px; text-align:center; }
