@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml } from './utils.js';
-import { renderPost, renderUserCommentCard } from './render.js';
+import { renderPost, renderUserCommentCard, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { showSkeletons, setMainOpen } from './feed.js';
 
@@ -25,7 +25,7 @@ export function buildProfileSortHtml(tab='overview', sort='new', time='all') {
   return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 
-export async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false) {
+export async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false, injectedData=null) {
   if (append && state.loading) return;
   if (!append) state.feedGen++;
   const myGen = state.feedGen;
@@ -33,23 +33,31 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
   if (!append) { showSkeletons(); state.profileAfter = null; }
   else sentinel.classList.add('loading');
   try {
-    let url;
-    if (tab === 'overview') {
-      url = `/api/user/${encodeURIComponent(username)}/overview?sort=${sort}`;
-      if (sort === 'top') url += `&t=${time || 'all'}`;
+    let data, res;
+    if (injectedData) {
+      data = injectedData;
+      res = { ok: true };
     } else {
-      const endpoint = tab === 'posts' ? 'posts' : 'comments';
-      url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
-      if (sort === 'top') url += `&t=${time || 'all'}`;
+      let url;
+      if (tab === 'overview') {
+        url = `/api/user/${encodeURIComponent(username)}/overview?sort=${sort}`;
+        if (sort === 'top') url += `&t=${time || 'all'}`;
+      } else {
+        const endpoint = tab === 'posts' ? 'posts' : 'comments';
+        url = `/api/user/${encodeURIComponent(username)}/${endpoint}?sort=${sort}`;
+        if (sort === 'top') url += `&t=${time || 'all'}`;
+      }
+      if (after) url += `&after=${after}`;
+      res  = await fetch(url);
+      data = await res.json();
     }
-    if (after) url += `&after=${after}`;
-    const res  = await fetch(url);
-    const data = await res.json();
     if (myGen !== state.feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
       return;
     }
+    await waitForMdLibs();
+    if (myGen !== state.feedGen) return;
     if (!append) feed.innerHTML = '';
 
     if (!append && data.archived) {
@@ -96,6 +104,15 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
+function _renderProfileAbout(d) {
+  document.getElementById('ctx-icon-wrap').innerHTML = d.icon
+    ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
+  document.getElementById('ctx-title').textContent = `u/${d.name}`;
+  document.getElementById('ctx-stats').innerHTML =
+    `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}`;
+  ctxInfo.classList.add('visible');
+}
+
 export async function loadProfile(username, after=null) {
   state.profileMode = true; state.profileUser = username; state.profileTab = 'overview'; state.profileSort = 'new'; state.profileTime = 'all'; state.profileAfter = null;
   sortBar.style.display = 'none';
@@ -104,11 +121,18 @@ export async function loadProfile(username, after=null) {
   pvSubInput.value = '';
   document.title = `u/${username} — RDVWR`;
   setMainOpen(`https://www.reddit.com/user/${encodeURIComponent(username)}/`);
-
-  const aboutFetch = fetch(`/api/user/${encodeURIComponent(username)}/about`);
   sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
   sortBar.style.display = 'flex';
 
+  const inj = !after && window.__INITIAL_PROFILE__;
+  if (inj && inj._username === username.toLowerCase()) {
+    window.__INITIAL_PROFILE__ = null;
+    await loadProfileTab(username, 'overview', state.profileSort, state.profileTime, after, false, inj);
+    if (inj._about) _renderProfileAbout(inj._about);
+    return;
+  }
+
+  const aboutFetch = fetch(`/api/user/${encodeURIComponent(username)}/about`);
   const [, aboutRes] = await Promise.all([
     loadProfileTab(username, 'overview', state.profileSort, state.profileTime, after),
     aboutFetch
@@ -116,12 +140,7 @@ export async function loadProfile(username, after=null) {
   try {
     if (aboutRes.ok) {
       const d = await aboutRes.json();
-      document.getElementById('ctx-icon-wrap').innerHTML = d.icon
-        ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
-      document.getElementById('ctx-title').textContent = `u/${d.name}`;
-      document.getElementById('ctx-stats').innerHTML =
-        `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}`;
-      ctxInfo.classList.add('visible');
+      _renderProfileAbout(d);
     }
   } catch {}
 }

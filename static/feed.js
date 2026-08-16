@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
-import { renderPost } from './render.js';
+import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -213,6 +213,8 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
+    await waitForMdLibs();
+    if (myGen !== state.feedGen) return;
     const startIdx = append ? feed.children.length : 0;
     const multiSub = state.currentSub === 'popular' || state.currentSub === 'all';
     const tmp = document.createElement('div');

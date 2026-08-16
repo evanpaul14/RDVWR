@@ -906,8 +906,43 @@ def get_widgets(subreddit):
 @app.route("/r/<subreddit>/wiki/<path:page>", strict_slashes=False)
 @app.route("/live/<path:path>", strict_slashes=False)
 def spa(**kwargs):
-    resp = render_template("index.html")
+    initial_profile = None
+    username = kwargs.get('username')
+    if username and 'multiname' not in kwargs:
+        initial_profile = _try_inject_profile(username)
+    resp = render_template("index.html", initial_profile=initial_profile)
     return resp, 200, {'Cache-Control': 'no-store'}
+
+
+def _try_inject_profile(username):
+    """Fetch a user's about + overview in parallel for SSR injection."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _about():
+        try:
+            data, err = _fetch_user_about(username, timeout=6)
+            return None if err else data
+        except Exception as e:
+            log.warning("inject profile about user=%s: %s", username, e)
+            return None
+
+    def _overview():
+        try:
+            data, err = _fetch_user_overview(username, timeout=6)
+            return None if err else data
+        except Exception as e:
+            log.warning("inject profile overview user=%s: %s", username, e)
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_about    = ex.submit(_about)
+        f_overview = ex.submit(_overview)
+        about, overview = f_about.result(), f_overview.result()
+    if overview is None:
+        return None
+    overview["_username"] = username.lower()
+    overview["_about"] = about
+    return overview
 
 
 def _try_inject_subreddit(sub, sort, time):
@@ -1630,36 +1665,45 @@ def _refresh_live_scores(posts):
         log.warning("archived score refresh failed: %s", e)
 
 
+def _fetch_user_about(username, timeout=10):
+    """Returns (data_dict, None) or (None, (error_msg, status))."""
+    resp = reddit_get(
+        f"https://www.reddit.com/user/{username}/about.json",
+        params={"raw_json": 1}, timeout=timeout)
+    if resp.status_code == 404:
+        return None, ("User not found", 404)
+    if resp.status_code != 200:
+        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+    d    = resp.json()["data"]
+    icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
+    sub  = d.get("subreddit") or {}
+    return {
+        "name":                d["name"],
+        "icon":                icon or "",
+        "description":         sub.get("public_description", "") or "",
+        "karma_post":          d.get("link_karma", 0),
+        "karma_comment":       d.get("comment_karma", 0),
+        "karma_award":         d.get("awarder_karma", 0),
+        "karma_total":         d.get("total_karma", d.get("link_karma", 0) + d.get("comment_karma", 0)),
+        "created_utc":         d.get("created_utc", 0),
+        "is_premium":          d.get("is_gold", False),
+        "is_mod":              d.get("is_mod", False),
+        "is_employee":         d.get("is_employee", False),
+        "verified":            d.get("verified", False),
+        "has_verified_email":  d.get("has_verified_email", False),
+    }, None
+
+
 @app.route("/api/user/<username>/about")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_about(username):
     try:
-        resp = reddit_get(
-            f"https://www.reddit.com/user/{username}/about.json",
-            params={"raw_json": 1}, timeout=10)
-        if resp.status_code == 404:
-            return jsonify({"error": "User not found"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        d    = resp.json()["data"]
-        icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
-        sub  = d.get("subreddit") or {}
-        return cached_json({
-            "name":                d["name"],
-            "icon":                icon or "",
-            "description":         sub.get("public_description", "") or "",
-            "karma_post":          d.get("link_karma", 0),
-            "karma_comment":       d.get("comment_karma", 0),
-            "karma_award":         d.get("awarder_karma", 0),
-            "karma_total":         d.get("total_karma", d.get("link_karma", 0) + d.get("comment_karma", 0)),
-            "created_utc":         d.get("created_utc", 0),
-            "is_premium":          d.get("is_gold", False),
-            "is_mod":              d.get("is_mod", False),
-            "is_employee":         d.get("is_employee", False),
-            "verified":            d.get("verified", False),
-            "has_verified_email":  d.get("has_verified_email", False),
-        }, CACHE_TTL_FEED)
+        data, err = _fetch_user_about(username)
+        if err:
+            msg, status = err
+            return jsonify({"error": msg}), status
+        return cached_json(data, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1815,6 +1859,53 @@ def _fetch_archived_overview(username, before=None):
     return items, next_after
 
 
+def _fetch_user_overview(username, sort='new', t='', after='', timeout=10):
+    """Returns (data_dict, None) or (None, (error_msg, status))."""
+    if after.startswith("arc:"):
+        items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
+        return {"items": items, "after": next_after, "archived": True}, None
+
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
+    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
+        params["t"] = t
+    if after:
+        params["after"] = after
+    resp = reddit_get(
+        f"https://www.reddit.com/user/{username}/overview.json",
+        params=params, timeout=timeout)
+    if resp.status_code in (403, 404):
+        try:
+            items, next_after = _fetch_archived_overview(username)
+            if items:
+                return {"items": items, "after": next_after, "archived": True}, None
+        except Exception as e:
+            log.warning("archived overview fallback failed for %s: %s", username, e)
+        return None, ("User not found or profile is private", 404)
+    if resp.status_code != 200:
+        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+    listing = resp.json()["data"]
+    items = []
+    for child in listing["children"]:
+        kind = child.get("kind")
+        d    = child.get("data", {})
+        if kind == "t3":
+            try:
+                items.append({"type": "post", "data": process_post(d)})
+            except Exception as e:
+                log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
+        elif kind == "t1":
+            items.append({"type": "comment", "data": _normalize_comment(d)})
+    hydrate_linked_posts([i["data"] for i in items if i["type"] == "post"])
+    if not items and not after:
+        try:
+            arc_items, next_after = _fetch_archived_overview(username)
+            if arc_items:
+                return {"items": arc_items, "after": next_after, "archived": True}, None
+        except Exception as e:
+            log.warning("archived overview fallback failed for %s: %s", username, e)
+    return {"items": items, "after": listing.get("after")}, None
+
+
 @app.route("/api/user/<username>/overview")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
@@ -1822,54 +1913,12 @@ def get_user_overview_api(username):
     sort  = request.args.get("sort", "new")
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
-
-    if after.startswith("arc:"):
-        try:
-            items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
-            return cached_json({"items": items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
-    if after:
-        params["after"] = after
     try:
-        resp = reddit_get(
-            f"https://www.reddit.com/user/{username}/overview.json",
-            params=params, timeout=10)
-        if resp.status_code in (403, 404):
-            try:
-                items, next_after = _fetch_archived_overview(username)
-                if items:
-                    return cached_json({"items": items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived overview fallback failed for %s: %s", username, e)
-            return jsonify({"error": "User not found or profile is private"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing = resp.json()["data"]
-        items = []
-        for child in listing["children"]:
-            kind = child.get("kind")
-            d    = child.get("data", {})
-            if kind == "t3":
-                try:
-                    items.append({"type": "post", "data": process_post(d)})
-                except Exception as e:
-                    log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
-            elif kind == "t1":
-                items.append({"type": "comment", "data": _normalize_comment(d)})
-        hydrate_linked_posts([i["data"] for i in items if i["type"] == "post"])
-        if not items and not after:
-            try:
-                arc_items, next_after = _fetch_archived_overview(username)
-                if arc_items:
-                    return cached_json({"items": arc_items, "after": next_after, "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived overview fallback failed for %s: %s", username, e)
-        return cached_json({"items": items, "after": listing.get("after")}, CACHE_TTL_FEED)
+        data, err = _fetch_user_overview(username, sort, t, after)
+        if err:
+            msg, status = err
+            return jsonify({"error": msg}), status
+        return cached_json(data, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
