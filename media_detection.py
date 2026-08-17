@@ -115,6 +115,16 @@ def process_post(p):
             hls_url   = clean_url(rvp.get("hls_url"))
             is_video  = True
 
+    # Reddit also mirrors redgifs videos (video-only, no audio) — keep it as a fallback
+    # in case the redgifs video has since been deleted/taken down upstream.
+    redgifs_fallback_url = None
+    redgifs_fallback_hls = None
+    if redgifs_id:
+        rvp = (p.get("preview") or {}).get("reddit_video_preview")
+        if rvp and rvp.get("fallback_url"):
+            redgifs_fallback_url = clean_url(rvp["fallback_url"])
+            redgifs_fallback_hls = clean_url(rvp.get("hls_url"))
+
     # Audio track for v.redd.it videos (fallback_url is video-only; audio lives at DASH_audio.mp4)
     audio_url = None
     if video_url and 'v.redd.it' in video_url:
@@ -239,6 +249,8 @@ def process_post(p):
         "streamable_id":  streamable_id,
         "embed_url":      embed_url,
         "redgifs_id":     redgifs_id,
+        "redgifs_fallback_url": redgifs_fallback_url,
+        "redgifs_fallback_hls": redgifs_fallback_hls,
         "gif_url":        gif_url,
         "gif_is_video":   gif_is_video,
         "imgur_album_id": imgur_album_id,
