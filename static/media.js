@@ -220,7 +220,16 @@ export async function initRedgifs(container) {
       } catch { data = null; }
     }
     if (!data || (!data.hd && !data.sd)) {
-      wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
+      const fbHls = wrap.dataset.fbHls, fbSrc = wrap.dataset.fbSrc;
+      if (fbHls || fbSrc) {
+        wrap.dataset.hls = fbHls || '';
+        wrap.dataset.src = fbSrc || '';
+        wrap.innerHTML = `<div class="rg-fallback-badge" title="Original video was removed from RedGifs — playing Reddit's mirrored copy, which has no audio">fallback · no audio</div><video controls preload="metadata" playsinline muted></video>`;
+        setupHls(wrap.querySelector('video'), fbHls, fbSrc, null);
+        _trackVideoMute(wrap.querySelector('video'));
+      } else {
+        wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
+      }
       return;
     }
     const videoSrc = data.hd || data.sd;
@@ -438,7 +447,7 @@ export function mediaHtml(p, full = false) {
   } else if (p.tiktok_id) {
     html = `<div class="${vc} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   } else if (p.redgifs_id) {
-    html = `<div class="${vc} redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}"><div class="rg-loading"></div></div>`;
+    html = `<div class="${vc} redgifs-wrap" data-rgid="${escHtml(p.redgifs_id)}" data-fb-hls="${escHtml(p.redgifs_fallback_hls||'')}" data-fb-src="${escHtml(p.redgifs_fallback_url||'')}"><div class="rg-loading"></div></div>`;
   } else if (p.imgur_album_id) {
     html = `<div class="${vc} imgur-album-wrap" data-iaid="${escHtml(p.imgur_album_id)}"><div class="rg-loading"></div></div>`;
   } else if (p.streamable_id) {

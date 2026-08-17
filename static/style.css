@@ -564,6 +564,12 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .rg-loading { width:100%; aspect-ratio:16/9; background:var(--bg2); display:flex; align-items:center; justify-content:center; color:var(--tx3); font-size:.85em; }
 .rg-loading::after { content:'Loading…'; }
 .rg-error { padding:12px; color:var(--tx3); font-size:.85em; text-align:center; }
+.rg-fallback-badge {
+  position:absolute; top:8px; left:8px; z-index:10;
+  background:rgba(0,0,0,.65); color:#e0e0e0; border-radius:4px;
+  padding:3px 8px; font-size:11px; font-family:var(--mono); line-height:1.6;
+  pointer-events:none;
+}
 
 /* ── Devvit (Interactive App) cards ──────────────────────────────────────── */
 .devvit-card { position:relative; width:100%; aspect-ratio:16/9; background:var(--bg2); border-radius:6px; overflow:hidden; display:flex; align-items:flex-end; }
