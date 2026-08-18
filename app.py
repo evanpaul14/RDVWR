@@ -2177,7 +2177,9 @@ def get_devvit_embed():
         return jsonify({'error': 'Invalid URL'}), 400
     cached = _devvit_cache.get(permalink)
     if cached and time.time() - cached[0] < DEVVIT_CACHE_TTL:
-        return cached_json(cached[1], 3600)
+        resp = make_response(jsonify(cached[1]))
+        resp.headers['Cache-Control'] = 'private, no-store'
+        return resp
     try:
         device = _get_device()
         hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
@@ -2207,7 +2209,9 @@ def get_devvit_embed():
         if len(_devvit_cache) >= DEVVIT_CACHE_MAX:
             _devvit_cache.pop(next(iter(_devvit_cache)))
         _devvit_cache[permalink] = (time.time(), result)
-        return cached_json(result, 3600)
+        resp = make_response(jsonify(result))
+        resp.headers['Cache-Control'] = 'private, no-store'
+        return resp
     except Exception as e:
         log.error('devvit embed error url=%s: %s', permalink, e)
         return jsonify({'embedded': False}), 200
