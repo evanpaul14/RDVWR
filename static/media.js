@@ -528,7 +528,7 @@ document.addEventListener('click', e => {
   if (!permalink) return;
   btn.disabled = true;
   btn.textContent = 'Loading…';
-  fetch(`/api/devvit?url=${encodeURIComponent(permalink)}`)
+  fetch(`/api/devvit?url=${encodeURIComponent(permalink)}`, { cache: 'no-store' })
     .then(r => r.json())
     .then(d => {
       if (!d.embedded || !d.url) {
