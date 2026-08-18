@@ -19,7 +19,7 @@ from flask import Flask, render_template, jsonify, request, Response, make_respo
 from flask_compress import Compress
 from bs4 import BeautifulSoup
 from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE
-from reddit_client import reddit_get, SESSION, HEADERS, _get_device
+from reddit_client import reddit_get, SESSION, HEADERS, _get_device, recent_user_agent
 from curl_cffi import requests as cffi_requests
 
 CACHE_TTL_STATIC     = 604800   # 1 week
@@ -2178,7 +2178,8 @@ def get_devvit_embed():
         return cached_json(_devvit_cache[permalink], 3600)
     try:
         device = _get_device()
-        hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8'}
+        hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                'User-Agent': recent_user_agent()}
         r = cffi_requests.get(permalink, impersonate=device.impersonate,
                               headers=hdrs, timeout=20, allow_redirects=True)
         m = re.search(r'<devvit2-surface[^>]+\binit="([^"]+)"', r.text, re.I)
