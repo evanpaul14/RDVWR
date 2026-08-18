@@ -308,6 +308,21 @@ class _OAuthDevice:
         self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
 
 
+def recent_user_agent():
+    """A User-Agent from a recent Android app build.
+
+    Reddit gates some server-rendered features (e.g. Devvit2 webview
+    entrypoints) behind a minimum client version and silently falls back to
+    an "app unavailable" placeholder for older ones. The identity pool spans
+    back to 2022 for general request diversity, which is too old for those
+    checks, so use this instead of device.user_agent for requests that need
+    a current client.
+    """
+    app_ver   = random.choice(_ANDROID_APP_VERSIONS[:8])
+    android_v = random.randint(9, 14)
+    return f"Reddit/{app_ver}/Android {android_v}"
+
+
 def _refresh_device(device: _OAuthDevice):
     device.reset_identity()
     log.info("token refresh: device_id=%s ua=%s", device.device_id, device.user_agent)
