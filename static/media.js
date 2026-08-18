@@ -430,7 +430,7 @@ export function mediaHtml(p, full = false) {
       <div class="devvit-overlay">
         <span class="devvit-badge"><svg width="14" height="14" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 10h6M10 7v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Interactive App</span>
         <div class="devvit-btns">
-          <button class="devvit-try-btn" title="Load the app in this page">Try App</button>
+          <button class="devvit-try-btn" title="Try the interactive app">Try App</button>
           <a class="devvit-open-btn" href="${href}" target="_blank" rel="noopener noreferrer">Open on Reddit ↗</a>
         </div>
       </div>
@@ -533,6 +533,16 @@ document.addEventListener('click', e => {
     .then(d => {
       if (!d.embedded || !d.url) {
         btn.textContent = 'Not available';
+        return;
+      }
+      // Devvit webviews send frame-ancestors allowing only reddit.com and
+      // localhost/127.0.0.1 (dev/loopback testing) — anywhere else, inline
+      // iframing is blocked by the browser, so fall back to a new tab.
+      const isLoopback = ['localhost', '127.0.0.1'].includes(location.hostname);
+      if (!isLoopback) {
+        window.open(d.url, '_blank', 'noopener');
+        btn.disabled = false;
+        btn.textContent = 'Try App';
         return;
       }
       const height = Math.max(300, Math.min(d.height || 512, 800));
