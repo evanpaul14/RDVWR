@@ -535,19 +535,26 @@ document.addEventListener('click', e => {
         btn.textContent = 'Not available';
         return;
       }
+      // Without a parent Reddit page doing the postMessage handshake, the
+      // Devvit SDK falls back to reading its render context (post id, poll
+      // state, signed auth token) from the URL hash — forward what the
+      // server already extracted so the app renders instead of erroring.
+      const url = d.bridge && Object.keys(d.bridge).length
+        ? `${d.url}#${encodeURIComponent(JSON.stringify(d.bridge))}`
+        : d.url;
       // Devvit webviews send frame-ancestors allowing only reddit.com and
       // localhost/127.0.0.1 (dev/loopback testing) — anywhere else, inline
       // iframing is blocked by the browser, so fall back to a new tab.
       const isLoopback = ['localhost', '127.0.0.1'].includes(location.hostname);
       if (!isLoopback) {
-        window.open(d.url, '_blank', 'noopener');
+        window.open(url, '_blank', 'noopener');
         btn.disabled = false;
         btn.textContent = 'Try App';
         return;
       }
       const height = Math.max(300, Math.min(d.height || 512, 800));
       const iframe = document.createElement('iframe');
-      iframe.src = d.url;
+      iframe.src = url;
       iframe.className = 'devvit-iframe';
       iframe.style.height = `${height}px`;
       iframe.allow = 'autoplay; clipboard-write';

@@ -2167,15 +2167,17 @@ def get_og_image():
 _DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')
 _devvit_cache: dict = {}
 DEVVIT_CACHE_MAX = 200
+DEVVIT_CACHE_TTL = 3600  # the embedded signedRequestContext JWT is only valid ~24h; keep this well under that
 
 @app.route("/api/devvit")
 def get_devvit_embed():
-    """Fetch the Devvit webview entrypoint URL for a custom post."""
+    """Fetch the Devvit webview entrypoint URL (and bridge context) for a custom post."""
     permalink = request.args.get('url', '').strip()
     if not permalink or not _DEVVIT_URL_RE.match(permalink):
         return jsonify({'error': 'Invalid URL'}), 400
-    if permalink in _devvit_cache:
-        return cached_json(_devvit_cache[permalink], 3600)
+    cached = _devvit_cache.get(permalink)
+    if cached and time.time() - cached[0] < DEVVIT_CACHE_TTL:
+        return cached_json(cached[1], 3600)
     try:
         device = _get_device()
         hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
@@ -2188,14 +2190,23 @@ def get_devvit_embed():
         else:
             init = json.loads(html_lib.unescape(m.group(1)))
             entry = init.get('entrypointUrl', '')
-            if not entry or 'devvit.net' not in entry:
+            if not entry or 'devvit.net' not in entry or '/faceplant/' in entry:
                 result = {'embedded': False}
             else:
                 height = (init.get('postStyles') or {}).get('heightPixels', 512)
-                result = {'embedded': True, 'url': entry, 'height': int(height)}
+                # The Devvit webview SDK reads its render context (post id, subreddit,
+                # signed auth token, poll/app state) from a JSON blob in the URL hash
+                # when there's no parent-frame postMessage handshake to supply it —
+                # forward what Reddit already embedded in the page so the app renders
+                # instead of failing with "Invalid poll payload. Open a valid trial post."
+                bridge = {k: init[k] for k in (
+                    'signedRequestContext', 'postData', 'webViewClientData',
+                    'viewMode', 'appPermissionState',
+                ) if init.get(k) is not None}
+                result = {'embedded': True, 'url': entry, 'height': int(height), 'bridge': bridge}
         if len(_devvit_cache) >= DEVVIT_CACHE_MAX:
             _devvit_cache.pop(next(iter(_devvit_cache)))
-        _devvit_cache[permalink] = result
+        _devvit_cache[permalink] = (time.time(), result)
         return cached_json(result, 3600)
     except Exception as e:
         log.error('devvit embed error url=%s: %s', permalink, e)
