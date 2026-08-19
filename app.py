@@ -1228,26 +1228,31 @@ def get_home():
                         txt = child.get_text(separator=' ', strip=True)
                         if txt and len(txt) < 300:
                             current_label = txt
-                # Batch-fetch gallery data for gallery posts where HTML parsing found no images
-                missing = [(i, p['id']) for i, p in enumerate(posts)
-                           if p['post_hint'] == 'gallery' and not p['gallery']]
-                if missing:
-                    ids_str = ','.join(f't3_{pid}' for _, pid in missing)
+                # Batch-fetch gallery data + flair (not present in shreddit's HTML) via the JSON API
+                if posts:
+                    ids_str = ','.join(f't3_{p["id"]}' for p in posts)
                     try:
                         gi = reddit_get('https://www.reddit.com/api/info.json',
                                         params={'id': ids_str, 'raw_json': 1}, timeout=8)
                         if gi.ok:
                             by_id = {c['data']['id']: c['data']
                                      for c in gi.json()['data']['children']}
-                            for i, pid in missing:
-                                if pid in by_id:
-                                    full = process_post(by_id[pid])
-                                    if full.get('gallery'):
-                                        posts[i]['gallery'] = full['gallery']
-                                        if full.get('preview_img'):
-                                            posts[i]['preview_img'] = full['preview_img']
+                            for post in posts:
+                                d = by_id.get(post['id'])
+                                if not d:
+                                    continue
+                                full = process_post(d)
+                                post['flair'] = full['flair']
+                                post['flair_richtext'] = full['flair_richtext']
+                                post['flair_type'] = full['flair_type']
+                                post['flair_bg'] = full['flair_bg']
+                                post['flair_tc'] = full['flair_tc']
+                                if post['post_hint'] == 'gallery' and not post['gallery'] and full.get('gallery'):
+                                    post['gallery'] = full['gallery']
+                                    if full.get('preview_img'):
+                                        post['preview_img'] = full['preview_img']
                     except Exception as ge:
-                        log.warning("gallery batch-fetch failed: %s", ge)
+                        log.warning("home-feed flair/gallery batch-fetch failed: %s", ge)
                 hydrate_linked_posts(posts)
                 next_after = None
                 next_partial = soup.find('faceplate-partial', id='feed-next-page-partial')
