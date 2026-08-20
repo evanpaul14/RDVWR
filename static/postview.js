@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit } from './utils.js';
-import { initMedia, initGifVideos, mediaHtmlFull } from './media.js';
+import { initMedia, initGifVideos, initGifImages, mediaHtmlFull } from './media.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
@@ -368,6 +368,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
 
     initMedia(pvContent);
     initGifVideos(pvContent);
+    initGifImages(pvContent);
     initCommentAvatars(pvContent, data.avatar_prefetch);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
@@ -384,6 +385,7 @@ export async function stepViewFullThread() {
     area.innerHTML = buildCommentsHtml(state._pvData, state._pvCommentId);
     initMedia(area);
     initGifVideos(area);
+    initGifImages(area);
     initCommentAvatars(area, state._pvData.avatar_prefetch);
   } else {
     state._pvShowingContext = false;
@@ -410,6 +412,7 @@ export async function loadMoreComments(btn) {
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
     initMedia(wrap.parentElement);
+    initGifImages(wrap.parentElement);
     initCommentAvatars(wrap.parentElement, data.avatar_prefetch);
     wrap.remove();
   } catch {
