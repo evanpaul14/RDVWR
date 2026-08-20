@@ -746,7 +746,7 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
-    <label class="settings-row"><span class="settings-label">Show profile pictures <span class="settings-hint">(fetches an extra request per commenter)</span></span>${chk('s-show-avatars', settings.showAvatars)}</label>
+    <label class="settings-row"><span class="settings-label">Show profile pictures</span>${chk('s-show-avatars', settings.showAvatars)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
