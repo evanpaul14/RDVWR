@@ -69,6 +69,25 @@ const COMMENT_SORTS = [
   {value:'qa',            label:'Q&A'},
 ];
 
+// ── Comment avatars (opt-in, batch-fetched) ─────────────────────────────────
+export async function loadCommentAvatars(container) {
+  if (!settings.showAvatars || !container) return;
+  const imgs = [...container.querySelectorAll('.comment-avatar[data-author]:not([data-loaded])')];
+  if (!imgs.length) return;
+  imgs.forEach(img => img.dataset.loaded = '1');
+  const names = [...new Set(imgs.map(img => img.dataset.author))].slice(0, 60);
+  try {
+    const res = await fetch(`/api/user/avatars?names=${encodeURIComponent(names.join(','))}`);
+    if (!res.ok) return;
+    const map = await res.json();
+    for (const img of imgs) {
+      const url = map[img.dataset.author];
+      if (url) img.src = url;
+      else img.remove();
+    }
+  } catch {}
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 function findComment(comments, id) {
   for (const c of comments) {
@@ -196,6 +215,7 @@ export async function changeCommentSort(sort) {
     const data = await res.json();
     state._pvData = data;
     area.innerHTML = buildCommentsHtml(data, state._pvCommentId);
+    loadCommentAvatars(area);
   } catch {
     area.innerHTML = errState('Network error', 'comments');
   }
@@ -290,6 +310,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
 
     initMedia(pvContent);
     initGifVideos(pvContent);
+    loadCommentAvatars(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
   } catch {
@@ -305,6 +326,7 @@ export async function stepViewFullThread() {
     area.innerHTML = buildCommentsHtml(state._pvData, state._pvCommentId);
     initMedia(area);
     initGifVideos(area);
+    loadCommentAvatars(area);
   } else {
     state._pvShowingContext = false;
     state._pvCommentId = '';
@@ -330,6 +352,7 @@ export async function loadMoreComments(btn) {
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
     initMedia(wrap.parentElement);
+    loadCommentAvatars(wrap.parentElement);
     wrap.remove();
   } catch {
     btn.textContent = 'Failed to load';

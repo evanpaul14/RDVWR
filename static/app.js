@@ -18,7 +18,7 @@ import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js'
 import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, searchTypeBar, SEARCH_SORT_BTN_HTML } from './search.js';
 import { loadWikiPage } from './wiki.js';
 import { loadLiveThread, loadMoreLiveUpdates, cancelLivePoll } from './live.js';
-import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments, stepViewFullThread } from './postview.js';
+import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments, stepViewFullThread, loadCommentAvatars } from './postview.js';
 import { closeSidebar, toggleSidebar, toggleUserSidebar } from './sidebar.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -746,6 +746,7 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
+    <label class="settings-row"><span class="settings-label">Show profile pictures <span class="settings-hint">(fetches an extra request per commenter)</span></span>${chk('s-show-avatars', settings.showAvatars)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
@@ -806,6 +807,11 @@ function bindSettingEvents() {
     settings.pagination = e.target.checked;
     if (!e.target.checked) sentinel.innerHTML = '';
     saveSettings();
+  });
+  settingsBody.querySelector('#s-show-avatars').addEventListener('change', e => {
+    settings.showAvatars = e.target.checked;
+    saveSettings();
+    if (settings.showAvatars) loadCommentAvatars(document.getElementById('pv-content'));
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
