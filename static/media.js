@@ -134,6 +134,28 @@ const _gifObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
+// Animated <img> gifs (giphy embeds in comments) have no play/pause API and decode
+// every frame forever once loaded, even off-screen — a thread with many gif reactions
+// tanks scroll performance. Drop the src when scrolled away and restore it on return.
+const _imgGifObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const img = entry.target;
+    if (entry.isIntersecting) {
+      if (!img.src && img.dataset.gifSrc) img.src = img.dataset.gifSrc;
+    } else if (img.src) {
+      img.dataset.gifSrc = img.src;
+      img.removeAttribute('src');
+    }
+  });
+}, { rootMargin: '200px' });
+
+export function initGifImages(container) {
+  container.querySelectorAll('img.gif-anim-img:not([data-gif-img-obs])').forEach(img => {
+    img.dataset.gifImgObs = '1';
+    _imgGifObserver.observe(img);
+  });
+}
+
 // Resolved URL cache shared across feed and postview — keyed by redgifs ID.
 // Feed's batch fetch populates it; postview hits it instantly for the same IDs.
 // Capped so a long scrolling session doesn't grow this unbounded.
@@ -166,17 +188,39 @@ export function initGifVideos(container) {
   });
 }
 
+function _buildHlsWrap(wrap) {
+  if (wrap.dataset.hlsInit) return;
+  wrap.dataset.hlsInit = '1';
+  const v = wrap.querySelector('video');
+  if (v) {
+    setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
+    if (wrap.dataset.poster) {
+      const img = new Image();
+      img.onload = () => { v.poster = wrap.dataset.poster; };
+      img.src = wrap.dataset.poster;
+    }
+  }
+}
+
+// Reddit-video gif reactions embedded in comment markdown (.md-video-embed) are
+// built lazily like redgifs below — a gif-heavy thread can have many of these, and
+// eagerly attaching hls.js to every one fires a manifest fetch per embed on mount.
+const _hlsBuildObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      _hlsBuildObserver.unobserve(entry.target);
+      _buildHlsWrap(entry.target);
+    }
+  });
+}, { rootMargin: '300px' });
+
 export function initVideos(container) {
-  container.querySelectorAll('[data-hls]:not([data-hls-init])').forEach(wrap => {
-    const v = wrap.querySelector('video');
-    if (v) {
-      setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
-      if (wrap.dataset.poster) {
-        const img = new Image();
-        img.onload = () => { v.poster = wrap.dataset.poster; };
-        img.src = wrap.dataset.poster;
-      }
-      wrap.dataset.hlsInit = '1';
+  container.querySelectorAll('[data-hls]:not([data-hls-init]):not([data-hls-obs])').forEach(wrap => {
+    if (wrap.classList.contains('md-video-embed')) {
+      wrap.dataset.hlsObs = '1';
+      _hlsBuildObserver.observe(wrap);
+    } else {
+      _buildHlsWrap(wrap);
     }
   });
   container.querySelectorAll('video').forEach(_trackVideoMute);
@@ -186,73 +230,91 @@ export function observeRedgifsPrefetch(container) {
   container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-prefetch])').forEach(w => {
     w.dataset.rgPrefetch = '1';
     _rgPrefetchObserver.observe(w);
+    _rgBuildObserver.observe(w);
   });
 }
 
-export async function initRedgifs(container) {
-  const wraps = [...container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-init])')];
-  if (!wraps.length) return;
-  wraps.forEach(w => {
-    w.dataset.rgInit = '1';
-    _rgPrefetchObserver.unobserve(w);
-  });
-  const ids = wraps.map(w => w.dataset.rgid);
-  const coldIds = ids.filter(id => !_rgCache.has(id));
-  let batchData = {};
-  if (coldIds.length) {
-    try {
-      const res = await fetch(`/api/redgifs/batch?ids=${coldIds.join(',')}`);
-      if (res.ok) {
-        batchData = await res.json();
-        Object.entries(batchData).forEach(([id, data]) => _rgCacheSet(id, data));
-      }
-    } catch {}
+async function _buildRedgifsWrap(wrap) {
+  const id = wrap.dataset.rgid;
+  let data = _rgCache.get(id);
+  if (!data) { _prefetchRedgifs(id); data = _rgCache.get(id); }
+  data = (await data) ?? null;
+  if (!data || (!data.hd && !data.sd)) {
+    const fbHls = wrap.dataset.fbHls, fbSrc = wrap.dataset.fbSrc;
+    if (fbHls || fbSrc) {
+      wrap.dataset.hls = fbHls || '';
+      wrap.dataset.src = fbSrc || '';
+      wrap.innerHTML = `<div class="rg-fallback-badge" title="Original video was removed from RedGifs — playing Reddit's mirrored copy, which has no audio">fallback · no audio</div><video controls preload="metadata" playsinline muted></video>`;
+      setupHls(wrap.querySelector('video'), fbHls, fbSrc, null);
+      _trackVideoMute(wrap.querySelector('video'));
+    } else {
+      wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
+    }
+    return;
   }
-  await Promise.all(wraps.map(async wrap => {
-    const id = wrap.dataset.rgid;
-    let data = batchData[id] ?? await _rgCache.get(id) ?? null;
-    if (!data) {
-      try {
-        const res = await fetch(`/api/redgifs/${id}`);
-        data = res.ok ? await res.json() : null;
-        if (data) _rgCacheSet(id, data);
-      } catch { data = null; }
-    }
-    if (!data || (!data.hd && !data.sd)) {
-      const fbHls = wrap.dataset.fbHls, fbSrc = wrap.dataset.fbSrc;
-      if (fbHls || fbSrc) {
-        wrap.dataset.hls = fbHls || '';
-        wrap.dataset.src = fbSrc || '';
-        wrap.innerHTML = `<div class="rg-fallback-badge" title="Original video was removed from RedGifs — playing Reddit's mirrored copy, which has no audio">fallback · no audio</div><video controls preload="metadata" playsinline muted></video>`;
-        setupHls(wrap.querySelector('video'), fbHls, fbSrc, null);
-        _trackVideoMute(wrap.querySelector('video'));
-      } else {
-        wrap.innerHTML = `<div class="rg-error">Could not load video</div>`;
-      }
-      return;
-    }
-    const videoSrc = data.hd || data.sd;
-    const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
-    wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
-    _trackVideoMute(wrap.querySelector('video'));
-    // Activate the pv-meta placeholder if present
-    const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
-    if (placeholder) {
-      const a = document.createElement('a');
-      a.className = 'share-btn';
-      a.href = videoSrc;
-      a.download = rgFname;
-      a.title = 'Download video';
-      a.innerHTML = `${_DL_ICON} download`;
-      placeholder.replaceWith(a);
-    }
-  }));
+  const videoSrc = data.hd || data.sd;
+  const rgFname = videoSrc.split('/').pop().split('?')[0] || 'video.mp4';
+  wrap.innerHTML = `<video controls playsinline preload="metadata" muted src="${escHtml(videoSrc)}"></video>`;
+  _trackVideoMute(wrap.querySelector('video'));
+  // Activate the pv-meta placeholder if present
+  const placeholder = document.querySelector(`[data-rg-dl="${CSS.escape(id)}"]`);
+  if (placeholder) {
+    const a = document.createElement('a');
+    a.className = 'share-btn';
+    a.href = videoSrc;
+    a.download = rgFname;
+    a.title = 'Download video';
+    a.innerHTML = `${_DL_ICON} download`;
+    placeholder.replaceWith(a);
+  }
 }
+
+// Batches wraps that become near-visible within the same tick into one call to
+// /api/redgifs/batch (e.g. a page of feed cards all mounting at once), while wraps
+// that only reach the viewport later via scrolling are built individually against
+// the (likely already-prefetched) per-id cache. Building only fires near the
+// viewport instead of for the whole container up front — a comment thread with
+// dozens of gif replies no longer creates a <video> for every single one on load.
+let _rgBuildQueue = [];
+let _rgBuildScheduled = false;
+function _flushRgBuildQueue() {
+  const wraps = _rgBuildQueue;
+  _rgBuildQueue = [];
+  _rgBuildScheduled = false;
+  (async () => {
+    const coldIds = [...new Set(wraps.map(w => w.dataset.rgid).filter(id => !_rgCache.has(id)))];
+    if (coldIds.length > 1) {
+      try {
+        const res = await fetch(`/api/redgifs/batch?ids=${coldIds.join(',')}`);
+        if (res.ok) {
+          const batchData = await res.json();
+          Object.entries(batchData).forEach(([id, data]) => _rgCacheSet(id, data));
+        }
+      } catch {}
+    }
+    wraps.forEach(_buildRedgifsWrap);
+  })();
+}
+
+const _rgBuildObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const wrap = entry.target;
+    if (wrap.dataset.rgInit) return;
+    wrap.dataset.rgInit = '1';
+    _rgBuildObserver.unobserve(wrap);
+    _rgPrefetchObserver.unobserve(wrap);
+    _rgBuildQueue.push(wrap);
+    if (!_rgBuildScheduled) {
+      _rgBuildScheduled = true;
+      setTimeout(_flushRgBuildQueue, 0);
+    }
+  });
+}, { rootMargin: '200px' });
 
 export function initMedia(container) {
   initVideos(container);
   observeRedgifsPrefetch(container);
-  initRedgifs(container);
   initImgurAlbums(container);
   initOgImages(container);
   initOgDescriptions(container);

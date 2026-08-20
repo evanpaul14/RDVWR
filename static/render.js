@@ -32,7 +32,7 @@ function _initMarked() {
   const _img  = r.image.bind(r);
   const _link = r.link.bind(r);
   r.image = (href, title, text) => {
-    if (href?.startsWith('giphy|'))   return `<img src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
+    if (href?.startsWith('giphy|'))   return `<img class="gif-anim-img" src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
     if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
     if (href?.startsWith('redditvid|')) {
       const base = `https://v.redd.it/${href.slice(10)}`;
