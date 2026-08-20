@@ -13,12 +13,15 @@ import uuid
 import threading
 import requests
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse, parse_qs, quote as url_quote, unquote as url_unquote
 from flask import Flask, render_template, jsonify, request, Response, make_response
 from flask_compress import Compress
 from bs4 import BeautifulSoup
-from media_detection import process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE
+from media_detection import (process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id,
+                              YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
+                              proxy_if_reddit_preview, build_reddit_video_urls)
 from reddit_client import reddit_get, SESSION, HEADERS, _get_device, recent_user_agent
 from curl_cffi import requests as cffi_requests
 
@@ -44,6 +47,23 @@ USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
 FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
+
+
+TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
+
+
+def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
+    """Reddit only honors the `t` (time-window) param for certain sorts (top/controversial
+    by default; some endpoints only support it for "top")."""
+    if sort in sorts_with_time and t in TIME_FILTERS:
+        params["t"] = t
+
+
+def parallel(*fns):
+    """Run each zero-arg callable in its own thread and return results in order."""
+    with ThreadPoolExecutor(max_workers=len(fns)) as ex:
+        futures = [ex.submit(fn) for fn in fns]
+        return [f.result() for f in futures]
 
 
 def hydrate_linked_posts(posts):
@@ -81,6 +101,40 @@ def validate_params(**patterns):
             return f(*args, **kwargs)
         return wrapper
     return decorator
+_CACHE_MISS = object()
+
+
+class TTLCache:
+    """Thread-safe in-process cache with a per-entry TTL and a size cap evicted
+    oldest-inserted-first (not true LRU, but keeps memory bounded predictably)."""
+    def __init__(self, max_size):
+        self._max_size = max_size
+        self._lock = threading.Lock()
+        self._data = {}
+
+    def get(self, key):
+        """Returns the cached value, or the _CACHE_MISS sentinel if absent/expired
+        (a cached value can itself legitimately be None, so plain None can't mean "miss")."""
+        with self._lock:
+            hit = self._data.get(key)
+        if hit and hit[0] > time.time():
+            return hit[1]
+        return _CACHE_MISS
+
+    def set(self, key, value, ttl):
+        with self._lock:
+            if len(self._data) >= self._max_size:
+                self._data.pop(next(iter(self._data)))
+            self._data[key] = (time.time() + ttl, value)
+
+    def __len__(self):
+        return len(self._data)
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
@@ -88,8 +142,8 @@ _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 LIVE_ID_RE          = re.compile(r'^[A-Za-z0-9_-]+$')
 OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
 OG_DESC_RE          = re.compile(r'<meta[^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])', re.I)
-_og_cache: dict = {}
-OG_CACHE_MAX = 1000
+_og_cache = TTLCache(1000)
+OG_CACHE_TTL = 365 * 86400  # effectively permanent; entries are evicted by size cap, not expiry
 
 _rg_token     = None
 _rg_token_exp = 0.0
@@ -100,9 +154,7 @@ def cached_json(data, seconds):
     resp.headers['Cache-Control'] = f'public, max-age={seconds}'
     return resp
 
-_view_cache: dict = {}
-_view_cache_lock = threading.Lock()
-VIEW_CACHE_MAX = 1000
+_view_cache = TTLCache(1000)
 
 def server_cache(ttl):
     """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
@@ -112,20 +164,15 @@ def server_cache(ttl):
         @wraps(f)
         def wrapper(*args, **kwargs):
             key = request.full_path
-            now = time.time()
-            with _view_cache_lock:
-                hit = _view_cache.get(key)
-            if hit and hit[0] > now:
-                return cached_json(hit[1], ttl)
+            hit = _view_cache.get(key)
+            if hit is not _CACHE_MISS:
+                return cached_json(hit, ttl)
             resp = f(*args, **kwargs)
             cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
             if isinstance(resp, Response) and resp.status_code == 200 and 'no-store' not in cache_control and 'private' not in cache_control:
                 data = resp.get_json(silent=True)
                 if data is not None:
-                    with _view_cache_lock:
-                        if len(_view_cache) >= VIEW_CACHE_MAX:
-                            _view_cache.pop(next(iter(_view_cache)))
-                        _view_cache[key] = (now + ttl, data)
+                    _view_cache.set(key, data, ttl)
             return resp
         return wrapper
     return decorator
@@ -187,14 +234,11 @@ def _parse_shreddit_crosspost(el):
         base = m.group(1) if m else None
         if base:
             is_video = True
-            hls_url = base + '/HLSPlaylist.m3u8'
-            video_url = base + '/DASH_480.mp4'
-            audio_url = base + '/DASH_audio.mp4'
+            urls = build_reddit_video_urls(base)
+            hls_url, video_url, audio_url = urls['hls_url'], urls['video_url'], urls['audio_url']
         poster = player.get('poster', '') or ''
         if poster:
-            h = urlparse(poster).hostname or ''
-            preview_img = (f'/api/img?url={url_quote(poster, safe="")}'
-                           if h in ('preview.redd.it', 'external-preview.redd.it') else poster)
+            preview_img = proxy_if_reddit_preview(poster)
     else:
         seen = set()
         for img in container.find_all('img'):
@@ -205,7 +249,7 @@ def _parse_shreddit_crosspost(el):
             if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
                 continue
             seen.add(src)
-            proxied = f'/api/img?url={url_quote(src, safe="")}' if h != 'i.redd.it' else src
+            proxied = proxy_if_reddit_preview(src)
             if img.has_attr('data-post-media-primary') or not gallery:
                 gallery.append({'url': proxied, 'width': 0, 'height': 0, 'caption': ''})
         if len(gallery) == 1:
@@ -277,20 +321,14 @@ def _parse_shreddit_post(el):
 
     preview_img = None
     if post_type == 'image' and content_href:
-        h = urlparse(content_href).hostname or ''
-        if h in ('preview.redd.it', 'external-preview.redd.it'):
-            preview_img = f'/api/img?url={url_quote(content_href, safe="")}'
-        else:
-            preview_img = content_href
+        preview_img = proxy_if_reddit_preview(content_href)
 
     if not preview_img and post_type == 'link':
         thumb_div = el.find('div', {'slot': 'thumbnail'})
         thumb_img = thumb_div.find('img') if thumb_div else None
         thumb_src = thumb_img.get('src', '') if thumb_img else ''
         if thumb_src:
-            h = urlparse(thumb_src).hostname or ''
-            preview_img = (f'/api/img?url={url_quote(thumb_src, safe="")}'
-                           if h in ('preview.redd.it', 'external-preview.redd.it') else thumb_src)
+            preview_img = proxy_if_reddit_preview(thumb_src)
 
     is_gallery_url = content_href and '/gallery/' in content_href
     gallery = []
@@ -305,7 +343,7 @@ def _parse_shreddit_post(el):
             if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
                 continue
             seen.add(src)
-            proxied = f'/api/img?url={url_quote(src, safe="")}' if h != 'i.redd.it' else src
+            proxied = proxy_if_reddit_preview(src)
             fig = img.find_parent('figure')
             cap_el = fig.find('figcaption') if fig else None
             try: w = int(img.get('width', 0) or 0)
@@ -323,9 +361,9 @@ def _parse_shreddit_post(el):
         m = VREDDDIT_RE.match(content_href)
         base = m.group(1) if m else None
         if base:
-            video_url = content_href if '/DASH_' in content_href else base + '/DASH_480.mp4'
-            hls_url = base + '/HLSPlaylist.m3u8'
-            audio_url = base + '/DASH_audio.mp4'
+            urls = build_reddit_video_urls(base)
+            video_url = content_href if '/DASH_' in content_href else urls['video_url']
+            hls_url, audio_url = urls['hls_url'], urls['audio_url']
 
     redgifs_id = extract_redgifs_id(url)
     yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
@@ -574,7 +612,6 @@ GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-pre
 @app.route("/api/download/gallery")
 def download_gallery():
     import io, zipfile
-    from concurrent.futures import ThreadPoolExecutor
 
     urls_param = request.args.get('urls', '').strip()
     _raw = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))
@@ -916,8 +953,6 @@ def spa(**kwargs):
 
 def _try_inject_profile(username):
     """Fetch a user's about + overview in parallel for SSR injection."""
-    from concurrent.futures import ThreadPoolExecutor
-
     def _about():
         try:
             data, err = _fetch_user_about(username, timeout=6)
@@ -934,10 +969,7 @@ def _try_inject_profile(username):
             log.warning("inject profile overview user=%s: %s", username, e)
             return None
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_about    = ex.submit(_about)
-        f_overview = ex.submit(_overview)
-        about, overview = f_about.result(), f_overview.result()
+    about, overview = parallel(_about, _overview)
     if overview is None:
         return None
     overview["_username"] = username.lower()
@@ -948,14 +980,11 @@ def _try_inject_profile(username):
 def _try_inject_subreddit(sub, sort, time):
     """Fetch subreddit feed + about in parallel for SSR injection.
     Returns (feed_dict, about_dict); either may be None on error."""
-    from concurrent.futures import ThreadPoolExecutor
-
     def _feed():
         try:
             url = f"https://www.reddit.com/r/{sub}/{sort}.json"
             params = {"limit": FEED_LIMIT, "raw_json": 1}
-            if sort in ("top", "controversial") and time in ("hour", "day", "week", "month", "year", "all"):
-                params["t"] = time
+            add_time_param(params, sort, time)
             r = reddit_get(url, params=params, timeout=6)
             if r.status_code != 200:
                 return None
@@ -982,10 +1011,7 @@ def _try_inject_subreddit(sub, sort, time):
             log.warning("inject about sub=%s: %s", sub, e)
             return None
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_feed  = ex.submit(_feed)
-        f_about = ex.submit(_about)
-        return f_feed.result(), f_about.result()
+    return parallel(_feed, _about)
 
 
 @app.route("/r/<path:reddit_path>")
@@ -1084,6 +1110,13 @@ def _subreddit_error_state(resp):
     return "error", f"Reddit returned {resp.status_code}"
 
 
+def _subreddit_error_response(resp):
+    """Classify a non-200 subreddit response into a jsonify (body, status) tuple."""
+    state, message = _subreddit_error_state(resp)
+    status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
+    return jsonify({"error": message, "state": state}), status
+
+
 def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
     """Quarantined subreddit listings are blocked for anonymous sessions even after
     opt-in. Fall back: paginate the comments feed (accessible) to collect post IDs,
@@ -1138,16 +1171,13 @@ def get_posts(subreddit):
     quarantine_opt_in = request.args.get("quarantine_opt_in", "")
     url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
+    add_time_param(params, sort, t)
     if after:
         params["after"] = after
     try:
         resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=10)
         if resp.status_code != 200:
-            state, message = _subreddit_error_state(resp)
-            status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
-            return jsonify({"error": message, "state": state}), status
+            return _subreddit_error_response(resp)
         listing = resp.json()["data"]
         posts   = extract_posts(listing)
         fallback_after = None
@@ -1177,8 +1207,7 @@ def get_home():
         nav_id = str(uuid.uuid4())
         params = {"sort": shreddit_sort, "distance": 4, "adDistance": 2,
                   "navigationSessionId": nav_id, "referer": "www.reddit.com"}
-        if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
-            params["t"] = t
+        add_time_param(params, sort, t)
         if after:
             params["after"] = after
             params["cursor"] = after
@@ -1273,8 +1302,7 @@ def get_home():
     # Fallback: anonymous JSON API
     url    = f"https://www.reddit.com/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
+    add_time_param(params, sort, t)
     if after:
         params["after"] = after
     try:
@@ -1300,9 +1328,7 @@ def get_about(subreddit):
             f"https://www.reddit.com/r/{subreddit}/about.json",
             params={"raw_json": 1}, timeout=10)
         if resp.status_code != 200:
-            state, message = _subreddit_error_state(resp)
-            status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
-            return jsonify({"error": message, "state": state}), status
+            return _subreddit_error_response(resp)
         d      = resp.json()["data"]
         icon   = clean_url(d.get("icon_img") or d.get("community_icon") or "")
         active = d.get("active_user_count") or d.get("accounts_active") or 0
@@ -1499,14 +1525,12 @@ def _fetch_user_icons_batch(pairs):
     calls in testing (1.04s -> 0.19s for 48 commenters), verified to return
     identical icon URLs. Falls back to nothing (caller retries per-user) for
     any author whose fullname is missing or absent from the batch response."""
-    now = time.time()
     result = {}
     to_fetch = {}  # fullname -> author
     for author, fullname in pairs:
-        with _avatar_cache_lock:
-            hit = _avatar_cache.get(author)
-        if hit and hit[0] > now:
-            result[author] = hit[1]
+        hit = _avatar_cache.get(author)
+        if hit is not _CACHE_MISS:
+            result[author] = hit
         elif fullname:
             to_fetch[fullname] = author
     fullnames = list(to_fetch.keys())
@@ -1518,14 +1542,11 @@ def _fetch_user_icons_batch(pairs):
             data = resp.json() if resp.status_code == 200 else {}
         except Exception:
             data = {}
-        with _avatar_cache_lock:
-            for fullname in chunk:
-                author = to_fetch[fullname]
-                icon = clean_url((data.get(fullname) or {}).get("profile_img") or "") or None
-                result[author] = icon
-                if len(_avatar_cache) >= AVATAR_CACHE_MAX:
-                    _avatar_cache.pop(next(iter(_avatar_cache)))
-                _avatar_cache[author] = (now + AVATAR_CACHE_TTL, icon)
+        for fullname in chunk:
+            author = to_fetch[fullname]
+            icon = clean_url((data.get(fullname) or {}).get("profile_img") or "") or None
+            result[author] = icon
+            _avatar_cache.set(author, icon, AVATAR_CACHE_TTL)
     return result
 
 
@@ -1553,7 +1574,6 @@ def _embed_comment_avatars(comments, fullname_map=None):
     unbatchable = [a for a in embed_authors if not fullname_map.get(a)]
     icon_map = _fetch_user_icons_batch(batchable) if batchable else {}
     if unbatchable:
-        from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=8) as ex:
             futures = {ex.submit(_fetch_user_icon, a): a for a in unbatchable}
             for fut in futures:
@@ -1601,7 +1621,6 @@ def get_user_avatars():
     unbatchable = [a for a, f in pairs if not f]
     result = _fetch_user_icons_batch(batchable) if batchable else {}
     if unbatchable:
-        from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=8) as ex:
             futures = {ex.submit(_fetch_user_icon, n): n for n in unbatchable}
             for fut in futures:
@@ -1782,28 +1801,29 @@ def _backfill_comment_titles(comments):
         log.warning("archived comment link_title backfill failed: %s", e)
 
 
-def _fetch_archived_posts(username, limit, before=None):
+def _arctic_fetch(path, mapper, username, limit, before=None):
+    """Shared Arctic Shift archive fetch: builds the author/sort/limit/before params,
+    GETs `path`, and maps each raw item through `mapper` (skipping ones that raise)."""
     params = {"author": username, "sort": "desc", "limit": limit}
     if before:
         params["before"] = before
-    resp = arctic_shift_get("/posts/search", params)
+    resp = arctic_shift_get(path, params)
     resp.raise_for_status()
-    posts = []
+    items = []
     for d in resp.json().get("data", []):
         try:
-            posts.append(process_post(d))
+            items.append(mapper(d))
         except Exception as e:
-            log.warning("archived process_post failed id=%s: %s", d.get("id"), e)
-    return posts
+            log.warning("archived fetch mapper failed id=%s: %s", d.get("id"), e)
+    return items
+
+
+def _fetch_archived_posts(username, limit, before=None):
+    return _arctic_fetch("/posts/search", process_post, username, limit, before)
 
 
 def _fetch_archived_comments(username, limit, before=None):
-    params = {"author": username, "sort": "desc", "limit": limit}
-    if before:
-        params["before"] = before
-    resp = arctic_shift_get("/comments/search", params)
-    resp.raise_for_status()
-    comments = [_normalize_comment(d) for d in resp.json().get("data", [])]
+    comments = _arctic_fetch("/comments/search", _normalize_comment, username, limit, before)
     _backfill_comment_titles(comments)
     return comments
 
@@ -1844,17 +1864,13 @@ def get_posts_live_info():
         return jsonify({})
 
 
-_avatar_cache: dict = {}
-_avatar_cache_lock = threading.Lock()
+_avatar_cache = TTLCache(5000)
 AVATAR_CACHE_TTL = 6 * 3600
-AVATAR_CACHE_MAX = 5000
 
 def _fetch_user_icon(username):
-    now = time.time()
-    with _avatar_cache_lock:
-        hit = _avatar_cache.get(username)
-    if hit and hit[0] > now:
-        return hit[1]
+    hit = _avatar_cache.get(username)
+    if hit is not _CACHE_MISS:
+        return hit
     icon = None
     try:
         resp = reddit_get(f"https://www.reddit.com/user/{username}/about.json",
@@ -1864,10 +1880,7 @@ def _fetch_user_icon(username):
             icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or None
     except Exception:
         icon = None
-    with _avatar_cache_lock:
-        if len(_avatar_cache) >= AVATAR_CACHE_MAX:
-            _avatar_cache.pop(next(iter(_avatar_cache)))
-        _avatar_cache[username] = (now + AVATAR_CACHE_TTL, icon)
+    _avatar_cache.set(username, icon, AVATAR_CACHE_TTL)
     return icon
 
 
@@ -1942,108 +1955,95 @@ def get_user_trophies(username):
         return jsonify({"trophies": []})
 
 
-@app.route("/api/user/<username>/posts")
-@validate_params(username=USERNAME_RE)
-@server_cache(CACHE_TTL_FEED)
-def get_user_posts_api(username):
-    sort   = request.args.get("sort", "new")
-    t      = request.args.get("t", "")
-    after  = request.args.get("after", "")
-
+def _fetch_listing_with_archive(username, after, item_key, do_live_request, parse_live_items,
+                                 fetch_archived, hydrate=False):
+    """Shared control flow for /user/<u>/posts and /user/<u>/comments: serve from
+    Reddit's live listing, transparently falling back to the Arctic Shift archive
+    on 403/404 or an empty result (both usually mean a suspended/shadowbanned/
+    deleted account whose data only survives in the archive)."""
     if after.startswith("arc:"):
         try:
-            posts = _fetch_archived_posts(username, FEED_LIMIT, before=int(after[4:]))
-            hydrate_linked_posts(posts)
-            return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
+            items = fetch_archived(FEED_LIMIT, before=int(after[4:]))
+            if hydrate:
+                hydrate_linked_posts(items)
+            return cached_json({item_key: items, "after": _arc_cursor(items, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
-    if after:
-        params["after"] = after
     try:
-        resp = reddit_get(
-            f"https://www.reddit.com/user/{username}/submitted.json",
-            params=params, timeout=10)
+        resp = do_live_request()
         if resp.status_code in (403, 404):
             try:
-                posts = _fetch_archived_posts(username, FEED_LIMIT)
-                if posts:
-                    hydrate_linked_posts(posts)
-                    return cached_json({"posts": posts, "after": _arc_cursor(posts, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
+                items = fetch_archived(FEED_LIMIT)
+                if items:
+                    if hydrate:
+                        hydrate_linked_posts(items)
+                    return cached_json({item_key: items, "after": _arc_cursor(items, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
-                log.warning("archived posts fallback failed for %s: %s", username, e)
+                log.warning("archived %s fallback failed for %s: %s", item_key, username, e)
             return jsonify({"error": "User not found or profile is private"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
         listing = resp.json()["data"]
-        posts   = extract_posts(listing)
-        if not posts and not after:
+        items   = parse_live_items(listing)
+        if not items and not after:
             try:
-                archived = _fetch_archived_posts(username, FEED_LIMIT)
+                archived = fetch_archived(FEED_LIMIT)
                 if archived:
-                    hydrate_linked_posts(archived)
-                    return cached_json({"posts": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
+                    if hydrate:
+                        hydrate_linked_posts(archived)
+                    return cached_json({item_key: archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
             except Exception as e:
-                log.warning("archived posts fallback failed for %s: %s", username, e)
-        hydrate_linked_posts(posts)
-        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
+                log.warning("archived %s fallback failed for %s: %s", item_key, username, e)
+        if hydrate:
+            hydrate_linked_posts(items)
+        return cached_json({item_key: items, "after": listing.get("after")}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/user/<username>/posts")
+@validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_FEED)
+def get_user_posts_api(username):
+    sort  = request.args.get("sort", "new")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
+    add_time_param(params, sort, t, sorts_with_time=("top",))
+    if after:
+        params["after"] = after
+    return _fetch_listing_with_archive(
+        username, after, "posts",
+        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/submitted.json",
+                                            params=params, timeout=10),
+        parse_live_items=extract_posts,
+        fetch_archived=lambda limit, before=None: _fetch_archived_posts(username, limit, before=before),
+        hydrate=True,
+    )
 
 
 @app.route("/api/user/<username>/comments")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_comments_api(username):
-    sort   = request.args.get("sort", "new")
-    t      = request.args.get("t", "")
-    after  = request.args.get("after", "")
-
-    if after.startswith("arc:"):
-        try:
-            comments = _fetch_archived_comments(username, FEED_LIMIT, before=int(after[4:]))
-            return cached_json({"comments": comments, "after": _arc_cursor(comments, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
+    sort  = request.args.get("sort", "new")
+    t     = request.args.get("t", "")
+    after = request.args.get("after", "")
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
+    add_time_param(params, sort, t, sorts_with_time=("top",))
     if after:
         params["after"] = after
-    try:
-        resp = reddit_get(
-            f"https://www.reddit.com/user/{username}/comments.json",
-            params=params, timeout=10)
-        if resp.status_code in (403, 404):
-            try:
-                comments = _fetch_archived_comments(username, FEED_LIMIT)
-                if comments:
-                    return cached_json({"comments": comments, "after": _arc_cursor(comments, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived comments fallback failed for %s: %s", username, e)
-            return jsonify({"error": "User not found or profile is private"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing  = resp.json()["data"]
-        comments = []
-        for c in listing["children"]:
-            if c.get("kind") != "t1":
-                continue
-            comments.append(_normalize_comment(c["data"]))
-        if not comments and not after:
-            try:
-                archived = _fetch_archived_comments(username, FEED_LIMIT)
-                if archived:
-                    return cached_json({"comments": archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived comments fallback failed for %s: %s", username, e)
-        return cached_json({"comments": comments, "after": listing.get("after")}, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+    def parse_comments(listing):
+        return [_normalize_comment(c["data"]) for c in listing["children"] if c.get("kind") == "t1"]
+
+    return _fetch_listing_with_archive(
+        username, after, "comments",
+        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/comments.json",
+                                            params=params, timeout=10),
+        parse_live_items=parse_comments,
+        fetch_archived=lambda limit, before=None: _fetch_archived_comments(username, limit, before=before),
+    )
 
 
 def _fetch_archived_overview(username, before=None):
@@ -2074,8 +2074,7 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow
         return {"items": items, "after": next_after, "archived": True}, None
 
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    if sort == "top" and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
+    add_time_param(params, sort, t, sorts_with_time=("top",))
     if after:
         params["after"] = after
     resp = reddit_get(
@@ -2170,8 +2169,7 @@ def get_multireddit(username, multiname):
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    if sort in ("top", "controversial") and t in ("hour", "day", "week", "month", "year", "all"):
-        params["t"] = t
+    add_time_param(params, sort, t)
     if after:
         params["after"] = after
     try:
@@ -2224,16 +2222,11 @@ def get_live_thread(thread_id):
     if not LIVE_ID_RE.match(thread_id):
         return jsonify({"error": "Invalid thread ID"}), 400
     try:
-        from concurrent.futures import ThreadPoolExecutor
         def _fetch_info():
             return reddit_get(f"https://www.reddit.com/live/{thread_id}.json", params={"raw_json": 1}, timeout=10)
         def _fetch_updates():
             return reddit_get(f"https://www.reddit.com/live/{thread_id}/updates.json", params={"raw_json": 1, "limit": 25}, timeout=10)
-        with ThreadPoolExecutor(max_workers=2) as ex:
-            f_info = ex.submit(_fetch_info)
-            f_upd  = ex.submit(_fetch_updates)
-            info_resp = f_info.result()
-            upd_resp  = f_upd.result()
+        info_resp, upd_resp = parallel(_fetch_info, _fetch_updates)
         if info_resp.status_code == 404:
             return jsonify({"error": "Live thread not found"}), 404
         if info_resp.status_code != 200:
@@ -2331,8 +2324,9 @@ def get_og_image():
     resolved_ip = _resolve_ssrf_safe(hostname)
     if not resolved_ip:
         return jsonify({"error": "URL not allowed"}), 403
-    if url in _og_cache:
-        return cached_json(_og_cache[url], 3600)
+    cached = _og_cache.get(url)
+    if cached is not _CACHE_MISS:
+        return cached_json(cached, 3600)
     # For HTTP, connect directly to the resolved IP to prevent DNS rebinding TOCTOU.
     # For HTTPS, SSL certificate validation prevents rebinding (cert won't match a spoofed IP).
     if parsed.scheme == "http":
@@ -2353,21 +2347,17 @@ def get_og_image():
         d = OG_DESC_RE.search(text)
         desc = html_lib.unescape(d.group(1) or d.group(2)).strip() if d else None
         result = {"url": img_url, "description": desc or None}
-        if len(_og_cache) >= OG_CACHE_MAX:
-            for k in list(_og_cache)[:OG_CACHE_MAX // 5]:
-                del _og_cache[k]
-        _og_cache[url] = result
+        _og_cache.set(url, result, OG_CACHE_TTL)
         return cached_json(result, 3600)
     except Exception as e:
         log.warning("get_og_image failed url=%s: %s", url, e)
         result = {"url": None, "description": None}
-        _og_cache[url] = result
+        _og_cache.set(url, result, OG_CACHE_TTL)
         return cached_json(result, 60)
 
 
 _DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')
-_devvit_cache: dict = {}
-DEVVIT_CACHE_MAX = 200
+_devvit_cache = TTLCache(200)
 DEVVIT_CACHE_TTL = 3600  # the embedded signedRequestContext JWT is only valid ~24h; keep this well under that
 
 @app.route("/api/devvit")
@@ -2377,8 +2367,8 @@ def get_devvit_embed():
     if not permalink or not _DEVVIT_URL_RE.match(permalink):
         return jsonify({'error': 'Invalid URL'}), 400
     cached = _devvit_cache.get(permalink)
-    if cached and time.time() - cached[0] < DEVVIT_CACHE_TTL:
-        resp = make_response(jsonify(cached[1]))
+    if cached is not _CACHE_MISS:
+        resp = make_response(jsonify(cached))
         resp.headers['Cache-Control'] = 'private, no-store'
         return resp
     try:
@@ -2407,9 +2397,7 @@ def get_devvit_embed():
                     'viewMode', 'appPermissionState',
                 ) if init.get(k) is not None}
                 result = {'embedded': True, 'url': entry, 'height': int(height), 'bridge': bridge}
-        if len(_devvit_cache) >= DEVVIT_CACHE_MAX:
-            _devvit_cache.pop(next(iter(_devvit_cache)))
-        _devvit_cache[permalink] = (time.time(), result)
+        _devvit_cache.set(permalink, result, DEVVIT_CACHE_TTL)
         resp = make_response(jsonify(result))
         resp.headers['Cache-Control'] = 'private, no-store'
         return resp
