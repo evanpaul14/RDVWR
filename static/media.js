@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, setMutePref } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, evictMap, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
@@ -9,8 +9,7 @@ function _trackVideoMute(v) {
   v.addEventListener('volumechange', () => {
     const nowMuted = v.muted || v.volume === 0;
     if (nowMuted !== state.userPrefersMuted) {
-      state.userPrefersMuted = nowMuted;
-      localStorage.setItem('mutePreference', nowMuted ? 'muted' : 'unmuted');
+      setMutePref(nowMuted);
       document.querySelectorAll('video[data-mute-tracked]').forEach(other => {
         if (other !== v) other.muted = nowMuted;
       });

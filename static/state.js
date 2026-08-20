@@ -1,3 +1,8 @@
+export function setMutePref(muted) {
+  state.userPrefersMuted = muted;
+  localStorage.setItem('mutePreference', muted ? 'muted' : 'unmuted');
+}
+
 export const state = {
   userPrefersMuted: localStorage.getItem('mutePreference') !== 'unmuted',
 
