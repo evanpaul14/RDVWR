@@ -128,6 +128,9 @@ function _prefetchAvatars(pairs) {
 }
 
 function initCommentAvatars(container, avatarPrefetch) {
+  // Fire the fast fullname-batched prefetch first so it claims those authors'
+  // pending slots before the slow per-name fallback below sees them.
+  if (avatarPrefetch && Object.keys(avatarPrefetch).length) _prefetchAvatars(avatarPrefetch);
   container?.querySelectorAll('.comment-avatar-lazy').forEach(img => {
     const author = img.dataset.author;
     const cached = _avatarIconCache.get(author);
@@ -141,7 +144,6 @@ function initCommentAvatars(container, avatarPrefetch) {
     _avatarQueue.add(author);
   });
   if (_avatarQueue.size && !_avatarTimer) _avatarTimer = setTimeout(_flushAvatarQueue, 80);
-  if (avatarPrefetch && Object.keys(avatarPrefetch).length) _prefetchAvatars(avatarPrefetch);
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
