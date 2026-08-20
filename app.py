@@ -1454,7 +1454,50 @@ def get_duplicates(subreddit, post_id):
 
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
-def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence', timeout=12):
+def _collect_comment_authors(comments, authors):
+    for c in comments:
+        if c.get("kind") == "more":
+            continue
+        author = c.get("author")
+        if author and author != "[deleted]":
+            authors.add(author)
+        if c.get("replies"):
+            _collect_comment_authors(c["replies"], authors)
+
+
+def _apply_comment_avatars(comments, icon_map):
+    for c in comments:
+        if c.get("kind") == "more":
+            continue
+        c["author_icon"] = icon_map.get(c.get("author")) or None
+        if c.get("replies"):
+            _apply_comment_avatars(c["replies"], icon_map)
+
+
+def _embed_comment_avatars(comments):
+    """Batch-resolve + embed each commenter's profile picture directly on the
+    comment dicts, mirroring how flair already ships inline in the payload —
+    keeps avatars appearing with the rest of the comment instead of a jarring
+    pop-in after a separate client round trip."""
+    authors = set()
+    _collect_comment_authors(comments, authors)
+    if not authors:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+    icon_map = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_fetch_user_icon, a): a for a in authors}
+        for fut in futures:
+            try:
+                icon = fut.result()
+            except Exception:
+                icon = None
+            if icon:
+                icon_map[futures[fut]] = icon
+    _apply_comment_avatars(comments, icon_map)
+
+
+def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
     """Fetch + parse a post's comments. Returns (data_dict, None) or (None, (error_msg, status))."""
     if sort not in COMMENT_SORTS:
         sort = 'confidence'
@@ -1503,8 +1546,10 @@ def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence',
         comment["replies"] = replies
         return comment
 
-    comments = [parse_comment(c) for c in data[1]["data"]["children"]]
-    return {"post": post, "comments": [c for c in comments if c]}, None
+    comments = [c for c in (parse_comment(c) for c in data[1]["data"]["children"]) if c]
+    if with_avatars:
+        _embed_comment_avatars(comments)
+    return {"post": post, "comments": comments}, None
 
 
 @app.route("/api/r/<subreddit>/comments/<post_id>")
@@ -1514,7 +1559,8 @@ def get_comments(subreddit, post_id):
     try:
         comment_id = request.args.get('comment')
         sort = request.args.get('sort', 'confidence')
-        data, err = _fetch_comments_data(subreddit, post_id, comment_id, sort)
+        with_avatars = request.args.get('avatars') == '1'
+        data, err = _fetch_comments_data(subreddit, post_id, comment_id, sort, with_avatars=with_avatars)
         if err:
             msg, status = err
             return jsonify({"error": msg}), status
@@ -1529,6 +1575,7 @@ def get_comments(subreddit, post_id):
 def get_morechildren(subreddit, post_id):
     children = request.args.get("children", "")
     sort     = request.args.get("sort", "confidence")
+    with_avatars = request.args.get("avatars") == "1"
     if sort not in COMMENT_SORTS:
         sort = "confidence"
     if not children:
@@ -1561,6 +1608,8 @@ def get_morechildren(subreddit, post_id):
                     parent["replies"].append(c)
                     continue
             roots.append(c)
+        if with_avatars:
+            _embed_comment_avatars(roots)
         return cached_json({"comments": roots}, CACHE_TTL_FEED)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1700,36 +1749,6 @@ def _fetch_user_icon(username):
             _avatar_cache.pop(next(iter(_avatar_cache)))
         _avatar_cache[username] = (now + AVATAR_CACHE_TTL, icon)
     return icon
-
-
-@app.route("/api/user/avatars")
-def get_user_avatars():
-    """Batch-fetch profile picture URLs for comment authors. Opt-in (settings.showAvatars),
-    since it's one Reddit request per uncached username."""
-    raw = request.args.get("names", "")
-    seen = set()
-    names = []
-    for n in raw.split(","):
-        n = n.strip()
-        if n and n not in seen and n != "[deleted]" and USERNAME_RE.match(n):
-            seen.add(n)
-            names.append(n)
-    names = names[:60]
-    if not names:
-        return jsonify({})
-    from concurrent.futures import ThreadPoolExecutor
-    result = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        futures = {ex.submit(_fetch_user_icon, n): n for n in names}
-        for fut in futures:
-            icon = None
-            try:
-                icon = fut.result()
-            except Exception:
-                pass
-            if icon:
-                result[futures[fut]] = icon
-    return cached_json(result, 3600)
 
 
 def _fetch_user_about(username, timeout=10):

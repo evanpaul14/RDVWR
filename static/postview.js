@@ -69,25 +69,6 @@ const COMMENT_SORTS = [
   {value:'qa',            label:'Q&A'},
 ];
 
-// ── Comment avatars (opt-in, batch-fetched) ─────────────────────────────────
-export async function loadCommentAvatars(container) {
-  if (!settings.showAvatars || !container) return;
-  const imgs = [...container.querySelectorAll('.comment-avatar[data-author]:not([data-loaded])')];
-  if (!imgs.length) return;
-  imgs.forEach(img => img.dataset.loaded = '1');
-  const names = [...new Set(imgs.map(img => img.dataset.author))].slice(0, 60);
-  try {
-    const res = await fetch(`/api/user/avatars?names=${encodeURIComponent(names.join(','))}`);
-    if (!res.ok) return;
-    const map = await res.json();
-    for (const img of imgs) {
-      const url = map[img.dataset.author];
-      if (url) img.src = url;
-      else img.remove();
-    }
-  } catch {}
-}
-
 // ── Private helpers ───────────────────────────────────────────────────────────
 function findComment(comments, id) {
   for (const c of comments) {
@@ -209,13 +190,12 @@ export async function changeCommentSort(sort) {
   if (!area) return;
   area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   try {
-    const apiUrl = `/api/r/${encodeURIComponent(state._pvSub)}/comments/${encodeURIComponent(state._pvPostId)}?sort=${sort}${state._pvCommentId ? `&comment=${encodeURIComponent(state._pvCommentId)}` : ''}`;
+    const apiUrl = `/api/r/${encodeURIComponent(state._pvSub)}/comments/${encodeURIComponent(state._pvPostId)}?sort=${sort}${settings.showAvatars ? '&avatars=1' : ''}${state._pvCommentId ? `&comment=${encodeURIComponent(state._pvCommentId)}` : ''}`;
     const res  = await fetch(apiUrl);
     if (!res.ok) { area.innerHTML = errState('Failed to load comments', 'comments'); return; }
     const data = await res.json();
     state._pvData = data;
     area.innerHTML = buildCommentsHtml(data, state._pvCommentId);
-    loadCommentAvatars(area);
   } catch {
     area.innerHTML = errState('Network error', 'comments');
   }
@@ -239,7 +219,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       window.__INITIAL_POST__ = null;
       data = inj;
     } else {
-      const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
+      const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (settings.showAvatars ? '&avatars=1' : '') + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
       const res  = await fetch(apiUrl);
       const resData = await res.json();
       if (!res.ok) { pvContent.innerHTML = errState(escHtml(resData.error||'Failed to load'), 'post'); return; }
@@ -310,7 +290,6 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
 
     initMedia(pvContent);
     initGifVideos(pvContent);
-    loadCommentAvatars(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
   } catch {
@@ -326,7 +305,6 @@ export async function stepViewFullThread() {
     area.innerHTML = buildCommentsHtml(state._pvData, state._pvCommentId);
     initMedia(area);
     initGifVideos(area);
-    loadCommentAvatars(area);
   } else {
     state._pvShowingContext = false;
     state._pvCommentId = '';
@@ -344,7 +322,7 @@ export async function loadMoreComments(btn) {
   btn.disabled = true;
   btn.textContent = 'Loading…';
   try {
-    const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${state.currentCommentSort}`;
+    const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${state.currentCommentSort}${settings.showAvatars ? '&avatars=1' : ''}`;
     const res  = await fetch(url);
     const data = await res.json();
     if (!res.ok) { btn.textContent = 'Failed to load'; btn.disabled = false; return; }
@@ -352,7 +330,6 @@ export async function loadMoreComments(btn) {
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
     initMedia(wrap.parentElement);
-    loadCommentAvatars(wrap.parentElement);
     wrap.remove();
   } catch {
     btn.textContent = 'Failed to load';
