@@ -1489,9 +1489,15 @@ AVATAR_PREFETCH_LIMIT = 200  # further commenters whose name:fullname pairs ship
 # EMBED+PREFETCH fall back to the old per-scroll fetch for the remainder.
 AVATAR_BATCH_CHUNK = 200  # server->Reddit chunk size for _fetch_user_icons_batch, same reasoning
 
-def _collect_comment_authors_ordered(comments, seen, ordered):
+THREAD_MAX_DEPTH = 4  # mirrors static/render.js — replies past this depth are collapsed
+                       # behind a "Continue thread" link and never actually rendered, so
+                       # counting their authors would waste embed slots on invisible comments
+
+
+def _collect_comment_authors_ordered(comments, seen, ordered, depth=0):
     """Depth-first, matching render order, so the first N found are the ones
-    actually visible first."""
+    actually visible first. Stops descending past THREAD_MAX_DEPTH since the
+    frontend doesn't render replies beyond that depth either."""
     for c in comments:
         if c.get("kind") == "more":
             continue
@@ -1499,8 +1505,8 @@ def _collect_comment_authors_ordered(comments, seen, ordered):
         if author and author != "[deleted]" and author not in seen:
             seen.add(author)
             ordered.append(author)
-        if c.get("replies"):
-            _collect_comment_authors_ordered(c["replies"], seen, ordered)
+        if c.get("replies") and depth < THREAD_MAX_DEPTH:
+            _collect_comment_authors_ordered(c["replies"], seen, ordered, depth + 1)
 
 
 def _apply_comment_avatars(comments, icon_map, resolved_authors):
