@@ -271,6 +271,10 @@ class _OAuthDevice:
         android_v        = random.randint(9, 14)
         self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
         self.extra        = {}  # loid, session headers from auth response
+        # Reused across requests (thread-local curl handle under the hood) so
+        # repeated calls for this device get TCP/TLS connection keep-alive
+        # instead of a fresh handshake every time.
+        self.session     = cffi_requests.Session()
 
     def needs_refresh(self):
         now = time.time()
@@ -340,7 +344,7 @@ def _refresh_device(device: _OAuthDevice):
 def _cffi_post(url, device, **kwargs):
     """POST via curl_cffi, falling back to requests on TLS errors."""
     try:
-        return cffi_requests.post(url, impersonate=device.impersonate, **kwargs)
+        return device.session.post(url, impersonate=device.impersonate, **kwargs)
     except Exception as e:
         # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
         kwargs.pop("impersonate", None)
@@ -447,7 +451,7 @@ def reddit_get(url, *, quarantine=False, **kwargs):
         device.drift_qos()
         headers = {**device.api_headers(), **extra_headers}
         try:
-            resp = cffi_requests.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
+            resp = device.session.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
         except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
             return SESSION.get(url, headers=headers, **kwargs)
