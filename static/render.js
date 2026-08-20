@@ -460,7 +460,11 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
-        ${!isDeleted && c.author_icon ? `<img class="comment-avatar" src="${escHtml(c.author_icon)}" alt="" loading="lazy">` : ''}
+        ${!isDeleted && settings.showAvatars ? (
+          'author_icon' in c
+            ? (c.author_icon ? `<img class="comment-avatar" src="${escHtml(c.author_icon)}" alt="" loading="lazy">` : '')
+            : `<img class="comment-avatar comment-avatar-lazy" data-author="${escHtml(c.author)}" alt="">`
+        ) : ''}
         <a class="comment-author${isMod?' is-mod':''}" href="/user/${escHtml(c.author)}" data-user="${escHtml(c.author)}" data-nav="/user/${escHtml(c.author)}">${escHtml(c.author)}</a>
         ${isMod      ? '<span class="comment-mod">MOD</span>'        : ''}
         ${isAdmin    ? '<span class="comment-admin">ADMIN</span>'    : ''}
