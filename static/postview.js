@@ -69,6 +69,44 @@ const COMMENT_SORTS = [
   {value:'qa',            label:'Q&A'},
 ];
 
+// ── Lazy comment avatars ─────────────────────────────────────────────────────
+// Server embeds the first AVATAR_EMBED_LIMIT commenters' pictures inline with
+// the comment payload (no pop-in); the rest render as bare placeholders and
+// get batch-fetched here as they scroll into view.
+let _avatarQueue = new Set();
+let _avatarTimer = null;
+
+function _flushAvatarQueue() {
+  const names = [..._avatarQueue];
+  _avatarQueue.clear();
+  _avatarTimer = null;
+  if (!names.length) return;
+  fetch(`/api/user/avatars?names=${encodeURIComponent(names.join(','))}`)
+    .then(res => res.ok ? res.json() : {})
+    .then(map => {
+      document.querySelectorAll('.comment-avatar-lazy').forEach(img => {
+        if (!names.includes(img.dataset.author)) return;
+        const url = map[img.dataset.author];
+        _avatarObserver.unobserve(img);
+        if (url) { img.src = url; img.classList.remove('comment-avatar-lazy'); }
+        else img.remove();
+      });
+    })
+    .catch(() => {});
+}
+
+const _avatarObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    _avatarQueue.add(entry.target.dataset.author);
+    if (!_avatarTimer) _avatarTimer = setTimeout(_flushAvatarQueue, 80);
+  });
+}, { rootMargin: '200px' });
+
+function initCommentAvatars(container) {
+  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => _avatarObserver.observe(img));
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 function findComment(comments, id) {
   for (const c of comments) {
@@ -196,6 +234,7 @@ export async function changeCommentSort(sort) {
     const data = await res.json();
     state._pvData = data;
     area.innerHTML = buildCommentsHtml(data, state._pvCommentId);
+    initCommentAvatars(area);
   } catch {
     area.innerHTML = errState('Network error', 'comments');
   }
@@ -290,6 +329,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
 
     initMedia(pvContent);
     initGifVideos(pvContent);
+    initCommentAvatars(pvContent);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
     translatePost(p, pvContent).catch(() => {});
   } catch {
@@ -305,6 +345,7 @@ export async function stepViewFullThread() {
     area.innerHTML = buildCommentsHtml(state._pvData, state._pvCommentId);
     initMedia(area);
     initGifVideos(area);
+    initCommentAvatars(area);
   } else {
     state._pvShowingContext = false;
     state._pvCommentId = '';
@@ -330,6 +371,7 @@ export async function loadMoreComments(btn) {
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
     initMedia(wrap.parentElement);
+    initCommentAvatars(wrap.parentElement);
     wrap.remove();
   } catch {
     btn.textContent = 'Failed to load';

@@ -1454,39 +1454,55 @@ def get_duplicates(subreddit, post_id):
 
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
-def _collect_comment_authors(comments, authors):
+AVATAR_EMBED_LIMIT = 20  # rest are left unresolved for the client to lazy-load as they scroll into view
+
+def _collect_comment_authors_ordered(comments, seen, ordered):
+    """Depth-first, matching render order, so the first N found are the ones
+    actually visible first."""
     for c in comments:
         if c.get("kind") == "more":
             continue
         author = c.get("author")
-        if author and author != "[deleted]":
-            authors.add(author)
+        if author and author != "[deleted]" and author not in seen:
+            seen.add(author)
+            ordered.append(author)
         if c.get("replies"):
-            _collect_comment_authors(c["replies"], authors)
+            _collect_comment_authors_ordered(c["replies"], seen, ordered)
 
 
-def _apply_comment_avatars(comments, icon_map):
+def _apply_comment_avatars(comments, icon_map, resolved_authors):
+    """Only stamp author_icon on comments whose author was actually resolved
+    (in resolved_authors) — the key is left absent for the rest so the client
+    can tell "no icon" (key present, null) apart from "not fetched yet"
+    (key absent) and lazy-load only the latter."""
     for c in comments:
         if c.get("kind") == "more":
             continue
-        c["author_icon"] = icon_map.get(c.get("author")) or None
+        author = c.get("author")
+        if author in resolved_authors:
+            c["author_icon"] = icon_map.get(author) or None
         if c.get("replies"):
-            _apply_comment_avatars(c["replies"], icon_map)
+            _apply_comment_avatars(c["replies"], icon_map, resolved_authors)
 
 
 def _embed_comment_avatars(comments):
-    """Batch-resolve + embed each commenter's profile picture directly on the
-    comment dicts, mirroring how flair already ships inline in the payload —
-    keeps avatars appearing with the rest of the comment instead of a jarring
-    pop-in after a separate client round trip."""
-    authors = set()
-    _collect_comment_authors(comments, authors)
-    if not authors:
+    """Batch-resolve + embed the first AVATAR_EMBED_LIMIT commenters' profile
+    pictures directly on the comment dicts, mirroring how flair already ships
+    inline in the payload — keeps avatars appearing with the rest of the
+    comment instead of a jarring pop-in after a separate client round trip.
+    Capped so a big thread with hundreds of unique commenters doesn't block
+    the whole response on a wall of uncached Reddit requests; the remainder
+    are fetched lazily client-side via /api/user/avatars as they scroll in."""
+    seen = set()
+    ordered = []
+    _collect_comment_authors_ordered(comments, seen, ordered)
+    if not ordered:
         return
+    embed_authors = ordered[:AVATAR_EMBED_LIMIT]
     from concurrent.futures import ThreadPoolExecutor
     icon_map = {}
     with ThreadPoolExecutor(max_workers=8) as ex:
-        futures = {ex.submit(_fetch_user_icon, a): a for a in authors}
+        futures = {ex.submit(_fetch_user_icon, a): a for a in embed_authors}
         for fut in futures:
             try:
                 icon = fut.result()
@@ -1494,7 +1510,37 @@ def _embed_comment_avatars(comments):
                 icon = None
             if icon:
                 icon_map[futures[fut]] = icon
-    _apply_comment_avatars(comments, icon_map)
+    _apply_comment_avatars(comments, icon_map, set(embed_authors))
+
+
+@app.route("/api/user/avatars")
+def get_user_avatars():
+    """Lazy-load path for commenters beyond AVATAR_EMBED_LIMIT — batch-fetch
+    profile picture URLs as they scroll into view client-side."""
+    raw = request.args.get("names", "")
+    seen = set()
+    names = []
+    for n in raw.split(","):
+        n = n.strip()
+        if n and n not in seen and n != "[deleted]" and USERNAME_RE.match(n):
+            seen.add(n)
+            names.append(n)
+    names = names[:60]
+    if not names:
+        return jsonify({})
+    from concurrent.futures import ThreadPoolExecutor
+    result = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_fetch_user_icon, n): n for n in names}
+        for fut in futures:
+            icon = None
+            try:
+                icon = fut.result()
+            except Exception:
+                pass
+            if icon:
+                result[futures[fut]] = icon
+    return cached_json(result, 3600)
 
 
 def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
