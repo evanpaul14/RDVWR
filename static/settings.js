@@ -40,7 +40,6 @@ export function applySettings() {
   document.body.classList.toggle('nsfw-blur', settings.nsfwBlur);
   document.body.classList.toggle('nsfw-hide', settings.nsfwHide);
   document.body.classList.toggle('pagination-mode', !!settings.pagination);
-  document.body.classList.toggle('show-avatars', !!settings.showAvatars);
   document.body.classList.toggle('compact-mode', settings.layout === 'compact');
   document.body.classList.toggle('minimal-mode', settings.layout === 'minimal');
   document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
