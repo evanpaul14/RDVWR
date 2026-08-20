@@ -1675,6 +1675,63 @@ def get_posts_live_info():
         return jsonify({})
 
 
+_avatar_cache: dict = {}
+_avatar_cache_lock = threading.Lock()
+AVATAR_CACHE_TTL = 6 * 3600
+AVATAR_CACHE_MAX = 5000
+
+def _fetch_user_icon(username):
+    now = time.time()
+    with _avatar_cache_lock:
+        hit = _avatar_cache.get(username)
+    if hit and hit[0] > now:
+        return hit[1]
+    icon = None
+    try:
+        resp = reddit_get(f"https://www.reddit.com/user/{username}/about.json",
+                           params={"raw_json": 1}, timeout=6)
+        if resp.status_code == 200:
+            d = resp.json().get("data", {})
+            icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or None
+    except Exception:
+        icon = None
+    with _avatar_cache_lock:
+        if len(_avatar_cache) >= AVATAR_CACHE_MAX:
+            _avatar_cache.pop(next(iter(_avatar_cache)))
+        _avatar_cache[username] = (now + AVATAR_CACHE_TTL, icon)
+    return icon
+
+
+@app.route("/api/user/avatars")
+def get_user_avatars():
+    """Batch-fetch profile picture URLs for comment authors. Opt-in (settings.showAvatars),
+    since it's one Reddit request per uncached username."""
+    raw = request.args.get("names", "")
+    seen = set()
+    names = []
+    for n in raw.split(","):
+        n = n.strip()
+        if n and n not in seen and n != "[deleted]" and USERNAME_RE.match(n):
+            seen.add(n)
+            names.append(n)
+    names = names[:60]
+    if not names:
+        return jsonify({})
+    from concurrent.futures import ThreadPoolExecutor
+    result = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_fetch_user_icon, n): n for n in names}
+        for fut in futures:
+            icon = None
+            try:
+                icon = fut.result()
+            except Exception:
+                pass
+            if icon:
+                result[futures[fut]] = icon
+    return cached_json(result, 3600)
+
+
 def _fetch_user_about(username, timeout=10):
     """Returns (data_dict, None) or (None, (error_msg, status))."""
     resp = reddit_get(
