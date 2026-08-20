@@ -2311,8 +2311,8 @@ def get_devvit_embed():
         device = _get_device()
         hdrs = {**device.api_headers(), 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
                 'User-Agent': recent_user_agent()}
-        r = cffi_requests.get(permalink, impersonate=device.impersonate,
-                              headers=hdrs, timeout=20, allow_redirects=True)
+        r = device.session.get(permalink, impersonate=device.impersonate,
+                               headers=hdrs, timeout=20, allow_redirects=True)
         m = re.search(r'<devvit2-surface[^>]+\binit="([^"]+)"', r.text, re.I)
         if not m:
             result = {'embedded': False}
