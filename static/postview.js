@@ -79,9 +79,12 @@ const COMMENT_SORTS = [
 // per-request floor that dominates small batches, so batching more into one
 // call is strictly faster than paying that floor multiple times (measured:
 // ~0.22s for 100 users, ~0.64s for 450 in one call vs. 8x ~1s for 48 users
-// done one-by-one). Anyone beyond EMBED+PREFETCH still resolves the old way,
-// batched into the same queue, but fired immediately in the background rather
-// than waiting for the user to scroll them into view.
+// done one-by-one). Anyone beyond EMBED+PREFETCH still resolves the old way —
+// one Reddit request per user — so that fallback stays gated behind
+// IntersectionObserver rather than firing for everyone on thread load: on a
+// large thread (220+ unique commenters) that fallback can mean hundreds of
+// individual per-user requests, and firing them all at once was enough to
+// trip Reddit's rate limiting.
 // A session-wide icon cache also short-circuits repeat commenters across
 // different threads viewed in the same session.
 const _avatarIconCache = new Map();   // author -> url|null, resolved this session
@@ -94,6 +97,7 @@ function _applyAvatarResults(map) {
     const author = img.dataset.author;
     if (!(author in map)) return;
     const url = map[author];
+    _avatarObserver.unobserve(img);
     if (url) { img.src = url; img.classList.remove('comment-avatar-lazy'); }
     else img.remove();
   });
@@ -127,23 +131,37 @@ function _prefetchAvatars(pairs) {
     .catch(() => {});
 }
 
-function initCommentAvatars(container, avatarPrefetch) {
-  // Fire the fast fullname-batched prefetch first so it claims those authors'
-  // pending slots before the slow per-name fallback below sees them.
-  if (avatarPrefetch && Object.keys(avatarPrefetch).length) _prefetchAvatars(avatarPrefetch);
-  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => {
-    const author = img.dataset.author;
-    const cached = _avatarIconCache.get(author);
-    if (cached !== undefined) {
-      if (cached) { img.src = cached; img.classList.remove('comment-avatar-lazy'); }
-      else img.remove();
+const _avatarObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const author = entry.target.dataset.author;
+    if (_avatarIconCache.has(author)) {
+      const url = _avatarIconCache.get(author);
+      _avatarObserver.unobserve(entry.target);
+      if (url) { entry.target.src = url; entry.target.classList.remove('comment-avatar-lazy'); }
+      else entry.target.remove();
       return;
     }
     if (_avatarPending.has(author)) return;
     _avatarPending.add(author);
     _avatarQueue.add(author);
+    if (!_avatarTimer) _avatarTimer = setTimeout(_flushAvatarQueue, 80);
   });
-  if (_avatarQueue.size && !_avatarTimer) _avatarTimer = setTimeout(_flushAvatarQueue, 80);
+}, { rootMargin: '200px' });
+
+function initCommentAvatars(container, avatarPrefetch) {
+  // Fire the fast fullname-batched prefetch first so it claims those authors'
+  // pending slots before the slow per-name fallback below sees them.
+  if (avatarPrefetch && Object.keys(avatarPrefetch).length) _prefetchAvatars(avatarPrefetch);
+  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => {
+    const cached = _avatarIconCache.get(img.dataset.author);
+    if (cached === undefined) return;
+    if (cached) { img.src = cached; img.classList.remove('comment-avatar-lazy'); }
+    else img.remove();
+  });
+  // Anyone left (not resolved by the prefetch map above) falls back to the
+  // slow one-request-per-user path — keep that gated behind scroll-into-view.
+  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => _avatarObserver.observe(img));
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
