@@ -137,14 +137,26 @@ const _gifObserver = new IntersectionObserver((entries) => {
 // Animated <img> gifs (giphy embeds in comments) have no play/pause API and decode
 // every frame forever once loaded, even off-screen — a thread with many gif reactions
 // tanks scroll performance. Drop the src when scrolled away and restore it on return.
+// These <img> tags have no reserved size, so dropping the src collapses them — done
+// on a short delay (cancelled if the gif re-enters view first) so a quick scroll pass
+// doesn't collapse-and-reflow the thread out from under the reader.
+const _imgGifUnloadTimers = new WeakMap();
+const _IMG_GIF_UNLOAD_DELAY = 1500;
 const _imgGifObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     const img = entry.target;
     if (entry.isIntersecting) {
+      const t = _imgGifUnloadTimers.get(img);
+      if (t) { clearTimeout(t); _imgGifUnloadTimers.delete(img); }
       if (!img.src && img.dataset.gifSrc) img.src = img.dataset.gifSrc;
-    } else if (img.src) {
-      img.dataset.gifSrc = img.src;
-      img.removeAttribute('src');
+    } else if (img.src && !_imgGifUnloadTimers.has(img)) {
+      _imgGifUnloadTimers.set(img, setTimeout(() => {
+        _imgGifUnloadTimers.delete(img);
+        if (img.src) {
+          img.dataset.gifSrc = img.src;
+          img.removeAttribute('src');
+        }
+      }, _IMG_GIF_UNLOAD_DELAY));
     }
   });
 }, { rootMargin: '200px' });
