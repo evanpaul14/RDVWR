@@ -78,7 +78,8 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   setMainOpen(_searchUrl);
 
   document.getElementById('ctx-icon-wrap').innerHTML = '';
-  document.getElementById('ctx-title').textContent = sub ? `r/${sub}: "${query}"` : `Search: "${query}"`;
+  const queryLabel = query.startsWith('flair:') ? query : `"${query}"`;
+  document.getElementById('ctx-title').textContent = sub ? `r/${sub}: ${queryLabel}` : `Search: ${queryLabel}`;
   document.getElementById('ctx-stats').innerHTML = `<span>${sort}</span>${time !== 'all' ? ` · <span>${time}</span>` : ''}`;
   ctxInfo.classList.add('visible');
 
