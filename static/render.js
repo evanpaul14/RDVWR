@@ -47,10 +47,13 @@ function _initMarked() {
   };
   r.link = (href, title, text) => {
     const decodedText = text ? text.replace(/&amp;/g, '&') : text;
-    if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && (!decodedText || decodedText === href)) {
+    if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href)) {
       const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
         ? `/api/img?url=${encodeURIComponent(href)}` : href;
-      return `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
+      const img = `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
+      if (decodedText && decodedText !== href)
+        return `<span class="md-img-block">${img}<span class="md-img-caption">${text}</span></span>`;
+      return img;
     }
     const base = _link(href, title, text) || '';
     // Relative links and reddit.com links are intercepted by the SPA router — no _blank
