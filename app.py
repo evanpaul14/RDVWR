@@ -1198,6 +1198,10 @@ def get_home():
     after = request.args.get("after", "")
     if sort not in {"best", "hot", "new", "top", "rising", "controversial"}:
         sort = "best"
+    try:
+        distance = min(max(int(request.args.get("distance", 4)), 4), 500)
+    except ValueError:
+        distance = 4
 
     cookie = request.headers.get("X-Reddit-Cookie", "").strip()
     if cookie:
@@ -1205,7 +1209,7 @@ def get_home():
                          "top": "TOP", "rising": "RISING",
                          "controversial": "CONTROVERSIAL"}.get(sort, "HOT")
         nav_id = str(uuid.uuid4())
-        params = {"sort": shreddit_sort, "distance": 4, "adDistance": 2,
+        params = {"sort": shreddit_sort, "distance": distance, "adDistance": 2,
                   "navigationSessionId": nav_id, "referer": "www.reddit.com"}
         add_time_param(params, sort, t)
         if after:
