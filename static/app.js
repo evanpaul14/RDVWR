@@ -562,7 +562,15 @@ feed.addEventListener('click', e => {
     e.stopPropagation();
     const sub   = flairEl.dataset.sub;
     const flair = flairEl.dataset.flair;
-    if (sub && flair) navigateOrOpen(`/search?q=${encodeURIComponent('flair:"'+flair+'"')}&sub=${encodeURIComponent(sub)}&sort=new`, e);
+    if (sub && flair) {
+      const query = 'flair:"'+flair+'"';
+      const titleHtml = flairEl.outerHTML
+        .replace(' flair-clickable', '')
+        .replace(/ data-flair="[^"]*"/, '')
+        .replace(/ data-sub="[^"]*"/, '');
+      state.searchFlairNav = { query, html: titleHtml };
+      navigateOrOpen(`/search?q=${encodeURIComponent(query)}&sub=${encodeURIComponent(sub)}&sort=new`, e);
+    }
     return;
   }
   const card = e.target.closest('.community-card[data-nav]');

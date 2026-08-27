@@ -44,6 +44,7 @@ export const state = {
   searchType: 'posts',
   communityAfter: null,
   userAfter: null,
+  searchFlairNav: null,
 
   // Duplicates
   duplicatesMode: false,
