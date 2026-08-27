@@ -3,6 +3,7 @@ import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
+import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed        = document.getElementById('feed');
@@ -64,6 +65,20 @@ export function buildHomeSortHtml(sort='best', time='all') {
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '');
 }
 
+const HOME_TARGET_UNSEEN = 20;
+const HOME_MAX_EXTRA_FETCHES = 3;
+
+async function _fetchHomePage(sort, time, after, distance) {
+  let url = `/api/home?sort=${sort}`;
+  if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
+  if (after) url += `&after=${encodeURIComponent(after)}`;
+  if (distance) url += `&distance=${distance}`;
+  const fetchOpts = settings.redditCookies ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
+  const res  = await fetch(url, fetchOpts);
+  const data = await res.json();
+  return { res, data };
+}
+
 export async function loadHomeFeed(sort, time, after=null, append=false) {
   if (append && state.loading) return;
   if (!append) state.feedGen++;
@@ -72,33 +87,54 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
   if (!append) showSkeletons();
   else sentinel.classList.add('loading');
   try {
-    let url = `/api/home?sort=${sort}`;
-    if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
-    if (after) url += `&after=${encodeURIComponent(after)}`;
-    const fetchOpts = settings.redditCookies ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
-    const res  = await fetch(url, fetchOpts);
-    const data = await res.json();
-    if (myGen !== state.feedGen) return;
-    if (!res.ok) {
-      if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
-      return;
+    // On a fresh (non-append) load, resume from the last-known cursor so a
+    // plain refresh pages deeper into Reddit's feed instead of re-fetching
+    // the same first page, then dedupe against posts already shown.
+    let curAfter = after;
+    let curDistance = 4;
+    const cursor = getHomeCursor(sort, time);
+    if (cursor) {
+      curDistance = cursor.distance || 4;
+      if (!append && !after) curAfter = cursor.after;
     }
+
+    let res, data;
+    let collected = [];
+    let fetches = 0;
+    while (true) {
+      ({ res, data } = await _fetchHomePage(sort, time, curAfter, curDistance));
+      if (myGen !== state.feedGen) return;
+      if (!res.ok) {
+        if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
+        return;
+      }
+      const fresh = append ? data.posts : data.posts.filter(p => !isHomeSeen(p.id));
+      collected = collected.concat(fresh);
+      curAfter = data.after;
+      curDistance += 4;
+      fetches++;
+      const enough = append ? true : collected.length >= HOME_TARGET_UNSEEN;
+      if (enough || !curAfter || fetches > HOME_MAX_EXTRA_FETCHES) break;
+    }
+
     if (!append) feed.innerHTML = '';
-    if (!data.posts.length && !append) {
+    if (!collected.length && !append) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
       return;
     }
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
     const tmp = document.createElement('div');
     const parts = [];
-    data.posts.forEach((p, i) => {
+    collected.forEach((p, i) => {
       parts.push(renderPost(p, startIdx + i, true));
     });
     tmp.innerHTML = parts.join('');
     initMedia(tmp);
     while (tmp.firstChild) feed.appendChild(tmp.firstChild);
     initGifVideos(feed);
-    state.afterToken = data.after;
+    markHomeSeen(collected.map(p => p.id));
+    setHomeCursor(sort, time, curAfter, curDistance);
+    state.afterToken = curAfter;
     sentinel.classList.remove('loading');
   } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
   finally  { if (myGen === state.feedGen) state.loading = false; }
