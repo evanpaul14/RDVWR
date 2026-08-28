@@ -1,12 +1,14 @@
-import { state, setMutePref } from './state.js';
+import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, evictMap, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
   v.dataset.muteTracked = '1';
+  v.volume = state.userVolume;
   v.muted = state.userPrefersMuted;
   v.addEventListener('volumechange', () => {
+    if (v.volume !== state.userVolume) setVolumePref(v.volume);
     const nowMuted = v.muted || v.volume === 0;
     if (nowMuted !== state.userPrefersMuted) {
       setMutePref(nowMuted);
@@ -39,6 +41,8 @@ const _DL_ICON = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><p
 export function syncAudio(videoEl, audioSrc) {
   const audio = new Audio(audioSrc);
   audio.preload = 'none';
+  audio.volume = videoEl.volume;
+  audio.muted = videoEl.muted;
   videoEl.addEventListener('play',         () => { audio.currentTime = videoEl.currentTime; audio.play().catch(()=>{}); });
   videoEl.addEventListener('pause',        () => audio.pause());
   videoEl.addEventListener('seeked',       () => { audio.currentTime = videoEl.currentTime; });
