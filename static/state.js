@@ -3,8 +3,17 @@ export function setMutePref(muted) {
   localStorage.setItem('mutePreference', muted ? 'muted' : 'unmuted');
 }
 
+export function setVolumePref(vol) {
+  state.userVolume = vol;
+  localStorage.setItem('volumePreference', String(vol));
+}
+
 export const state = {
   userPrefersMuted: localStorage.getItem('mutePreference') !== 'unmuted',
+  userVolume: (() => {
+    const v = parseFloat(localStorage.getItem('volumePreference'));
+    return isFinite(v) && v >= 0 && v <= 1 ? v : 1;
+  })(),
 
   // Feed
   currentSub: '',
