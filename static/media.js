@@ -8,7 +8,12 @@ function _trackVideoMute(v) {
   v.volume = state.userVolume;
   v.muted = state.userPrefersMuted;
   v.addEventListener('volumechange', () => {
-    if (v.volume !== state.userVolume) setVolumePref(v.volume);
+    if (v.volume !== state.userVolume) {
+      setVolumePref(v.volume);
+      document.querySelectorAll('video[data-mute-tracked]').forEach(other => {
+        if (other !== v) other.volume = v.volume;
+      });
+    }
     const nowMuted = v.muted || v.volume === 0;
     if (nowMuted !== state.userPrefersMuted) {
       setMutePref(nowMuted);
