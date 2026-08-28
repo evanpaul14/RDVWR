@@ -1,4 +1,4 @@
-import { state, setMutePref } from './state.js';
+import { state, setMutePref, setVolumePref } from './state.js';
 
 // Track AbortControllers keyed by wrap element so we can abort document-level
 // listeners when the player element is removed from the DOM.
@@ -96,7 +96,8 @@ export function initCustomPlayer(videoEl) {
   videoEl.addEventListener('ended', setPlayIcon);
 
   // Volume + mute
-  let _lastVol = videoEl.volume || 1;
+  let _lastVol = state.userVolume || 1;
+  videoEl.volume = _lastVol;
 
   function syncVol() {
     const muted = videoEl.muted || videoEl.volume === 0;
@@ -139,6 +140,7 @@ export function initCustomPlayer(videoEl) {
       videoEl.muted = false;
       videoEl.volume = v;
       _lastVol = v;
+      setVolumePref(v);
       if (wasM) propagateUnmute();
     }
     syncVol();
