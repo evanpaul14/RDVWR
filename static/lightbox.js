@@ -1,10 +1,14 @@
-const lightbox    = document.getElementById('lightbox');
-const lightboxImg = document.getElementById('lightbox-img');
+const lightbox        = document.getElementById('lightbox');
+const lightboxImg     = document.getElementById('lightbox-img');
+const lightboxPrev    = document.getElementById('lightbox-prev');
+const lightboxNext    = document.getElementById('lightbox-next');
+const lightboxCounter = document.getElementById('lightbox-counter');
 
 let _lbScale = 1, _lbX = 0, _lbY = 0;
 let _lbDragging = false, _lbDragX = 0, _lbDragY = 0;
 let _lbPinchDist = 0, _lbPinchScale = 1;
 let _lbTouchX = 0, _lbTouchY = 0, _lbTouchInitX = 0, _lbTouchInitY = 0;
+let _lbGallery = null, _lbIndex = 0;
 
 function _lbApply() {
   lightboxImg.style.transform = _lbScale === 1 ? '' : `translate(${_lbX}px,${_lbY}px) scale(${_lbScale})`;
@@ -14,8 +18,27 @@ function _lbReset() {
   _lbScale = 1; _lbX = 0; _lbY = 0; _lbDragging = false;
   lightboxImg.style.transform = ''; lightboxImg.style.cursor = '';
 }
-export function openLightbox(src) {
-  lightboxImg.src = src; _lbReset();
+function _lbShowIndex(i) {
+  _lbIndex = i;
+  lightboxImg.src = _lbGallery[i];
+  lightboxCounter.textContent = `${i + 1} / ${_lbGallery.length}`;
+  lightboxPrev.disabled = i === 0;
+  lightboxNext.disabled = i === _lbGallery.length - 1;
+  _lbReset();
+}
+
+// src can be a single image URL, or an array of URLs for a gallery (with index
+// picking the starting image) — the gallery gets prev/next nav controls.
+export function openLightbox(src, index = 0) {
+  if (Array.isArray(src)) {
+    _lbGallery = src;
+    lightbox.classList.add('gallery-mode');
+    _lbShowIndex(index);
+  } else {
+    _lbGallery = null;
+    lightbox.classList.remove('gallery-mode');
+    lightboxImg.src = src; _lbReset();
+  }
   lightbox.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -23,7 +46,18 @@ export function closeLightbox() {
   lightbox.classList.remove('open');
   document.body.style.overflow = '';
   lightboxImg.src = ''; _lbReset();
+  _lbGallery = null;
 }
+
+function _lbGoPrev(e) { e.stopPropagation(); if (_lbGallery && _lbIndex > 0) _lbShowIndex(_lbIndex - 1); }
+function _lbGoNext(e) { e.stopPropagation(); if (_lbGallery && _lbIndex < _lbGallery.length - 1) _lbShowIndex(_lbIndex + 1); }
+lightboxPrev.addEventListener('click', _lbGoPrev);
+lightboxNext.addEventListener('click', _lbGoNext);
+document.addEventListener('keydown', e => {
+  if (!lightbox.classList.contains('open') || !_lbGallery) return;
+  if (e.key === 'ArrowLeft') _lbGoPrev(e);
+  else if (e.key === 'ArrowRight') _lbGoNext(e);
+});
 
 lightbox.addEventListener('click', () => { if (!_lbDragging) closeLightbox(); });
 lightboxImg.addEventListener('click', e => e.stopPropagation());

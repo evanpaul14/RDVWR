@@ -250,6 +250,12 @@ function _fullImgSrc(m) {
   return m.url || _compactThumbSrc(m);
 }
 
+// Reddit galleries only ever contain static images (see media_detection.py),
+// so any multi-image gallery can open straight into the lightbox too.
+function _galleryUrls(m) {
+  return m.gallery.map(g => g.url);
+}
+
 function _isVReddIt(url) {
   try { return new URL(url).hostname === 'v.redd.it'; } catch { return false; }
 }
@@ -268,6 +274,8 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
     if (_isSingleStaticImage(mediaSrc)) {
       thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`;
+    } else if (mediaSrc.gallery?.length > 1) {
+      thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(mediaSrc.gallery[0].url)}" data-gallery="${escHtml(JSON.stringify(_galleryUrls(mediaSrc)))}">${thumbContent}${galleryBadge}</a>`;
     } else {
       thumbHtml = _compactHasMedia(mediaSrc)
         ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
@@ -306,6 +314,8 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
       thumbHtml = _isSingleStaticImage(mediaSrc)
         ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`
+        : mediaSrc.gallery?.length > 1
+        ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(mediaSrc.gallery[0].url)}" data-gallery="${escHtml(JSON.stringify(_galleryUrls(mediaSrc)))}">${thumbContent}${galleryBadge}</a>`
         : `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
     }
   }

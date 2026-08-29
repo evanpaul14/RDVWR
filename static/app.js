@@ -726,6 +726,9 @@ document.addEventListener('click', e => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   e.stopPropagation();
+  if (thumb.dataset.gallery) {
+    try { openLightbox(JSON.parse(thumb.dataset.gallery), 0); return; } catch {}
+  }
   openLightbox(thumb.dataset.lightbox);
 });
 
