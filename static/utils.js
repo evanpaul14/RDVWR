@@ -65,12 +65,9 @@ export function renderFlair(p, clickable=false) {
   if (p.flair_type === 'richtext' && p.flair_richtext?.length) {
     inner = p.flair_richtext.map(part => {
       if (part.e === 'text')  return escHtml(part.t || '');
-      if (part.e === 'emoji') {
-        const label = (part.a || '').replace(/^:|:$/g, '');
-        return settings.layout === 'minimal' && label ? escHtml(label) : `<img class="flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
-      }
+      if (part.e === 'emoji') return `<img class="flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
       return '';
-    }).join(settings.layout === 'minimal' ? ' ' : '');
+    }).join('');
   } else {
     inner = escHtml(p.flair);
   }
@@ -102,12 +99,9 @@ export function renderAuthorFlair(c) {
   if (hasRichtext) {
     inner = c.author_flair_richtext.map(part => {
       if (part.e === 'text')  return escHtml(part.t || '');
-      if (part.e === 'emoji') {
-        const label = (part.a || '').replace(/^:|:$/g, '');
-        return settings.layout === 'minimal' && label ? escHtml(label) : `<img class="author-flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
-      }
+      if (part.e === 'emoji') return `<img class="author-flair-emoji" src="${escHtml(part.u)}" alt="${escHtml(part.a||'')}" loading="lazy">`;
       return '';
-    }).join(settings.layout === 'minimal' ? ' ' : '');
+    }).join('');
   } else {
     inner = escHtml(c.author_flair_text);
   }
