@@ -661,6 +661,7 @@ document.addEventListener('touchend', e => {
   if (e.target.closest('.spoiler:not(.revealed)')) return;
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank') return;
+  if (a.classList.contains('thumb-lightbox') && a.hasAttribute('data-lightbox')) return;
   if (interceptNavLink(a, e)) _navFromTouch = true;
 }, { passive: false });
 
@@ -672,6 +673,7 @@ document.addEventListener('click', e => {
   if (unrevealedSpoiler) { e.preventDefault(); e.stopPropagation(); unrevealedSpoiler.classList.add('revealed'); return; }
   const a = e.target.closest('a[data-nav], a[href]');
   if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
+  if (a.classList.contains('thumb-lightbox') && a.hasAttribute('data-lightbox')) return;
   interceptNavLink(a, e);
 }, true);
 
