@@ -20,7 +20,7 @@ from flask import Flask, render_template, jsonify, request, Response, make_respo
 from flask_compress import Compress
 from bs4 import BeautifulSoup
 from media_detection import (process_post, extract_posts, clean_url, _parse_awards, extract_redgifs_id,
-                              YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
+                              YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE, GIFV_RE,
                               proxy_if_reddit_preview, build_reddit_video_urls)
 from reddit_client import reddit_get, SESSION, HEADERS, _get_device, recent_user_agent
 from curl_cffi import requests as cffi_requests
@@ -355,19 +355,41 @@ def _parse_shreddit_post(el):
         if gallery and not preview_img:
             preview_img = gallery[0]['url']
 
-    is_video = post_type in ('video', 'gif')
+    is_video = post_type in ('video', 'gif') and bool(content_href) and 'v.redd.it' in content_href
     video_url = hls_url = audio_url = None
-    if is_video and content_href and 'v.redd.it' in content_href:
+    if is_video:
         m = VREDDDIT_RE.match(content_href)
         base = m.group(1) if m else None
         if base:
             urls = build_reddit_video_urls(base)
             video_url = content_href if '/DASH_' in content_href else urls['video_url']
             hls_url, audio_url = urls['hls_url'], urls['audio_url']
+        else:
+            is_video = False
 
     redgifs_id = extract_redgifs_id(url)
     yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
     sm = STREAMABLE_RE.search(url); streamable_id = sm.group(1) if sm else None
+
+    gif_url = None
+    gif_is_video = False
+    if not is_video and not redgifs_id and not youtube_id and not streamable_id:
+        lower_url = url.lower().split('?')[0]
+        if lower_url.endswith('.gif'):
+            gif_url = url
+        elif lower_url.endswith('.gifv'):
+            gif_url = GIFV_RE.sub('.mp4', url)
+            gif_is_video = True
+        elif post_type == 'gif' and content_href:
+            lower_href = content_href.lower().split('?')[0]
+            if lower_href.endswith('.gif'):
+                gif_url = content_href
+            elif lower_href.endswith('.gifv'):
+                gif_url = GIFV_RE.sub('.mp4', content_href)
+                gif_is_video = True
+            else:
+                gif_url = content_href
+                gif_is_video = True
 
     is_devvit = post_type == 'custom'
     devvit_url = (f'https://sh.reddit.com/r/{el.get("subreddit-name", "")}/comments/{post_id}'
@@ -405,7 +427,7 @@ def _parse_shreddit_post(el):
         'hls_url': hls_url, 'audio_url': audio_url,
         'youtube_id': youtube_id, 'tiktok_id': None,
         'streamable_id': streamable_id, 'embed_url': None,
-        'redgifs_id': redgifs_id, 'gif_url': None, 'gif_is_video': False,
+        'redgifs_id': redgifs_id, 'gif_url': gif_url, 'gif_is_video': gif_is_video,
         'imgur_album_id': None, 'post_hint': post_type,
         'is_devvit': is_devvit, 'devvit_url': devvit_url,
         'over_18': el.has_attr('is-nsfw'),
