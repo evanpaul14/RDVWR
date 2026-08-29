@@ -38,22 +38,42 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
 export function showSkeletons() {
   state.selectedPostIdx = -1;
   sentinel.innerHTML = '';
-  feed.innerHTML = Array.from({length:SKELETON_COUNT}, (_, i) => {
-    if (i % 3 === 1) return `
+  if (settings.layout === 'minimal') {
+    feed.innerHTML = Array.from({length:SKELETON_COUNT}, () => `
+    <div class="skeleton-post skel-minimal">
+      <div class="skel skel-min-score"></div>
+      <div class="skel-min-body">
+        <div class="skel skel-min-title"></div>
+        <div class="skel skel-min-meta"></div>
+      </div>
+    </div>`).join('');
+  } else if (settings.layout === 'compact') {
+    feed.innerHTML = Array.from({length:SKELETON_COUNT}, () => `
     <div class="skeleton-post skel-compact">
       <div class="skel-compact-left">
         <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
         <div class="skel skel-footer"></div>
       </div>
       <div class="skel skel-compact-thumb"></div>
-    </div>`;
-    return `
-    <div class="skeleton-post">
-      <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
-      <div class="skel skel-banner"></div>
-      <div class="skel skel-footer"></div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
+  } else {
+    feed.innerHTML = Array.from({length:SKELETON_COUNT}, (_, i) => {
+      if (i % 3 === 1) return `
+      <div class="skeleton-post skel-compact">
+        <div class="skel-compact-left">
+          <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
+          <div class="skel skel-footer"></div>
+        </div>
+        <div class="skel skel-compact-thumb"></div>
+      </div>`;
+      return `
+      <div class="skeleton-post">
+        <div class="skel-header"><div class="skel skel-title"></div><div class="skel skel-title2"></div></div>
+        <div class="skel skel-banner"></div>
+        <div class="skel skel-footer"></div>
+      </div>`;
+    }).join('');
+  }
   sentinel.classList.remove('active', 'loading');
 }
 
