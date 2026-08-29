@@ -233,6 +233,23 @@ function _thumbNsfwWrap(html) {
   return `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${html}</div></div>`;
 }
 
+// A thumb qualifies for opening straight into the lightbox (rather than
+// navigating to postview) only when it's a single static image — multi-image
+// galleries and video/embeds need the postview UI to actually view them.
+function _isSingleStaticImage(m) {
+  if (m.is_video || m.youtube_id || m.tiktok_id || m.redgifs_id || m.imgur_album_id || m.streamable_id || m.embed_url) return false;
+  if (m.gif_url && m.gif_is_video) return false;
+  if (m.gallery?.length > 1) return false;
+  const isImageDomain = m.domain && (m.domain === 'i.redd.it' || m.domain === 'i.imgur.com' || /^i\.\w/.test(m.domain));
+  return !!(m.gallery?.length === 1 || isImageDomain || (m.gif_url && !m.gif_is_video));
+}
+
+function _fullImgSrc(m) {
+  if (m.gallery?.length === 1) return m.gallery[0].url;
+  if (m.gif_url && !m.gif_is_video) return m.gif_url;
+  return m.url || _compactThumbSrc(m);
+}
+
 function _isVReddIt(url) {
   try { return new URL(url).hostname === 'v.redd.it'; } catch { return false; }
 }
@@ -249,9 +266,13 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
     if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
     const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
-    thumbHtml = _compactHasMedia(mediaSrc)
-      ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
-      : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
+    if (_isSingleStaticImage(mediaSrc)) {
+      thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`;
+    } else {
+      thumbHtml = _compactHasMedia(mediaSrc)
+        ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
+        : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
+    }
   } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && settings.layout !== 'minimal' && !_isVReddIt(mediaSrc.url)) {
     thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
   }
@@ -283,7 +304,9 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
       if (p.over_18)    thumbContent = _thumbNsfwWrap(thumbContent);
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
-      thumbHtml = `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
+      thumbHtml = _isSingleStaticImage(mediaSrc)
+        ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`
+        : `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
     }
   }
 
@@ -463,7 +486,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
-        ${!isDeleted && settings.showAvatars ? (
+        ${!isDeleted && settings.showAvatars && settings.layout !== 'minimal' ? (
           'author_icon' in c
             ? (c.author_icon ? `<img class="comment-avatar" src="${escHtml(c.author_icon)}" alt="" loading="lazy">` : '')
             : `<img class="comment-avatar comment-avatar-lazy" data-author="${escHtml(c.author)}" alt="">`
