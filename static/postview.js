@@ -285,7 +285,7 @@ export async function changeCommentSort(sort) {
   if (!area) return;
   area.innerHTML = '<div class="state" style="padding:30px 0"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
   try {
-    const apiUrl = `/api/r/${encodeURIComponent(state._pvSub)}/comments/${encodeURIComponent(state._pvPostId)}?sort=${sort}${settings.showAvatars ? '&avatars=1' : ''}${state._pvCommentId ? `&comment=${encodeURIComponent(state._pvCommentId)}` : ''}`;
+    const apiUrl = `/api/r/${encodeURIComponent(state._pvSub)}/comments/${encodeURIComponent(state._pvPostId)}?sort=${sort}${settings.showAvatars && settings.layout !== 'minimal' ? '&avatars=1' : ''}${state._pvCommentId ? `&comment=${encodeURIComponent(state._pvCommentId)}` : ''}`;
     const res  = await fetch(apiUrl);
     if (!res.ok) { area.innerHTML = errState('Failed to load comments', 'comments'); return; }
     const data = await res.json();
@@ -315,7 +315,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       window.__INITIAL_POST__ = null;
       data = inj;
     } else {
-      const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (settings.showAvatars ? '&avatars=1' : '') + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
+      const apiUrl = `/api/r/${encodeURIComponent(sub)}/comments/${encodeURIComponent(postId)}?sort=${state.currentCommentSort}` + (settings.showAvatars && settings.layout !== 'minimal' ? '&avatars=1' : '') + (commentId ? `&comment=${encodeURIComponent(commentId)}` : '');
       const res  = await fetch(apiUrl);
       const resData = await res.json();
       if (!res.ok) { pvContent.innerHTML = errState(escHtml(resData.error||'Failed to load'), 'post'); return; }
@@ -422,7 +422,7 @@ export async function loadMoreComments(btn) {
   btn.disabled = true;
   btn.textContent = 'Loading…';
   try {
-    const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${state.currentCommentSort}${settings.showAvatars ? '&avatars=1' : ''}`;
+    const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${state.currentCommentSort}${settings.showAvatars && settings.layout !== 'minimal' ? '&avatars=1' : ''}`;
     const res  = await fetch(url);
     const data = await res.json();
     if (!res.ok) { btn.textContent = 'Failed to load'; btn.disabled = false; return; }

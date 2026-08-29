@@ -717,6 +717,16 @@ document.addEventListener('click', e => {
   openLightbox(img.src);
 });
 
+document.addEventListener('click', e => {
+  if (e.target.closest('.spoiler-veil, .nsfw-veil')) return;
+  const thumb = e.target.closest('.thumb-lightbox[data-lightbox]');
+  if (!thumb) return;
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openLightbox(thumb.dataset.lightbox);
+});
+
 // ── Platform detection ────────────────────────────────────────────────────────
 let _platformPromise = null;
 function getPlatform() {
