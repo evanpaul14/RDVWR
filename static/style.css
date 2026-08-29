@@ -798,7 +798,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .lightbox-nav-btn {
   display:none; position:absolute; top:50%; transform:translateY(-50%);
   background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.2);
-  color:#fff; font-family:var(--mono); font-size:22px; line-height:1;
+  color:#fff; font-family:var(--mono); font-size:22px; line-height:1; padding-bottom:3px;
   width:44px; height:44px; border-radius:50%; cursor:pointer; transition:background .15s;
 }
 .lightbox-nav-btn:hover { background:rgba(0,0,0,.8); }
