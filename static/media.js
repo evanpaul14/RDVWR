@@ -76,6 +76,17 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
     const hls = new Hls({ autoStartLoad: false, startLevel: 999 });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
     videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
+    hls.on(Hls.Events.ERROR, (_ev, data) => {
+      if (!data.fatal) return;
+      hls.destroy();
+      if (fallback) {
+        const wrap = videoEl.closest('[data-hls]');
+        if (wrap) wrap.querySelectorAll('.hls-quality-btn, .hls-quality-menu').forEach(el => el.remove());
+        const wasPlaying = !videoEl.paused;
+        videoEl.src = fallback;
+        if (wasPlaying) videoEl.play().catch(() => {});
+      }
+    });
     hls.on(Hls.Events.MANIFEST_PARSED, (_ev, data) => {
       if (data.levels.length < 2) return;
       const wrap = videoEl.closest('[data-hls]');
