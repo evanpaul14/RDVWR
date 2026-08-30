@@ -227,11 +227,7 @@ function _buildHlsWrap(wrap) {
   const v = wrap.querySelector('video');
   if (v) {
     setupHls(v, wrap.dataset.hls, wrap.dataset.src, wrap.dataset.audio);
-    if (wrap.dataset.poster) {
-      const img = new Image();
-      img.onload = () => { v.poster = wrap.dataset.poster; };
-      img.src = wrap.dataset.poster;
-    }
+    if (wrap.dataset.poster) v.poster = wrap.dataset.poster;
   }
 }
 
