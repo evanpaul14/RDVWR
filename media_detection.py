@@ -77,8 +77,9 @@ def process_post(p):
         if imgs.get("source"):
             preview_img = clean_url(imgs["source"]["url"])
             res = imgs.get("resolutions", [])
-            # card thumbnail: smallest resolution ≥320px wide
-            card = next((r for r in res if r.get("width", 0) >= 320), None) or (res[0] if res else None)
+            # card thumbnail: smallest resolution ≥640px wide (crisp at feed-card width without
+            # downloading the full-size source image, which can be 10-20x larger)
+            card = next((r for r in res if r.get("width", 0) >= 640), None) or (res[-1] if res else None)
             if card:
                 thumb_url = clean_url(card["url"])
         elif imgs.get("resolutions"):

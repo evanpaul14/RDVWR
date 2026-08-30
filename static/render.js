@@ -135,9 +135,14 @@ export function renderMd(text) {
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
+// Plain-ASCII titles are never worth a translate round-trip — skips the network
+// call for the vast majority of (English) posts.
+const _ASCII_RE = /^[\x00-\x7F]*$/;
+
 export async function translatePost(p, container) {
   const titleEl = container.querySelector('.pv-title');
   if (!titleEl) return;
+  if (_ASCII_RE.test(p.title || '')) return;
   const titleRes = await xlateText(p.title);
   if (!titleRes || !titleRes.detected || titleRes.detected.toLowerCase().startsWith('en')) return;
   if (!titleRes.translated || titleRes.translated === p.title) return;
@@ -211,7 +216,7 @@ export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(link
 
 // ── Compact mode row ─────────────────────────────────────────────────────────
 function _compactThumbSrc(m) {
-  return m.gallery?.[0]?.url ?? m.preview_img ?? m.thumb_url ?? null;
+  return m.gallery?.[0]?.url ?? m.thumb_url ?? m.preview_img ?? null;
 }
 
 function _compactHasMedia(m) {

@@ -481,7 +481,7 @@ export function nsfwWrap(html) {
 // ── Minimal mode: plain thumbnail + link, no video/iframe/gallery-nav embeds ──
 function _minimalMediaHtml(p, full) {
   const ic = full ? 'pv-media' : 'post-media';
-  const thumb = p.gallery?.[0]?.url ?? p.preview_img ?? null;
+  const thumb = p.gallery?.[0]?.url ?? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) ?? null;
   const thumbHtml = thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : '';
   let label = '', href = p.url || '';
   if (p.is_video)                  { label = 'video ↗'; href = p.video_url || p.url; }
@@ -555,7 +555,7 @@ export function mediaHtml(p, full = false) {
   } else if (p.gallery?.length > (full ? 0 : 1)) {
     html = renderGallery(p.gallery);
   } else {
-    const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? p.preview_img : null);
+    const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) : null);
     if (imgSrc) {
       html = `<div class="${ic}"><img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
     } else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) {
