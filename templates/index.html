@@ -16,10 +16,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.min.css', v='3') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.min.css', v=asset_v('style.min.css')) }}">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#0c0c0c">
-<link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js', v='3') }}">
+<link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}">
 </head>
 <body>
 
@@ -184,6 +184,6 @@
 {% if initial_about %}<script>window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
 {% if initial_post %}<script>window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}
 {% if initial_profile %}<script>window.__INITIAL_PROFILE__={{ initial_profile | tojson | safe }};</script>{% endif %}
-<script type="module" src="{{ url_for('static', filename='app.bundle.js', v='3') }}"></script>
+<script type="module" src="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}"></script>
 </body>
 </html>
