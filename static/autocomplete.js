@@ -1,4 +1,5 @@
 import { escHtml, fmtNum, AUTOCOMPLETE_DEBOUNCE } from './utils.js';
+import { settings } from './settings.js';
 
 const _acCancellers = [];
 
@@ -30,6 +31,7 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
       `<div class="autocomplete-item" role="option" data-sub="${escHtml(s.name)}">`+
       (s.icon ? `<img class="autocomplete-icon" src="${escHtml(s.icon)}" alt="" loading="lazy">` : `<span class="autocomplete-icon autocomplete-icon--placeholder">r/</span>`)+
       `<span class="autocomplete-name"><span class="autocomplete-prefix">r/</span>${escHtml(s.name)}</span>`+
+      (s.over18 ? `<span class="nsfw-tag">NSFW</span>` : '')+
       (s.subscribers ? `<span class="autocomplete-subs">${fmtNum(s.subscribers)} members</span>` : '')+
       `</div>`
     ).join('');
@@ -50,7 +52,9 @@ export function setupAutocomplete(inputEl, dropdownEl, navigate) {
         const res  = await fetch(`/api/subreddit-search?q=${encodeURIComponent(query)}`, { signal: ctrl.signal });
         const data = await res.json();
         acAbort = null;
-        show(data.subs || []);
+        let subs = data.subs || [];
+        if (settings.nsfwHide || settings.nsfwSearchHide) subs = subs.filter(s => !s.over18);
+        show(subs);
       } catch (err) {
         if (err.name !== 'AbortError') hide();
       }
