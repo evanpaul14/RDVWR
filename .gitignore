@@ -8,3 +8,4 @@ AUDIT.md
 extension/
 sync_android.sh
 android_app.py.patch
+benchmark.py
