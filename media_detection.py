@@ -167,6 +167,14 @@ def process_post(p):
     if tt:
         tiktok_id = tt.group(1)
 
+    # Streamin: real video clips (not silent loops) — play like a regular video, not an
+    # autoplaying gif.
+    if not is_video and not redgifs_id and not youtube_id:
+        m = STREAMIN_RE.search(p.get("url", ""))
+        if m:
+            is_video  = True
+            video_url = f"https://c-cdn.streamin.top/uploads/{m.group(1)}.mp4"
+
     # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
     if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
@@ -195,11 +203,6 @@ def process_post(p):
             m = IMGUR_DIRECT_RE.search(post_url)
             if m:
                 gif_url = f"https://i.imgur.com/{m.group(1)}.jpg"
-            else:
-                m = STREAMIN_RE.search(post_url)
-                if m:
-                    gif_url      = f"https://c-cdn.streamin.top/uploads/{m.group(1)}.mp4"
-                    gif_is_video = True
 
     # Devvit custom posts: is_self + magic selftext string
     is_devvit = False

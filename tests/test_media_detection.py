@@ -334,14 +334,16 @@ class TestProcessPost:
     def test_streamin_link_resolved_to_cdn_mp4(self):
         p = _post(url="https://streamin.link/v/c0bc857f")
         result = process_post(p)
-        assert result["gif_url"] == "https://c-cdn.streamin.top/uploads/c0bc857f.mp4"
-        assert result["gif_is_video"] is True
+        assert result["is_video"] is True
+        assert result["video_url"] == "https://c-cdn.streamin.top/uploads/c0bc857f.mp4"
+        assert result["hls_url"] is None
+        assert result["gif_url"] is None
 
     def test_streamin_me_resolved_to_cdn_mp4(self):
         p = _post(url="https://streamin.me/v/c0bc857f")
         result = process_post(p)
-        assert result["gif_url"] == "https://c-cdn.streamin.top/uploads/c0bc857f.mp4"
-        assert result["gif_is_video"] is True
+        assert result["is_video"] is True
+        assert result["video_url"] == "https://c-cdn.streamin.top/uploads/c0bc857f.mp4"
 
     # Poll
 
