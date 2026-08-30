@@ -9,7 +9,9 @@ STATIC = Path(__file__).parent / 'static'
 LIBS = [
     {'pkg': 'marked',    'major': 12, 'file': 'marked.min.js',     'cdn_path': 'marked.min.js'},
     {'pkg': 'dompurify', 'major': 3,  'file': 'purify.min.js',     'cdn_path': 'dist/purify.min.js'},
-    {'pkg': 'hls.js',    'major': 1,  'file': 'hls.min.js',        'cdn_path': 'dist/hls.min.js'},
+    # 'light' build excludes alt-audio/subtitles/EME/CMCD/etc — we only use basic
+    # loadSource/attachMedia + quality-level switching, so it's a safe, smaller drop-in.
+    {'pkg': 'hls.js',    'major': 1,  'file': 'hls.min.js',        'cdn_path': 'dist/hls.light.min.js'},
 ]
 
 def latest_in_major(pkg, major):
