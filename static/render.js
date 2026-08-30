@@ -135,14 +135,15 @@ export function renderMd(text) {
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
-// Plain-ASCII titles are never worth a translate round-trip — skips the network
-// call for the vast majority of (English) posts.
-const _ASCII_RE = /^[\x00-\x7F]*$/;
+// Titles with no characters outside Latin script (incl. accented Latin and
+// typographic punctuation like smart quotes/em dashes) are never worth a
+// translate round-trip — skips the network call for the vast majority of posts.
+const _NON_LATIN_RE = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿऀ-ॿ฀-๿぀-ヿ㐀-鿿가-힣豈-﫿]/;
 
 export async function translatePost(p, container) {
   const titleEl = container.querySelector('.pv-title');
   if (!titleEl) return;
-  if (_ASCII_RE.test(p.title || '')) return;
+  if (!_NON_LATIN_RE.test(p.title || '')) return;
   const titleRes = await xlateText(p.title);
   if (!titleRes || !titleRes.detected || titleRes.detected.toLowerCase().startsWith('en')) return;
   if (!titleRes.translated || titleRes.translated === p.title) return;
