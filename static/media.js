@@ -85,6 +85,7 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         const wasPlaying = !videoEl.paused;
         videoEl.src = fallback;
         if (wasPlaying) videoEl.play().catch(() => {});
+        if (audioSrc) syncAudio(videoEl, audioSrc);
       }
     });
     hls.on(Hls.Events.MANIFEST_PARSED, (_ev, data) => {
@@ -139,8 +140,8 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
     videoEl.src = hlsUrl;
   } else if (fallback) {
     videoEl.src = fallback;
+    if (audioSrc) syncAudio(videoEl, audioSrc);
   }
-  if (audioSrc) syncAudio(videoEl, audioSrc);
 }
 
 const _gifObserver = new IntersectionObserver((entries) => {
