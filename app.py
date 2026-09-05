@@ -245,7 +245,9 @@ def _parse_shreddit_crosspost(el):
         base = m.group(1) if m else None
         if base:
             is_video = True
-            urls = build_reddit_video_urls(base, cmaf='/DASH_' not in src)
+            # src is always the HLS playlist URL here, which carries no DASH-vs-CMAF hint;
+            # there's no way to detect the actual encoding from a shreddit-player tag alone.
+            urls = build_reddit_video_urls(base, cmaf=False)
             hls_url, video_url, audio_url = urls['hls_url'], urls['video_url'], urls['audio_url']
         poster = player.get('poster', '') or ''
         if poster:
