@@ -37,9 +37,24 @@ def proxy_if_reddit_preview(url):
     return url
 
 
-def build_reddit_video_urls(base):
+def build_reddit_video_urls(base, cmaf=True):
     """Given a v.redd.it base URL (e.g. 'https://v.redd.it/abc123'), build the
-    HLS playlist / fallback video / audio-track URLs Reddit serves under it."""
+    HLS playlist / fallback video / audio-track URLs Reddit serves under it.
+
+    Reddit has two video encodings depending on when the video was transcoded:
+    older posts use DASH_<res>.mp4 + DASH_audio.mp4, newer ones use
+    CMAF_<res>.mp4 + CMAF_AUDIO_128.mp4. The legacy DASH_audio.mp4 path 403s
+    for CMAF-encoded videos (and vice versa), so callers that already know
+    which encoding a post uses (from its fallback_url/src) should pass
+    cmaf=False to get the DASH variant; cmaf=True (the default) matches
+    current uploads.
+    """
+    if cmaf:
+        return {
+            "hls_url":   base + '/HLSPlaylist.m3u8',
+            "video_url": base + '/CMAF_1080.mp4',
+            "audio_url": base + '/CMAF_AUDIO_128.mp4',
+        }
     return {
         "hls_url":   base + '/HLSPlaylist.m3u8',
         "video_url": base + '/DASH_480.mp4',
@@ -144,12 +159,13 @@ def process_post(p):
             redgifs_fallback_url = clean_url(rvp["fallback_url"])
             redgifs_fallback_hls = clean_url(rvp.get("hls_url"))
 
-    # Audio track for v.redd.it videos (fallback_url is video-only; audio lives at DASH_audio.mp4)
+    # Audio track for v.redd.it videos (fallback_url is video-only; audio lives in a
+    # sibling file whose name depends on the video's encoding — see build_reddit_video_urls).
     audio_url = None
     if video_url and 'v.redd.it' in video_url:
         m = VREDDDIT_RE.match(video_url)
         if m:
-            audio_url = build_reddit_video_urls(m.group(1))['audio_url']
+            audio_url = build_reddit_video_urls(m.group(1), cmaf='/DASH_' not in video_url)['audio_url']
 
     youtube_id = None
     yt = YOUTUBE_RE.search(p.get("url", ""))
