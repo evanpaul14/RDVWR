@@ -76,12 +76,6 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
     const hls = new Hls({ autoStartLoad: false, startLevel: 999 });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
     videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
-    // hls.light.min.js (the bundle we vendor) has no alt-audio-track support, so it
-    // never fetches Reddit's separate audio rendition even though the manifest lists
-    // it — sync it manually via a parallel <audio> element instead. This stays active
-    // across the fatal-error fallback below too, since it's driven by videoEl's own
-    // play/pause/seeked events rather than the HLS instance.
-    if (audioSrc) syncAudio(videoEl, audioSrc);
     hls.on(Hls.Events.ERROR, (_ev, data) => {
       if (!data.fatal) return;
       hls.destroy();
@@ -91,6 +85,7 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
         const wasPlaying = !videoEl.paused;
         videoEl.src = fallback;
         if (wasPlaying) videoEl.play().catch(() => {});
+        if (audioSrc) syncAudio(videoEl, audioSrc);
       }
     });
     hls.on(Hls.Events.MANIFEST_PARSED, (_ev, data) => {
