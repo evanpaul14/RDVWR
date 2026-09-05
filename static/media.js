@@ -60,7 +60,11 @@ function _ensureHls() {
   if (_hlsPromise) return _hlsPromise;
   _hlsPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = '/static/hls.min.js';
+    // Cache-busted via mtime so a deploy that changes hls.min.js (e.g. swapping the
+    // vendored build) doesn't keep serving stale bytes to browsers that already
+    // cached this URL under the 1-week static max-age.
+    const v = window.__HLS_JS_V__;
+    s.src = v ? `/static/hls.min.js?v=${encodeURIComponent(v)}` : '/static/hls.min.js';
     s.onload = resolve;
     s.onerror = reject;
     document.head.appendChild(s);
