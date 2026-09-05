@@ -245,7 +245,7 @@ def _parse_shreddit_crosspost(el):
         base = m.group(1) if m else None
         if base:
             is_video = True
-            urls = build_reddit_video_urls(base)
+            urls = build_reddit_video_urls(base, cmaf='/DASH_' not in src)
             hls_url, video_url, audio_url = urls['hls_url'], urls['video_url'], urls['audio_url']
         poster = player.get('poster', '') or ''
         if poster:
@@ -372,7 +372,7 @@ def _parse_shreddit_post(el):
         m = VREDDDIT_RE.match(content_href)
         base = m.group(1) if m else None
         if base:
-            urls = build_reddit_video_urls(base)
+            urls = build_reddit_video_urls(base, cmaf='/DASH_' not in content_href)
             video_url = content_href if '/DASH_' in content_href else urls['video_url']
             hls_url, audio_url = urls['hls_url'], urls['audio_url']
         else:
