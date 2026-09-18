@@ -1,4 +1,4 @@
-import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
+import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -33,16 +33,18 @@ function _initMarked() {
   const _img  = r.image.bind(r);
   const _link = r.link.bind(r);
   r.image = (href, title, text) => {
-    if (href?.startsWith('giphy|'))   return `<img class="gif-anim-img" src="https://media.giphy.com/media/${href.slice(6)}/giphy.gif" alt="${text||'gif'}" loading="lazy">`;
+    if (href?.startsWith('giphy|'))   return `<img class="gif-anim-img" src="${proxyMedia(`https://media.giphy.com/media/${href.slice(6)}/giphy.gif`)}" alt="${text||'gif'}" loading="lazy">`;
     if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
     if (href?.startsWith('redditvid|')) {
-      const base = `https://v.redd.it/${href.slice(10)}`;
+      const base = proxyMedia(`https://v.redd.it/${href.slice(10)}`);
       return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
     }
     try {
       const h = new URL(href).hostname;
       if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
         href = `/api/img?url=${encodeURIComponent(href)}`;
+      else
+        href = proxyMedia(href);
     } catch (_) {}
     return _img(href, title, text);
   };
@@ -50,7 +52,7 @@ function _initMarked() {
     const decodedText = text ? text.replace(/&amp;/g, '&') : text;
     if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href)) {
       const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
-        ? `/api/img?url=${encodeURIComponent(href)}` : href;
+        ? `/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href);
       const img = `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
       if (decodedText && decodedText !== href)
         return `<span class="md-img-block">${img}<span class="md-img-caption">${text}</span></span>`;
@@ -258,7 +260,7 @@ function _galleryUrls(m) {
 }
 
 function _isVReddIt(url) {
-  try { return new URL(url).hostname === 'v.redd.it'; } catch { return false; }
+  try { return new URL(realMediaUrl(url)).hostname === 'v.redd.it'; } catch { return false; }
 }
 
 function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, titleLink, footer }) {

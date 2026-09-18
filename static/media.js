@@ -1,6 +1,6 @@
 import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN } from './utils.js';
+import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
@@ -27,13 +27,13 @@ function _trackVideoMute(v) {
 const _DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
 function _dlOk(url) {
   if (!url) return false;
-  try { return _DL_HOSTS.has(new URL(url).hostname); } catch { return false; }
+  try { return _DL_HOSTS.has(new URL(realMediaUrl(url)).hostname); } catch { return false; }
 }
 function _dlHref(url, filename) {
-  return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  return `/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
 }
 function _dlFilename(url) {
-  try { return new URL(url).pathname.split('/').filter(Boolean).pop() || 'media'; }
+  try { return new URL(realMediaUrl(url)).pathname.split('/').filter(Boolean).pop() || 'media'; }
   catch { return 'media'; }
 }
 function _dlFilenamePos(url, pos) {
@@ -529,7 +529,7 @@ export function mediaHtml(p, full = false) {
   if (p.is_video) {
     html = `<div class="${vc}" data-hls="${escHtml(p.hls_url||'')}" data-src="${escHtml(p.video_url||'')}" data-audio="${escHtml(p.audio_url||'')}"`+(p.preview_img?` data-poster="${escHtml(p.preview_img)}"`:'')+`><video controls preload="${preload}" playsinline muted></video></div>`;
   } else if (p.youtube_id) {
-    html = `<div class="${vc}"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" allowfullscreen loading="lazy"></iframe></div>`;
+    html = `<div class="${vc}"><iframe src="https://www.youtube-nocookie.com/embed/${escHtml(p.youtube_id)}" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe></div>`;
   } else if (p.tiktok_id) {
     html = `<div class="${vc} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/${escHtml(p.tiktok_id)}?autoplay=0&rel=0" allowfullscreen loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
   } else if (p.redgifs_id) {

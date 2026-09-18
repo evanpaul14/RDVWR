@@ -161,6 +161,8 @@ RATE_LIMITS = [
     ('/api/download',        RateLimiter(10, 60)),
     ('/api/img',             RateLimiter(600, 60)),
     ('/api/redgifs/media/',  RateLimiter(600, 60)),
+    # HLS playback fetches a playlist per rendition plus a request per segment.
+    ('/api/m/',              RateLimiter(3000, 60)),
     ('/api/',                RateLimiter(240, 60)),
 ]
 
