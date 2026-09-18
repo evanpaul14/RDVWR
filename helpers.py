@@ -197,7 +197,7 @@ def cached_json(data, seconds):
     resp.headers['Cache-Control'] = f'public, max-age={seconds}'
     return resp
 
-_view_cache = TTLCache(1000)
+_view_cache = TTLCache(500)
 
 def server_cache(ttl):
     """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
