@@ -192,12 +192,12 @@
   </div>
   <div class="settings-body" id="settings-body"></div>
 </div>
-{% if initial_data %}<script>window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
-{% if initial_about %}<script>window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
-{% if initial_post %}<script>window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}
-{% if initial_profile %}<script>window.__INITIAL_PROFILE__={{ initial_profile | tojson | safe }};</script>{% endif %}
-<script>window.__HLS_JS_V__={{ asset_v('hls.min.js') | tojson | safe }};</script>
-<script>window.__DISABLE_DOWNLOADS__={{ disable_downloads | tojson | safe }};</script>
+{% if initial_data %}<script nonce="{{ csp_nonce }}">window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
+{% if initial_about %}<script nonce="{{ csp_nonce }}">window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
+{% if initial_post %}<script nonce="{{ csp_nonce }}">window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}
+{% if initial_profile %}<script nonce="{{ csp_nonce }}">window.__INITIAL_PROFILE__={{ initial_profile | tojson | safe }};</script>{% endif %}
+<script nonce="{{ csp_nonce }}">window.__HLS_JS_V__={{ asset_v('hls.min.js') | tojson | safe }};</script>
+<script nonce="{{ csp_nonce }}">window.__DISABLE_DOWNLOADS__={{ disable_downloads | tojson | safe }};</script>
 <script type="module" src="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}"></script>
 </body>
 </html>
