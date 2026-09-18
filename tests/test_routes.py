@@ -1,4 +1,4 @@
-"""Integration tests for Flask routes in app.py.
+"""Integration tests for the Flask routes (app.py + routes/).
 
 All external HTTP calls (SESSION.get / requests.head) are mocked so no network
 traffic is made during the test run.
@@ -11,9 +11,10 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-import app as app_module
+import helpers
 import reddit_client
 from app import app
+from routes import media as media_routes, embeds as embeds_routes
 
 
 # ── Mock helpers ──────────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ def _session_get(data=None, status_code=200, **kw):
 def no_oauth(monkeypatch):
     """Force reddit_get to use SESSION (not cffi) so SESSION.get mocks work."""
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
-    app_module._view_cache.clear()
+    helpers._view_cache.clear()
 
 
 @pytest.fixture
@@ -101,7 +102,7 @@ class TestSPARoutes:
 # ── /api/r/<sub> (feed) ───────────────────────────────────────────────────────
 
 class TestSubredditFeed:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([_make_post()]))
         resp = client.get("/api/r/python")
@@ -110,19 +111,19 @@ class TestSubredditFeed:
         assert "posts" in data
         assert len(data["posts"]) == 1
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404_from_reddit(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/r/nonexistent_sub_xyz")
         assert resp.status_code == 404
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_403_private_subreddit(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=403)
         resp = client.get("/api/r/private_sub")
         assert resp.status_code == 403
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_after_param_forwarded(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([], after="t3_next"))
         resp = client.get("/api/r/python?after=t3_abc")
@@ -130,7 +131,7 @@ class TestSubredditFeed:
         call_kwargs = mock_get.call_args
         assert "after" in str(call_kwargs)
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_timeout_returns_504(self, mock_get, client):
         import requests as req_lib
         mock_get.side_effect = req_lib.exceptions.Timeout()
@@ -141,7 +142,7 @@ class TestSubredditFeed:
 # ── /api/r/<sub>/about ────────────────────────────────────────────────────────
 
 class TestSubredditAbout:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({
             "data": {
@@ -160,7 +161,7 @@ class TestSubredditAbout:
         assert data["title"] == "Python"
         assert data["subscribers"] == 1000000
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_error_from_reddit(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/r/gone/about")
@@ -170,7 +171,7 @@ class TestSubredditAbout:
 # ── /api/r/<sub>/rules ────────────────────────────────────────────────────────
 
 class TestSubredditRules:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({
             "rules": [{"short_name": "Rule 1", "description": "Be nice"}]
@@ -179,7 +180,7 @@ class TestSubredditRules:
         assert resp.status_code == 200
         assert len(resp.get_json()["rules"]) == 1
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_error_returns_empty_rules(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=500)
         resp = client.get("/api/r/python/rules")
@@ -199,7 +200,7 @@ class TestComments:
             {"data": {"children": []}},
         ]
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get(self._comments_response())
         resp = client.get("/api/r/testsubreddit/comments/abc123")
@@ -208,7 +209,7 @@ class TestComments:
         assert "post" in data
         assert "comments" in data
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_invalid_sort_defaults_to_confidence(self, mock_get, client):
         mock_get.return_value = _session_get(self._comments_response())
         resp = client.get("/api/r/testsubreddit/comments/abc123?sort=bogus")
@@ -218,14 +219,14 @@ class TestComments:
         params_used = mock_get.call_args[1].get("params", {})
         assert params_used.get("sort") == "confidence"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_valid_sort_passed_through(self, mock_get, client):
         mock_get.return_value = _session_get(self._comments_response())
         resp = client.get("/api/r/testsubreddit/comments/abc123?sort=top")
         params_used = mock_get.call_args[1].get("params", {})
         assert params_used.get("sort") == "top"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_error_from_reddit(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/r/testsubreddit/comments/abc123")
@@ -235,14 +236,14 @@ class TestComments:
 # ── /api/r/<sub>/morechildren/<id> ───────────────────────────────────────────
 
 class TestMoreChildren:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_no_children_param_returns_empty(self, mock_get, client):
         resp = client.get("/api/r/testsubreddit/morechildren/abc123")
         assert resp.status_code == 200
         assert resp.get_json()["comments"] == []
         mock_get.assert_not_called()
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({
             "json": {"data": {"things": [
@@ -265,33 +266,33 @@ class TestMoreChildren:
 # ── /api/search ───────────────────────────────────────────────────────────────
 
 class TestSearch:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_missing_query_returns_400(self, mock_get, client):
         resp = client.get("/api/search")
         assert resp.status_code == 400
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([_make_post()]))
         resp = client.get("/api/search?q=python")
         assert resp.status_code == 200
         assert "posts" in resp.get_json()
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_invalid_sort_defaults_to_relevance(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([]))
         resp = client.get("/api/search?q=test&sort=bogus")
         params_used = mock_get.call_args[1].get("params", {})
         assert params_used.get("sort") == "relevance"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_sub_restricts_search(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([]))
         resp = client.get("/api/search?q=test&sub=python")
         url_called = mock_get.call_args[0][0]
         assert "/r/python/" in url_called
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_timeout_returns_504(self, mock_get, client):
         import requests as req_lib
         mock_get.side_effect = req_lib.exceptions.Timeout()
@@ -307,7 +308,7 @@ class TestSearchCommunities:
         assert resp.status_code == 200
         assert resp.get_json()["communities"] == []
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [
             {"kind": "t5", "data": {
@@ -330,7 +331,7 @@ class TestSearchUsers:
         assert resp.status_code == 200
         assert resp.get_json()["users"] == []
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [
             {"kind": "t2", "data": {
@@ -358,14 +359,14 @@ class TestSubredditSearch:
         assert resp.status_code == 200
         assert resp.get_json()["subs"] == []
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get(_autocomplete_listing(["python", "pythonista"]))
         resp = client.get("/api/subreddit-search?q=py")
         names = [s["name"] for s in resp.get_json()["subs"]]
         assert names == ["python", "pythonista"]
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_capped_at_eight(self, mock_get, client):
         mock_get.return_value = _session_get(_autocomplete_listing([f"sub{i}" for i in range(20)]))
         resp = client.get("/api/subreddit-search?q=sub")
@@ -375,7 +376,7 @@ class TestSubredditSearch:
 # ── /api/user/<username>/about ───────────────────────────────────────────────
 
 class TestUserAbout:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {
             "name": "testuser", "icon_img": "", "snoovatar_img": "",
@@ -388,7 +389,7 @@ class TestUserAbout:
         assert data["name"] == "testuser"
         assert "karma_post" in data
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/user/doesnotexist_xyzabc/about")
@@ -398,20 +399,20 @@ class TestUserAbout:
 # ── /api/user/<username>/posts ───────────────────────────────────────────────
 
 class TestUserPosts:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([_make_post()]))
         resp = client.get("/api/user/testuser/posts")
         assert resp.status_code == 200
         assert "posts" in resp.get_json()
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/user/gone/posts")
         assert resp.status_code == 404
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_falls_back_to_arctic_shift_on_404(self, mock_get, client):
         def side_effect(url, **kw):
             if "arctic-shift" in url:
@@ -424,7 +425,7 @@ class TestUserPosts:
         assert data["archived"] is True
         assert data["posts"][0]["id"] == "archived1"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404_when_arctic_shift_also_empty(self, mock_get, client):
         def side_effect(url, **kw):
             if "arctic-shift" in url:
@@ -438,7 +439,7 @@ class TestUserPosts:
 # ── /api/user/<username>/comments ────────────────────────────────────────────
 
 class TestUserComments:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [
             {"kind": "t1", "data": {
@@ -454,7 +455,7 @@ class TestUserComments:
         assert len(data["comments"]) == 1
         assert data["comments"][0]["body"] == "A comment"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_link_permalink_prefixed(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [
             {"kind": "t1", "data": {
@@ -468,7 +469,7 @@ class TestUserComments:
         comment = resp.get_json()["comments"][0]
         assert comment["link_permalink"].startswith("https://www.reddit.com")
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_falls_back_to_arctic_shift_with_title_backfill(self, mock_get, client):
         def side_effect(url, **kw):
             if url.endswith("/comments/search"):
@@ -495,7 +496,7 @@ class TestUserComments:
 # ── /api/user/<username>/overview ────────────────────────────────────────────
 
 class TestUserOverview:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_mixed_post_and_comment(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [
             {"kind": "t3", "data": _make_post()},
@@ -516,7 +517,7 @@ class TestUserOverview:
 # ── /api/user/<username>/m/<multiname> ───────────────────────────────────────
 
 class TestMultireddit:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         meta_resp = MockResponse({"data": {"subreddits": [{"name": "python"}], "display_name": "MyMulti"}})
         feed_resp = MockResponse(_make_listing([_make_post()]))
@@ -525,7 +526,7 @@ class TestMultireddit:
         assert resp.status_code == 200
         assert resp.get_json()["title"] == "MyMulti"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_empty_subs_returns_no_posts(self, mock_get, client):
         meta_resp = MockResponse({"data": {"subreddits": [], "display_name": "empty"}})
         mock_get.return_value = meta_resp
@@ -533,7 +534,7 @@ class TestMultireddit:
         assert resp.status_code == 200
         assert resp.get_json()["posts"] == []
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/user/testuser/m/notfound")
@@ -543,7 +544,7 @@ class TestMultireddit:
 # ── /api/r/<sub>/wiki ────────────────────────────────────────────────────────
 
 class TestWiki:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {
             "content_html": "&lt;p&gt;Hello&lt;/p&gt;",
@@ -557,13 +558,13 @@ class TestWiki:
         resp = client.get("/api/r/python/wiki/%00evil")
         assert resp.status_code in (400, 404)
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_private_wiki_403(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=403)
         resp = client.get("/api/r/private/wiki/index")
         assert resp.status_code == 403
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_sc_off_on_stripped(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {
             "content_html": "<!-- SC_OFF -->&lt;p&gt;text&lt;/p&gt;<!-- SC_ON -->",
@@ -578,7 +579,7 @@ class TestWiki:
 # ── /api/r/<sub>/duplicates/<id> ─────────────────────────────────────────────
 
 class TestDuplicates:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         orig = _make_post(post_id="abc123")
         orig["selftext"] = "some text"
@@ -602,7 +603,7 @@ class TestLiveThread:
             children.append({"kind": "LiveUpdate", "data": u})
         return {"data": {"children": children, "after": None}}
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         info = MockResponse({"data": {
             "title": "Live Event", "description": "desc",
@@ -625,7 +626,7 @@ class TestLiveThread:
         # but our regex check should reject any non-alphanumeric IDs
         assert resp.status_code in (400, 404)
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/live/notfound123")
@@ -635,7 +636,7 @@ class TestLiveThread:
 # ── /api/live/<thread_id>/updates ────────────────────────────────────────────
 
 class TestLiveUpdates:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({
             "data": {"children": [], "after": None}
@@ -652,7 +653,7 @@ class TestLiveUpdates:
 # ── /api/img (image proxy) ────────────────────────────────────────────────────
 
 class TestImgProxy:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_allowed_host(self, mock_get, client):
         mock_get.return_value = MockResponse(
             status_code=200,
@@ -674,7 +675,7 @@ class TestImgProxy:
         resp = client.get("/api/img?url=")
         assert resp.status_code == 403
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_external_preview_host_allowed(self, mock_get, client):
         mock_get.return_value = MockResponse(
             status_code=200,
@@ -709,7 +710,7 @@ class TestResolve:
 # ── /api/download ────────────────────────────────────────────────────────────
 
 class TestDownload:
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_allowed_host(self, mock_get, client):
         mock_get.return_value = MockResponse(
             status_code=200,
@@ -747,7 +748,7 @@ class TestRedgifs:
         resp = client.get("/api/redgifs/../../etc/passwd")
         assert resp.status_code in (400, 404)
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         token_resp = MockResponse({"token": "fake_token"})
         gif_resp = MockResponse({"gif": {"urls": {"hd": "https://media.redgifs.com/Test.mp4", "sd": None}}})
@@ -758,21 +759,21 @@ class TestRedgifs:
         assert data["hd"] is not None
         assert "/api/redgifs/media/" in data["hd"]
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_proxied_url_returned(self, mock_get, client):
         # Reset cached token so mock is called
-        app_module._rg_token = "cached_token"
-        app_module._rg_token_exp = float("inf")
+        media_routes._rg_token = "cached_token"
+        media_routes._rg_token_exp = float("inf")
         gif_resp = MockResponse({"gif": {"urls": {"hd": "https://media.redgifs.com/MyGif-mobile.mp4", "sd": None}}})
         mock_get.return_value = gif_resp
         resp = client.get("/api/redgifs/MyGif123")
         assert resp.status_code == 200
         assert resp.get_json()["hd"] == "/api/redgifs/media/MyGif-mobile.mp4"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_404_from_redgifs(self, mock_get, client):
-        app_module._rg_token = "cached_token"
-        app_module._rg_token_exp = float("inf")
+        media_routes._rg_token = "cached_token"
+        media_routes._rg_token_exp = float("inf")
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/redgifs/NotFoundGif")
         assert resp.status_code == 404
@@ -789,7 +790,7 @@ class TestRedgifsMedia:
         resp = client.get("/api/redgifs/media/malicious.exe")
         assert resp.status_code == 400
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_valid_filename_proxied(self, mock_get, client):
         mock_get.return_value = MockResponse(
             status_code=200,
@@ -799,7 +800,7 @@ class TestRedgifsMedia:
         resp = client.get("/api/redgifs/media/TestGif123.mp4")
         assert resp.status_code == 200
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_mobile_variant_valid(self, mock_get, client):
         mock_get.return_value = MockResponse(
             status_code=200,
@@ -817,10 +818,10 @@ class TestImgurAlbum:
         resp = client.get("/api/imgur/album/../../etc")
         assert resp.status_code in (400, 404)
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path_via_api(self, mock_get, client):
-        old_id = app_module.IMGUR_CLIENT_ID
-        app_module.IMGUR_CLIENT_ID = "fake_client_id"
+        old_id = media_routes.IMGUR_CLIENT_ID
+        media_routes.IMGUR_CLIENT_ID = "fake_client_id"
         try:
             mock_get.return_value = _session_get({
                 "data": [{"url": "https://i.imgur.com/Abc.jpg", "width": 800, "height": 600, "description": ""}]
@@ -829,7 +830,7 @@ class TestImgurAlbum:
             assert resp.status_code == 200
             assert len(resp.get_json()["images"]) == 1
         finally:
-            app_module.IMGUR_CLIENT_ID = old_id
+            media_routes.IMGUR_CLIENT_ID = old_id
 
 
 # ── /api/og-image ─────────────────────────────────────────────────────────────
@@ -843,7 +844,7 @@ class TestOgImage:
         resp = client.get("/api/og-image?url=javascript:alert(1)")
         assert resp.status_code == 400
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_og_tag_extracted(self, mock_get, client):
         html = b'<meta property="og:image" content="https://example.com/thumb.jpg">'
         mock_resp = MagicMock()
@@ -851,18 +852,18 @@ class TestOgImage:
         mock_resp.close = MagicMock()
         mock_get.return_value = mock_resp
         # Clear cache first
-        app_module._og_cache.clear()
+        embeds_routes._og_cache.clear()
         resp = client.get("/api/og-image?url=https://example.com/article")
         assert resp.status_code == 200
         assert resp.get_json()["url"] == "https://example.com/thumb.jpg"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_no_og_tag_returns_none(self, mock_get, client):
         mock_resp = MagicMock()
         mock_resp.iter_content.return_value = iter([b"<html><body>no og tag</body></html>"])
         mock_resp.close = MagicMock()
         mock_get.return_value = mock_resp
-        app_module._og_cache.clear()
+        embeds_routes._og_cache.clear()
         resp = client.get("/api/og-image?url=https://example.com/plain")
         assert resp.status_code == 200
         assert resp.get_json()["url"] is None
@@ -872,13 +873,13 @@ class TestOgImage:
 
 class TestImgurHelpers:
     def test_imgur_items_gifv_converted(self):
-        from app import _imgur_items_to_images
+        from routes.media import _imgur_items_to_images
         items = [{"url": "https://i.imgur.com/abc.gifv", "width": 0, "height": 0}]
         result = _imgur_items_to_images(items)
         assert result[0]["url"].endswith(".mp4")
 
     def test_imgur_items_skips_missing_url(self):
-        from app import _imgur_items_to_images
+        from routes.media import _imgur_items_to_images
         items = [{"width": 0, "height": 0}]  # no url or link
         result = _imgur_items_to_images(items)
         assert result == []
@@ -886,7 +887,7 @@ class TestImgurHelpers:
 
 class TestParseCommentFields:
     def test_basic_fields(self):
-        from app import _parse_comment_fields
+        from routes.comments import _parse_comment_fields
         d = {
             "id": "c1", "author": "user", "body": "hello", "score": 42,
             "created_utc": 1700000000, "edited": False, "depth": 2,
@@ -902,7 +903,7 @@ class TestParseCommentFields:
         assert result["replies"] == []
 
     def test_edited_utc_numeric(self):
-        from app import _parse_comment_fields
+        from routes.comments import _parse_comment_fields
         d = {
             "id": "c2", "body": "x", "score": 0, "created_utc": 0,
             "edited": 1700000000.0, "depth": 0, "distinguished": None,
@@ -929,7 +930,7 @@ class TestParseShredditCrosspost:
         return BeautifulSoup(html, 'html.parser').find('shreddit-post')
 
     def test_video_crosspost_media_populated(self):
-        from app import _parse_shreddit_post
+        from shreddit import _parse_shreddit_post
         inner = '''
         <div slot="post-media-container">
           <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
@@ -951,7 +952,7 @@ class TestParseShredditCrosspost:
         assert post["linked_post"] is None
 
     def test_image_crosspost_media_populated(self):
-        from app import _parse_shreddit_post
+        from shreddit import _parse_shreddit_post
         inner = '''
         <div slot="post-media-container">
           <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
@@ -966,7 +967,7 @@ class TestParseShredditCrosspost:
         assert xp["gallery"] == []
 
     def test_non_crosspost_untouched(self):
-        from app import _parse_shreddit_post
+        from shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="text"
             domain="self.dest" id="t3_id1" post-title="t" subreddit-name="dest"
@@ -979,7 +980,7 @@ class TestParseShredditCrosspost:
 
 class TestParseShredditPostLinkThumbnail:
     def test_link_post_thumbnail_proxied(self):
-        from app import _parse_shreddit_post
+        from shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
             content-href="https://example.com/article" domain="example.com"
@@ -995,7 +996,7 @@ class TestParseShredditPostLinkThumbnail:
         assert post["preview_img"].startswith("/api/img?url=")
 
     def test_link_post_no_thumbnail(self):
-        from app import _parse_shreddit_post
+        from shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
             content-href="https://example.com/article" domain="example.com"
@@ -1009,7 +1010,7 @@ class TestParseShredditPostLinkThumbnail:
 
 class TestParseLiveUpdates:
     def test_filters_non_live_update(self):
-        from app import _parse_live_updates
+        from routes.live import _parse_live_updates
         children = [
             {"kind": "LiveUpdate", "data": {
                 "id": "u1", "body": "msg", "author": "user",
@@ -1033,7 +1034,7 @@ class TestTranslate:
         resp = client.get("/api/translate?text=")
         assert resp.status_code == 400
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_happy_path(self, mock_get, client):
         mock_get.return_value = _session_get({
             "responseData": {"translatedText": "Hello world"},
@@ -1044,13 +1045,13 @@ class TestTranslate:
         data = resp.get_json()
         assert data["responseData"]["translatedText"] == "Hello world"
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_upstream_error_returns_502(self, mock_get, client):
         mock_get.side_effect = Exception("network error")
         resp = client.get("/api/translate?text=hello")
         assert resp.status_code == 502
 
-    @patch.object(app_module.SESSION, "get")
+    @patch.object(reddit_client.SESSION, "get")
     def test_text_truncated_to_1000_chars(self, mock_get, client):
         mock_get.return_value = _session_get({"responseData": {"translatedText": "x"}})
         long_text = "a" * 2000
