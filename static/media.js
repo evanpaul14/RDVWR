@@ -500,7 +500,24 @@ function _embedsThirdParty(p, full) {
   return !!img && !isLocalUrl(img);
 }
 
-// "Link instead of embedding" setting: a proxied thumbnail (if any) plus an outbound link.
+// "Don't embed third-party media" setting: such posts are shown like article links —
+// a proxied preview image (if any) plus an outbound link to where the media lives.
+export function linksOutMedia(p, full = false) {
+  return !!settings.linkExternalMedia && _embedsThirdParty(p, full);
+}
+export function mediaLinkHref(p) {
+  return _mediaLink(p).href;
+}
+export function mediaLinkDomain(p) {
+  try { return new URL(_mediaLink(p).href).hostname.replace(/^www\./, ''); } catch { return p.domain || ''; }
+}
+
+function _linkedPreviewHtml(p) {
+  const img = [p.preview_img, p.thumb_url].find(isLocalUrl);
+  return img ? `<div class="pv-media"><img src="${escHtml(img)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>` : '';
+}
+
+// Card-embed fallback (crossposts): a proxied thumbnail (if any) plus an outbound link.
 function _linkedMediaHtml(p, full) {
   const ic = full ? 'pv-media' : 'post-media';
   const thumb = [full ? p.preview_img : (p.thumb_url ?? p.preview_img), p.preview_img].find(isLocalUrl);
@@ -540,7 +557,9 @@ export function mediaHtml(p, full = false) {
   if (p.poll) return renderPoll(p.poll);
   const linkOnly = settings.linkExternalMedia && _embedsThirdParty(p, full);
   if (linkOnly || settings.layout === 'minimal') {
-    let html = linkOnly ? _linkedMediaHtml(p, full) : _minimalMediaHtml(p, full);
+    let html = !linkOnly ? _minimalMediaHtml(p, full)
+      : full && settings.layout !== 'minimal' ? _linkedPreviewHtml(p) // the post view adds the article box
+      : _linkedMediaHtml(p, full);
     if (!html) return '';
     if (p.is_spoiler) html = veilWrap('spoiler', html);
     if (p.over_18)   html = veilWrap('nsfw', html);

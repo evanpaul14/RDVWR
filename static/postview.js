@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
-import { initMedia, initGifVideos, initGifImages, mediaHtmlFull } from './media.js';
+import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
@@ -344,6 +344,10 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       ? veilWrap('nsfw', bodyInner, 'text')
       : bodyInner;
     const crosspostHtml = p.crosspost_from ? renderCrosspostFull(p.crosspost_from) : (p.linked_post ? renderLinkedPostFull(p.linked_post) : '');
+    // Article box: real link posts, plus media the "don't embed" setting links out.
+    const isArticle = !p.is_self && !p.crosspost_from && !p.linked_post && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video);
+    const linksOut = !p.crosspost_from && !p.linked_post && linksOutMedia(p, true);
+    const articleUrl = settings.layout === 'minimal' ? '' : linksOut ? mediaLinkHref(p) : isArticle ? p.url : '';
 
     pvContent.innerHTML = `
       <a class="pv-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
@@ -376,7 +380,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       </div>`}
       ${crosspostHtml}
       ${p.crosspost_from || p.linked_post ? '' : mediaHtmlFull(p)}
-      ${settings.layout !== 'minimal' && !p.is_self && !p.crosspost_from && !p.linked_post && p.url && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !p.url.includes('reddit.com/gallery') && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.streamable_id && !p.embed_url && !(p.gif_url && p.gif_is_video) ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(p.url)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(p.url)}"></div></div>` : ''}
+      ${articleUrl ? `<div class="pv-article-box"><a class="pv-article-link" href="${escHtml(articleUrl)}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${escHtml(articleUrl)}</span></a><div class="pv-article-desc" data-og-url="${escHtml(articleUrl)}"></div></div>` : ''}
       ${bodyHtml}
       <div class="pv-divider">
         <div class="pv-divider-line"></div>
