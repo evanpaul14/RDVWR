@@ -3,6 +3,7 @@ import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml } from './utils
 import { renderPost, renderUserCommentCard, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { showSkeletons, setMainOpen } from './feed.js';
+import { cardContent } from './hibernate.js';
 
 const feed      = document.getElementById('feed');
 const sentinel  = document.getElementById('scroll-sentinel');
@@ -140,8 +141,9 @@ async function refreshArchivedLiveInfo(postIds, myGen) {
 }
 
 function applyLiveInfo(id, live) {
-  const card = feed.querySelector(`[data-post-id="${id}"]`);
-  if (!card) return;
+  const el = feed.querySelector(`[data-post-id="${id}"]`);
+  if (!el) return;
+  const card = cardContent(el);
   const scoreNum = card.querySelector('.score-num');
   if (scoreNum) scoreNum.textContent = fmtNum(live.score);
   const minScore = card.querySelector('.min-score');

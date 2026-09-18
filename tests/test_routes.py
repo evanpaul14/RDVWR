@@ -1157,3 +1157,35 @@ class TestRateLimit:
             assert resp.status_code == 429
         finally:
             app.config["RATE_LIMIT"] = False
+
+
+# ── TTLCache ──────────────────────────────────────────────────────────────────
+
+class TestTTLCache:
+    def test_expired_entries_swept_before_live_ones_evicted(self):
+        cache = helpers.TTLCache(3)
+        with patch("helpers.time.time", return_value=1000.0):
+            cache.set("live", 1, 5000)
+            cache.set("old1", 2, 10)
+            cache.set("old2", 3, 10)
+        with patch("helpers.time.time", return_value=2000.0):
+            cache.set("new", 4, 600)
+            assert cache.get("live") == 1
+            assert cache.get("new") == 4
+            assert len(cache) == 2
+
+    def test_expired_get_is_miss_and_removed(self):
+        cache = helpers.TTLCache(10)
+        with patch("helpers.time.time", return_value=1000.0):
+            cache.set("k", "v", 5)
+        with patch("helpers.time.time", return_value=1010.0):
+            assert cache.get("k") is helpers._CACHE_MISS
+        assert len(cache) == 0
+
+    def test_oldest_evicted_when_nothing_expired(self):
+        cache = helpers.TTLCache(2)
+        cache.set("a", 1, 600)
+        cache.set("b", 2, 600)
+        cache.set("c", 3, 600)
+        assert cache.get("a") is helpers._CACHE_MISS
+        assert cache.get("c") == 3
