@@ -921,7 +921,7 @@ function _settingsHtml() {
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Privacy</div>
-    <label class="settings-row"><span class="settings-label">Link instead of embedding third-party media</span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
+    <label class="settings-row"><span class="settings-label">Don't embed third-party media</span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
