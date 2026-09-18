@@ -1,0 +1,9 @@
+services:
+  rdvwr:
+    build: .
+    ports:
+      - "8002:8002"
+    environment:
+      - REDDIT_OAUTH=${REDDIT_OAUTH:-1}
+      - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID:-}
+    restart: unless-stopped
