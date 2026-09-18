@@ -18,6 +18,7 @@ export const DEFAULTS = {
   pagination: false,
   layout: 'card',
   showAvatars: false,
+  linkExternalMedia: false,
 };
 
 function _load() {

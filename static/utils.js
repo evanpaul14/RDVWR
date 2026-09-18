@@ -40,6 +40,10 @@ export function proxyMedia(url) {
   } catch {}
   return url;
 }
+// Same-origin (proxied or local) URL — loading it never contacts a third party.
+export function isLocalUrl(url) {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//');
+}
 // Inverse of the /api/img and /api/m/ proxies — the upstream URL, for host checks,
 // filenames and the download endpoints. Accepts relative or absolute (img.src) forms.
 export function realMediaUrl(url) {

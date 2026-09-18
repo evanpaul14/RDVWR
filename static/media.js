@@ -1,6 +1,6 @@
 import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl } from './utils.js';
+import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl, isLocalUrl } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
@@ -363,6 +363,7 @@ export async function initImgurAlbums(container) {
       const data = await res.json();
       if (!res.ok || !data.images?.length) throw new Error(data.error || 'no images');
       const imgs = data.images.map(img => ({url: img.url, width: img.width, height: img.height, caption: img.description || ''}));
+      if (settings.linkExternalMedia && imgs.some(img => !isLocalUrl(img.url))) throw new Error('unproxied');
       const newHtml = imgs.length === 1
         ? `<div class="post-media"><img src="${escHtml(imgs[0].url)}" loading="lazy" alt="${escHtml(imgs[0].caption)}"></div>`
         : renderGallery(imgs);
@@ -385,7 +386,10 @@ export async function initImgurAlbums(container) {
         }
       }
     } catch {
-      wrap.insertAdjacentHTML('afterend', `<div class="${escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video')}"><iframe src="https://imgur.com/a/${escHtml(id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`);
+      const cls = escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video');
+      wrap.insertAdjacentHTML('afterend', settings.linkExternalMedia
+        ? `<div class="${cls} minimal-media"><a class="minimal-media-link" href="https://imgur.com/a/${escHtml(id)}" target="_blank" rel="noopener noreferrer">Imgur album ↗</a></div>`
+        : `<div class="${cls}"><iframe src="https://imgur.com/a/${escHtml(id)}/embed?pub=true" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`);
       wrap.remove();
       document.querySelector(`[data-imgur-dl="${CSS.escape(id)}"]`)?.remove();
     }
@@ -412,7 +416,7 @@ export function initOgImages(container) {
     const url = wrap.dataset.ogUrl;
     fetchOg(url)
       .then(d => {
-        if (!d.url) { wrap.remove(); return; }
+        if (!d.url || (settings.linkExternalMedia && !isLocalUrl(d.url))) { wrap.remove(); return; }
         if (wrap.classList.contains('post-compact-thumb')) {
           const img = document.createElement('img');
           img.src = d.url;
@@ -470,6 +474,42 @@ export function renderGallery(images) {
     </div>`;
 }
 
+// Where a post's media lives upstream, for a plain outbound link.
+function _mediaLink(p) {
+  const href = p.url || '';
+  if (p.is_video)        return { label: 'video ↗', href: realMediaUrl(p.video_url) || href };
+  if (p.youtube_id)      return { label: 'YouTube video ↗', href: `https://www.youtube.com/watch?v=${p.youtube_id}` };
+  if (p.tiktok_id)       return { label: 'TikTok video ↗', href };
+  if (p.imgur_album_id)  return { label: 'Imgur album ↗', href: `https://imgur.com/a/${p.imgur_album_id}` };
+  if (p.streamable_id)   return { label: 'Streamable video ↗', href: `https://streamable.com/${p.streamable_id}` };
+  if (p.embed_url)       return { label: 'embedded media ↗', href };
+  if (p.gif_url)         return { label: 'gif ↗', href: realMediaUrl(p.gif_url) };
+  if (p.gallery?.length) return { label: `gallery (${p.gallery.length}) ↗`, href };
+  return { label: 'image ↗', href: realMediaUrl(href) };
+}
+
+// True when rendering this post's media inline would make the browser load it
+// straight from a third party (an iframe player or an unproxied CDN URL).
+function _embedsThirdParty(p, full) {
+  if (p.poll || p.is_devvit || p.redgifs_id || p.imgur_album_id) return false;
+  if (p.youtube_id || p.tiktok_id || p.streamable_id || p.embed_url) return true;
+  if (p.is_video) return !isLocalUrl(p.hls_url || p.video_url);
+  if (p.gif_url)  return !isLocalUrl(p.gif_url);
+  if (p.gallery?.length) return p.gallery.some(g => !isLocalUrl(g.url));
+  const img = p.is_self ? null : (full ? p.preview_img : (p.thumb_url ?? p.preview_img));
+  return !!img && !isLocalUrl(img);
+}
+
+// "Link instead of embedding" setting: a proxied thumbnail (if any) plus an outbound link.
+function _linkedMediaHtml(p, full) {
+  const ic = full ? 'pv-media' : 'post-media';
+  const thumb = [full ? p.preview_img : (p.thumb_url ?? p.preview_img), p.preview_img].find(isLocalUrl);
+  const thumbHtml = thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : '';
+  const { label, href } = _mediaLink(p);
+  if (!href) return thumbHtml ? `<div class="${ic}">${thumbHtml}</div>` : '';
+  return `<div class="${ic} minimal-media">${thumbHtml}<a class="minimal-media-link" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">${escHtml(label)}</a></div>`;
+}
+
 // ── Minimal mode: plain thumbnail + link, no video/iframe/gallery-nav embeds ──
 function _minimalMediaHtml(p, full) {
   const ic = full ? 'pv-media' : 'post-media';
@@ -498,8 +538,9 @@ function _minimalMediaHtml(p, full) {
 
 export function mediaHtml(p, full = false) {
   if (p.poll) return renderPoll(p.poll);
-  if (settings.layout === 'minimal') {
-    let html = _minimalMediaHtml(p, full);
+  const linkOnly = settings.linkExternalMedia && _embedsThirdParty(p, full);
+  if (linkOnly || settings.layout === 'minimal') {
+    let html = linkOnly ? _linkedMediaHtml(p, full) : _minimalMediaHtml(p, full);
     if (!html) return '';
     if (p.is_spoiler) html = veilWrap('spoiler', html);
     if (p.over_18)   html = veilWrap('nsfw', html);
