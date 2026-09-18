@@ -111,7 +111,7 @@ python3 -m pytest tests/
 
 | Name | Default | Description |
 |---|---|---|
-| `REDDIT_OAUTH` | `1` | Use OAuth for Reddit API requests. Set to `0` to disable. |
+| `REDDIT_OAUTH` | `1` | Spoofs Reddit OAuth. Set `0` to disable and use public JSON API. |
 | `IMGUR_CLIENT_ID` | _(empty)_ | Imgur API client ID, used to fetch Imgur album contents. |
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
 
