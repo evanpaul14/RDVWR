@@ -750,6 +750,19 @@ class TestMediaProxy:
         assert p["url"] == "/api/m/i.redd.it/pic.jpg"
         assert p["domain"] == "i.redd.it"
 
+    def test_text_fields_and_arrays(self, client, proxy_media_on):
+        from routes import mediaproxy
+        body = (b'{"body":"https://preview.redd.it/a.png","selftext": "https://i.redd.it/b.jpg",'
+                b'"url":"https://i.redd.it/c.jpg","urls":["https://i.imgur.com/d.png","https://i.redd.it/e.jpg"],'
+                b'"content_html":"<img src=\\"https://i.redd.it/f.png\\">"}')
+        out = mediaproxy._BODY_URL_RE.sub(mediaproxy._rewrite_match, body)
+        d = json.loads(out)
+        assert d["body"] == "https://preview.redd.it/a.png"
+        assert d["selftext"] == "https://i.redd.it/b.jpg"
+        assert d["url"] == "/api/m/i.redd.it/c.jpg"
+        assert d["urls"] == ["/api/m/i.imgur.com/d.png", "/api/m/i.redd.it/e.jpg"]
+        assert d["content_html"] == '<img src="/api/m/i.redd.it/f.png">'
+
     @patch.object(reddit_client.SESSION, "get")
     def test_api_urls_untouched_when_disabled(self, mock_get, client):
         post = {**_make_post(), "url": "https://i.redd.it/pic.jpg"}

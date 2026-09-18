@@ -921,7 +921,7 @@ function _settingsHtml() {
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Privacy</div>
-    <label class="settings-row"><span class="settings-label">Link instead of embedding third-party media <span class="settings-hint">(YouTube, TikTok, Streamable and other players, plus any image or video the server doesn't proxy, become links that open in a new tab)</span></span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
+    <label class="settings-row"><span class="settings-label">Link instead of embedding third-party media</span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
