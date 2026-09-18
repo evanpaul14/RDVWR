@@ -52,8 +52,12 @@ def get_home():
                 },
                 impersonate="firefox133",
                 timeout=15,
+                # A redirect would carry the manually-set Cookie header to wherever
+                # Location points, even cross-host — the endpoint is fixed and not
+                # attacker-steerable, but there's no reason to allow it either.
+                allow_redirects=False,
             )
-            if resp.ok:
+            if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 posts = []
                 current_label = None
