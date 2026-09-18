@@ -25,6 +25,8 @@ _POST_PERMALINK_RE = re.compile(r'^([A-Za-z0-9_]+)/comments/([A-Za-z0-9]+)(?:/[^
 @bp.route("/u/<username>", strict_slashes=False)
 @bp.route("/search", strict_slashes=False)
 @bp.route("/saved", strict_slashes=False)
+@bp.route("/subscribed", strict_slashes=False)
+@bp.route("/subscribed/<sort>", strict_slashes=False)
 @bp.route("/r/<subreddit>/duplicates/<post_id>", strict_slashes=False)
 @bp.route("/r/<subreddit>/wiki", strict_slashes=False)
 @bp.route("/r/<subreddit>/wiki/<path:page>", strict_slashes=False)
@@ -69,7 +71,7 @@ def _try_inject_subreddit(sub, sort, time):
     Returns (feed_dict, about_dict); either may be None on error."""
     def _feed():
         try:
-            url = f"https://www.reddit.com/r/{sub}/{sort}.json"
+            url = f"https://www.reddit.com/r/{sub.replace('+', '%2B')}/{sort}.json"
             params = {"limit": FEED_LIMIT, "raw_json": 1}
             add_time_param(params, sort, time)
             r = reddit_get(url, params=params, timeout=6)

@@ -168,7 +168,9 @@ def get_posts(subreddit):
     t     = request.args.get("t", "")
     after             = request.args.get("after", "")
     quarantine_opt_in = request.args.get("quarantine_opt_in", "")
-    url   = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
+    # A literal "+" in combined feeds (a+b) makes oauth.reddit.com redirect to the
+    # HTML front page; the percent-encoded form returns the merged listing.
+    url   = f"https://www.reddit.com/r/{subreddit.replace('+', '%2B')}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
     add_time_param(params, sort, t)
     if after:

@@ -116,6 +116,13 @@ class TestSubredditFeed:
         assert len(data["posts"]) == 1
 
     @patch.object(reddit_client.SESSION, "get")
+    def test_combined_feed_plus_is_percent_encoded(self, mock_get, client):
+        mock_get.return_value = _session_get(_make_listing([_make_post()]))
+        resp = client.get("/api/r/pics+aww?sort=hot")
+        assert resp.status_code == 200
+        assert mock_get.call_args.args[0] == "https://www.reddit.com/r/pics%2Baww/hot.json"
+
+    @patch.object(reddit_client.SESSION, "get")
     def test_404_from_reddit(self, mock_get, client):
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/r/nonexistent_sub_xyz")
