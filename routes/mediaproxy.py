@@ -25,9 +25,13 @@ MEDIA_PROXY_MAX_REDIRECTS = 3
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
 
 _HOST_ALT = '|'.join(re.escape(h) for h in sorted(MEDIA_PROXY_HOSTS))
-# Only rewrite URLs that start a JSON string value, so links inside markdown bodies
-# (which the frontend proxies itself when it renders them as media) stay intact.
-_BODY_URL_RE     = re.compile(rb'"https://(' + _HOST_ALT.encode() + rb')/')
+# Matches a quoted URL, plus the object key it's the value of (if any). Only the start of
+# a string is rewritten, so links mid-way through text are left alone.
+_BODY_URL_RE     = re.compile(rb'(?:"(\w+)"\s*:\s*)?"https://(' + _HOST_ALT.encode() + rb')/')
+# Markdown/text fields: a body that is just an image URL must stay absolute so the
+# markdown renderer still autolinks it (it applies the proxy itself when rendering).
+_TEXT_KEYS       = frozenset({b'body', b'selftext', b'description', b'public_description',
+                              b'sidebar', b'text', b'title', b'translated'})
 _PLAYLIST_URL_RE = re.compile(r'https://(' + _HOST_ALT + r')/')
 _REWRITE_TYPES   = ('application/json', 'text/html')
 
@@ -84,6 +88,14 @@ def proxy_media(host, rest):
                     status=upstream.status_code, headers=resp_headers, direct_passthrough=True)
 
 
+def _rewrite_match(m):
+    key, host = m.group(1), m.group(2)
+    if key in _TEXT_KEYS:
+        return m.group(0)
+    key_prefix = m.group(0)[:m.start(2) - m.start(0) - len(b'"https://')]
+    return key_prefix + b'"/api/m/' + host + b'/'
+
+
 @bp.after_app_request
 def rewrite_media_urls(resp):
     """Point allowlisted media URLs in API/SPA payloads at /api/m/ when PROXY_MEDIA is on.
@@ -95,7 +107,7 @@ def rewrite_media_urls(resp):
     if not (resp.mimetype or '').startswith(_REWRITE_TYPES) or request.path.startswith('/api/m/'):
         return resp
     body = resp.get_data()
-    new_body = _BODY_URL_RE.sub(rb'"/api/m/\1/', body)
+    new_body = _BODY_URL_RE.sub(_rewrite_match, body)
     if new_body != body:
         resp.set_data(new_body)
     return resp
