@@ -13,6 +13,24 @@ bp = Blueprint("pages", __name__)
 _SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
 _POST_PERMALINK_RE = re.compile(r'^([A-Za-z0-9_]+)/comments/([A-Za-z0-9]+)(?:/[^/]*(?:/([A-Za-z0-9]+))?)?/?$')
 
+# Allowlist for the raw ".json" passthrough below: only the same public content
+# shapes rdvwr's own endpoints already expose (subreddit feeds/about/wiki, post
+# permalinks, user profiles, search) — never arbitrary oauth.reddit.com paths
+# like /api/v1/me.json or /api/morechildren.json, which would let any visitor
+# use the server's pooled OAuth credentials as an open proxy into Reddit's
+# authenticated API.
+_JSON_PASSTHROUGH_RE = re.compile(
+    r'^(?:'
+    r'r/[A-Za-z0-9_+]{1,100}(?:/(?:hot|new|top|rising|controversial'
+    r'|about|about/rules|about/moderators'
+    r'|comments/[A-Za-z0-9]{1,10}(?:/[^/]*(?:/[A-Za-z0-9]{1,10})?)?'
+    r'|duplicates/[A-Za-z0-9]{1,10}'
+    r'|wiki(?:/[A-Za-z0-9_\-/]+)?))?'
+    r'|u(?:ser)?/[A-Za-z0-9_-]{1,50}(?:/(?:about|submitted|comments|overview|trophies))?'
+    r'|search'
+    r')\.json$'
+)
+
 
 # ── SPA catch-all routes ──────────────────────────────────────────────────────
 
@@ -106,6 +124,8 @@ def _try_inject_subreddit(sub, sort, time):
 @bp.route("/r/<path:reddit_path>")
 def r_json_or_spa(reddit_path):
     if reddit_path.endswith(".json"):
+        if not _JSON_PASSTHROUGH_RE.match(f"r/{reddit_path}"):
+            return jsonify({"error": "not found"}), 404
         return _proxy_reddit(f"r/{reddit_path}")
     initial_data = initial_about = initial_post = None
     m = _SUB_FEED_RE.match(reddit_path)
@@ -146,6 +166,6 @@ def _proxy_reddit(reddit_path):
 
 @bp.route("/<path:reddit_path>")
 def json_catch_all(reddit_path):
-    if reddit_path.endswith(".json"):
+    if reddit_path.endswith(".json") and _JSON_PASSTHROUGH_RE.match(reddit_path):
         return _proxy_reddit(reddit_path)
     return jsonify({"error": "not found"}), 404
