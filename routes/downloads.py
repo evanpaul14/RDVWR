@@ -9,11 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from flask import Blueprint, jsonify, request, Response
 from reddit_client import SESSION, HEADERS
-from helpers import STREAM_CHUNK_SIZE, error_response, log
+from helpers import STREAM_CHUNK_SIZE, DISABLE_DOWNLOADS, error_response, log
 
 bp = Blueprint("downloads", __name__)
-
-DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 def _downloads_enabled(f):

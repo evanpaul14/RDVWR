@@ -20,6 +20,8 @@ FEED_LIMIT           = 25
 COMMENTS_LIMIT       = 200
 STREAM_CHUNK_SIZE    = 65536
 
+DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
 
 log = logging.getLogger(__name__)
 

@@ -18,6 +18,7 @@ function _pvDlExt(url) {
 const _DL_SVG = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function buildDownloadBtn(p) {
+  if (window.__DISABLE_DOWNLOADS__) return '';
   // Redgifs: placeholder replaced by initRedgifs once video URL is resolved
   if (p.redgifs_id) {
     return `<span class="share-btn pv-dl-placeholder" data-rg-dl="${escHtml(p.redgifs_id)}" title="Download (loading…)">${_DL_SVG} download</span>`;
