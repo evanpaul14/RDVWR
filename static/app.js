@@ -9,11 +9,12 @@ import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
 import { initKeyboard } from './keyboard.js';
 import { initCardHibernation, cardContent } from './hibernate.js';
 import { toggleSaved, saveBtnLabel } from './saved.js';
+import { getSubs, isSubscribed, isSubscribable, toggleSub, MAX_SUBS } from './subscriptions.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
   loadHome, loadHomeFeed, buildHomeSortHtml,
-  loadDuplicatesPage, loadSaved,
+  loadDuplicatesPage, loadSaved, loadSubscribed,
   sortBar, setMainOpen, buildSubSortHtml,
 } from './feed.js';
 import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js';
@@ -98,13 +99,27 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'saved') state.savedMode = false;
+  if (!['home', 'subscribed', 'post'].includes(route.type)) state.subsMode = false;
+  if (route.type !== 'post') { updateSubscribeBtn(route); updateFeedsActive(route); }
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
     case 'home':
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      await loadHome(route.sort || 'best', route.time || 'all', route.after || null);
+      // Without a personalized feed, local subscriptions take over the home feed.
+      if (!settings.redditCookies && getSubs().length) {
+        await loadSubscribed(route.sort || 'best', route.time || 'all', route.after || null, '/home');
+      } else {
+        state.subsMode = false;
+        await loadHome(route.sort || 'best', route.time || 'all', route.after || null);
+      }
+      break;
+    case 'subscribed':
+      closePostView();
+      closeSidebar();
+      state.searchMode = false;
+      await loadSubscribed(route.sort, route.time || 'all', route.after || null, '/subscribed');
       break;
     case 'sub': {
       closePostView();
@@ -181,6 +196,10 @@ window.addEventListener('popstate', (e) => {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
+  if ((route.type === 'home' || route.type === 'subscribed') && hasFeedPosts && state.subsMode && state.subsBase === (route.type === 'home' ? '/home' : '/subscribed') && (route.sort || 'best') === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
+    window.scrollTo({top: savedScroll, behavior: 'instant'});
+    return;
+  }
   if (route.type === 'home' && hasFeedPosts && state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
@@ -250,6 +269,8 @@ function retryFeedLoad() {
   }
   if (state.savedMode) {
     loadSaved();
+  } else if (state.subsMode) {
+    loadSubscribed(state.currentSort, state.currentTime, null, state.subsBase);
   } else if (state.liveMode) {
     loadLiveThread(state.liveThreadId);
   } else if (state.duplicatesMode) {
@@ -377,7 +398,9 @@ sortBar.addEventListener('click', e => {
   state.currentSort = newSort; state.currentTime = newSort === 'controversial' ? 'day' : 'all';
   state.afterToken = null;
   window.scrollTo({top:0, behavior:'instant'});
-  if (state.homeMode) {
+  if (state.subsMode) {
+    navigate(`${state.subsBase}/${state.currentSort}`, { replace:true });
+  } else if (state.homeMode) {
     navigate(`/home/${state.currentSort}`, { replace:true });
   } else if (state.multiMode) {
     navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
@@ -403,6 +426,11 @@ sortBar.addEventListener('change', e => {
     state.profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
+  } else if (state.subsMode) {
+    state.currentTime = sel.value;
+    state.afterToken = null;
+    window.scrollTo({top:0, behavior:'instant'});
+    navigate(`${state.subsBase}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
   } else if (state.homeMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
@@ -504,6 +532,12 @@ function buildNextPageUrl() {
   } else if (state.duplicatesMode) {
     if (!state.duplicatesAfter) return null;
     return `/r/${encodeURIComponent(state.duplicatesSub)}/duplicates/${encodeURIComponent(state.duplicatesPostId)}?after=${encodeURIComponent(state.duplicatesAfter)}&page=${nextPage}`;
+  } else if (state.subsMode) {
+    if (!state.afterToken) return null;
+    const params = [];
+    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
+    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
+    return `${state.subsBase}/${state.currentSort}?${params.join('&')}`;
   } else if (state.homeMode) {
     if (!state.afterToken) return null;
     const params = [];
@@ -743,6 +777,34 @@ document.addEventListener('auxclick', e => {
   interceptNavLink(a, e);
 }, true);
 
+// Subscribe / unsubscribe (local)
+const ctxSubBtn = document.getElementById('ctx-sub-btn');
+function _renderSubscribeBtn(sub) {
+  const on = isSubscribed(sub);
+  ctxSubBtn.textContent = on ? 'subscribed' : 'subscribe';
+  ctxSubBtn.classList.toggle('is-subscribed', on);
+  ctxSubBtn.setAttribute('aria-pressed', String(on));
+  ctxSubBtn.title = on ? `Unsubscribe from r/${sub}` : `Add r/${sub} to your subscribed feed`;
+}
+function updateSubscribeBtn(route) {
+  const show = route.type === 'sub' && isSubscribable(route.sub);
+  ctxSubBtn.hidden = !show;
+  if (!show) return;
+  ctxSubBtn.dataset.sub = route.sub;
+  _renderSubscribeBtn(route.sub);
+}
+ctxSubBtn.addEventListener('click', () => {
+  const sub = ctxSubBtn.dataset.sub;
+  if (!sub) return;
+  if (toggleSub(sub) === null) {
+    ctxSubBtn.title = getSubs().length >= MAX_SUBS
+      ? `You can subscribe to at most ${MAX_SUBS} subreddits`
+      : 'Could not save (storage full or unavailable)';
+    return;
+  }
+  _renderSubscribeBtn(sub);
+});
+
 // Save / unsave (local)
 function _setSaveBtn(btn, saved) {
   btn.classList.toggle('is-saved', saved);
@@ -949,10 +1011,26 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 // ── Feeds button mode ─────────────────────────────────────────────────────────
 function updateFeedsBtn() {
   const menu = !!settings.redditCookies;
+  document.getElementById('feeds-menu').classList.toggle('has-menu', menu);
   feedsBtn.textContent = menu ? 'feeds ▾' : 'saved';
   feedsBtn.setAttribute('aria-label', menu ? 'Feeds' : 'Saved posts');
   if (menu) feedsBtn.setAttribute('aria-haspopup', 'menu');
   else { feedsBtn.removeAttribute('aria-haspopup'); setFeedsMenuOpen(false); }
+  // Popular and the separate subscribed feed only exist alongside a personalized home feed.
+  feedsDropdown.querySelectorAll('.feeds-item[data-feed="/r/popular"], .feeds-item[data-feed="/subscribed"]')
+    .forEach(item => { item.hidden = !menu; });
+}
+
+function updateFeedsActive(route) {
+  const current = route.type === 'saved' ? '/saved'
+    : route.type === 'subscribed' ? '/subscribed'
+    : route.type === 'sub' && route.sub.toLowerCase() === 'popular' ? '/r/popular'
+    : null;
+  feedsDropdown.querySelectorAll('.feeds-item').forEach(item => {
+    const on = item.dataset.feed === current;
+    item.classList.toggle('active', on);
+    if (on) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
+  });
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

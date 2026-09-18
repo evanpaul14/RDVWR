@@ -66,6 +66,8 @@ export const state = {
   // Wiki
   wikiMode: false,
   savedMode: false,
+  subsMode: false,
+  subsBase: null,
   _wikiSub: '',
   _wikiPage: '',
 

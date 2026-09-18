@@ -4,6 +4,7 @@ import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT
 import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { getSavedPosts } from './saved.js';
+import { getSubs } from './subscriptions.js';
 import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -214,6 +215,46 @@ export async function loadSaved() {
   initGifVideos(feed);
 }
 
+// ── Subscribed feed (local subscriptions) ─────────────────────────────────────
+// `base` is the URL prefix the feed lives under: /home when it stands in for the
+// anonymous home feed, /subscribed when a personalized home feed takes /home.
+export async function loadSubscribed(sort='hot', time='all', after=null, base='/subscribed') {
+  const subs = getSubs();
+  state.subsMode    = true;
+  state.subsBase    = base;
+  state.homeMode    = false;
+  state.profileMode = false;
+  state.multiMode   = false;
+  state.currentSub  = subs.join('+');
+  state.currentSort = sort;
+  state.currentTime = time;
+  state.afterToken  = null;
+  state.currentAfter = after;
+  document.title = base === '/home' ? 'Home — RDVWR' : 'Subscribed — RDVWR';
+  subInput.value = '';
+  pvSubInput.value = '';
+  document.getElementById('ctx-icon-wrap').innerHTML = '';
+  document.getElementById('ctx-title').textContent = 'Subscribed';
+  document.getElementById('ctx-stats').innerHTML = subs.length
+    ? subs.map(sub => `<a class="ctx-sub-link" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`).join(' · ')
+    : 'no subreddits yet';
+  ctxInfo.classList.add('visible');
+  if (!subs.length) {
+    state.feedGen++;
+    state.loading = false;
+    setMainOpen('');
+    sortBar.style.display = 'none';
+    sentinel.innerHTML = '';
+    sentinel.classList.remove('active', 'loading');
+    feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No subscriptions</div><div class="state-sub">Open a subreddit and use its subscribe button to add it here.</div></div>';
+    return;
+  }
+  setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
+  sortBar.innerHTML = buildHomeSortHtml(sort, time);
+  sortBar.style.display = 'flex';
+  await loadSubFeed(state.currentSub, sort, time, after);
+}
+
 // ── Subreddit feed ────────────────────────────────────────────────────────────
 const _aboutCache = new Map();
 const ABOUT_CACHE_TTL = 5 * 60 * 1000;
@@ -307,7 +348,7 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     await waitForMdLibs();
     if (myGen !== state.feedGen) return;
     const startIdx = append ? feed.children.length : 0;
-    const multiSub = state.currentSub === 'popular' || state.currentSub === 'all';
+    const multiSub = state.currentSub === 'popular' || state.currentSub === 'all' || state.currentSub.includes('+');
     const tmp = document.createElement('div');
     tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join('');
     initMedia(tmp);

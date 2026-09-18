@@ -30,6 +30,7 @@
     <div class="feeds-menu" id="feeds-menu">
       <button class="popular-btn" id="feeds-btn" aria-haspopup="menu" aria-expanded="false">saved</button>
       <div class="feeds-dropdown" id="feeds-dropdown" role="menu" hidden>
+        <button class="feeds-item" role="menuitem" data-feed="/subscribed">subscribed</button>
         <button class="feeds-item" role="menuitem" data-feed="/saved">saved</button>
         <button class="feeds-item" role="menuitem" data-feed="/r/popular">popular</button>
       </div>
@@ -90,6 +91,7 @@
     <div class="ctx-title" id="ctx-title"></div>
     <div class="ctx-stats" id="ctx-stats"></div>
   </div>
+  <button class="popular-btn ctx-sub-btn" id="ctx-sub-btn" aria-pressed="false" hidden>subscribe</button>
 </div>
 
 <!-- ── Sidebar panel ── -->
@@ -124,18 +126,18 @@
     </svg>
     <span>Home</span>
   </button>
+  <button class="bn-btn" id="bn-saved" aria-label="Saved posts">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Saved</span>
+  </button>
   <button class="bn-btn" id="bn-search" aria-label="Search">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.5"/>
       <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <span>Search</span>
-  </button>
-  <button class="bn-btn" id="bn-saved" aria-label="Saved posts">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    <span>Saved</span>
   </button>
   <button class="bn-btn" id="bn-settings" aria-label="Settings">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">

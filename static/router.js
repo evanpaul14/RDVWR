@@ -43,6 +43,11 @@ export function parseRoute(path=location.pathname) {
     return { type:'user', username:mUser[1], after: params.get('after') || null, page: parseInt(params.get('page')) || 1 };
   }
   if (pathname === '/saved' || pathname === '/saved/') return { type: 'saved' };
+  const mSubscribed = pathname.match(/^\/subscribed(?:\/([^\/]+))?\/?$/i);
+  if (mSubscribed) {
+    const params = _qs(path);
+    return { type: 'subscribed', sort: SORTS.has(mSubscribed[1]) ? mSubscribed[1] : 'hot', time: params.get('t') || 'all', after: params.get('after') || null };
+  }
   if (pathname === '/search') {
     const params = _qs(path);
     const q = params.get('q') || '';
