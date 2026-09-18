@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
-import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref } from './media.js';
+import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
@@ -456,7 +456,7 @@ function _showGalleryDlModal(gallery, postId) {
   const itemsHtml = eligible.map((img, i) => `
     <label class="gdl-item">
       <input type="checkbox" class="gdl-check" checked data-url="${escHtml(realMediaUrl(img.url))}">
-      <div class="gdl-thumb"><img src="${escHtml(img.url)}" alt="${escHtml(img.caption || '')}" loading="lazy"></div>
+      <div class="gdl-thumb"><img src="${escHtml(galleryMini(img))}" alt="${escHtml(img.caption || '')}" loading="lazy"></div>
       ${img.caption ? `<span class="gdl-caption">${escHtml(img.caption)}</span>` : `<span class="gdl-caption">${i + 1}</span>`}
     </label>`).join('');
 

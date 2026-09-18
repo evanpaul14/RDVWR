@@ -1,5 +1,5 @@
 import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl, isLocalUrl } from './utils.js';
-import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain } from './media.js';
+import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
@@ -229,7 +229,7 @@ export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(link
 
 // ── Compact mode row ─────────────────────────────────────────────────────────
 function _compactThumbSrc(m) {
-  const src = m.gallery?.[0]?.url ?? m.thumb_url ?? m.preview_img ?? null;
+  const src = (m.gallery?.[0] && galleryMini(m.gallery[0])) ?? m.thumb_url ?? m.preview_img ?? null;
   // Under "link instead of embedding", fall back to a proxied thumbnail or none.
   if (src && settings.linkExternalMedia && !isLocalUrl(src))
     return [m.thumb_url, m.preview_img].find(isLocalUrl) ?? null;
@@ -445,7 +445,7 @@ export function renderPost(p, idx, showSub=false) {
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
   const isCompact = linksOut || (!p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain);
   if (isCompact) {
-    const imgSrc = linksOut ? _compactThumbSrc(p) : (p.gallery?.[0]?.url ?? p.thumb_url ?? p.preview_img ?? null);
+    const imgSrc = linksOut ? _compactThumbSrc(p) : ((p.gallery?.[0] && galleryMini(p.gallery[0])) ?? p.thumb_url ?? p.preview_img ?? null);
     let thumbHtml = '';
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;

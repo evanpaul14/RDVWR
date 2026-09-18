@@ -870,7 +870,7 @@ document.addEventListener('click', e => {
   if (!img) return;
   e.preventDefault();
   e.stopPropagation();
-  openLightbox(img.src);
+  openLightbox(img.dataset.full || img.src);
 });
 
 document.addEventListener('click', e => {
