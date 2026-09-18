@@ -1,6 +1,7 @@
 import os
+import secrets
 import logging
-from flask import Flask
+from flask import Flask, g
 from flask_compress import Compress
 from helpers import CACHE_TTL_STATIC
 from routes import register_all
@@ -20,7 +21,41 @@ def _inject_asset_version():
             return str(int(os.path.getmtime(os.path.join(app.static_folder, filename))))
         except OSError:
             return '0'
-    return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'])
+    return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''))
+
+
+@app.before_request
+def _set_csp_nonce():
+    g.csp_nonce = secrets.token_urlsafe(16)
+
+
+# Content-Security-Policy: script-src has no 'unsafe-inline' — the handful of
+# server-injected inline <script> tags (initial SSR data) carry a fresh
+# per-request nonce instead, and app code has no other inline scripts or
+# inline event-handler attributes. This is the main defense against exfiltrating
+# page state (e.g. localStorage) through an injected <script> if an XSS bug is
+# ever found: the browser refuses to run anything not from 'self' or nonced,
+# and connect-src 'self' blocks fetch()/XHR exfil to an attacker-controlled host.
+# img-src/media-src/frame-src stay open to https: since posts embed arbitrary
+# third-party media/oEmbed hosts by design.
+@app.after_request
+def _set_csp_header(resp):
+    nonce = g.get('csp_nonce', '')
+    resp.headers['Content-Security-Policy'] = (
+        f"default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}'; "
+        f"style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' https: data:; "
+        f"media-src 'self' https: blob:; "
+        f"font-src 'self'; "
+        f"connect-src 'self'; "
+        f"frame-src https:; "
+        f"object-src 'none'; "
+        f"base-uri 'self'; "
+        f"form-action 'self'; "
+        f"frame-ancestors 'self'"
+    )
+    return resp
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

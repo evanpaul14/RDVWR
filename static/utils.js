@@ -71,6 +71,21 @@ export function timeAgo(utc) {
 export function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// Delegated fallback handling for broken <img> loads, driven by a data-onerror
+// attribute instead of an inline onerror="..." attribute — the CSP's script-src
+// has no 'unsafe-inline', which blocks inline event-handler attributes outright.
+// The 'error' event doesn't bubble, so this has to listen on the capture phase.
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.onerror) return;
+  switch (img.dataset.onerror) {
+    case 'hide':          img.style.display = 'none'; break;
+    case 'remove-parent': img.parentElement?.remove(); break;
+    case 'no-media':      img.parentElement?.classList.add('no-media'); break;
+    case 'fallback-letter': img.outerHTML = `<span>${img.dataset.fallback || '?'}</span>`; break;
+  }
+}, true);
 export function fmtDate(utc) {
   return new Date(utc*1000).toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
 }

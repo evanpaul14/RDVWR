@@ -289,7 +289,7 @@ export async function loadAbout(sub) {
       _aboutCache.set(key, { d, ts: Date.now() });
     }
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
-      ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
+      ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" data-onerror="hide">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;
     const activePart = d.active ? ` · <span>${fmtNum(d.active)}</span> online` : '';
     const statePart = d.state ? ` · <span class="ctx-state">${escHtml(SUB_STATE_LABELS[d.state] || d.state)}</span>` : '';

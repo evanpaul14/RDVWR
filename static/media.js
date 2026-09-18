@@ -431,7 +431,7 @@ export function initOgImages(container) {
           }
         } else {
           const cls = wrap.classList.contains('pv-media') ? 'pv-media' : 'post-media';
-          wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`);
+          wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}" loading="lazy" alt="" data-onerror="no-media"></div>`);
           wrap.remove();
         }
       })
@@ -522,7 +522,7 @@ export function mediaLinkDomain(p) {
 
 function _linkedPreviewHtml(p) {
   const img = [p.preview_img, p.thumb_url].find(isLocalUrl);
-  return img ? `<div class="pv-media"><img src="${escHtml(img)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>` : '';
+  return img ? `<div class="pv-media"><img src="${escHtml(img)}" loading="lazy" alt="" data-onerror="no-media"></div>` : '';
 }
 
 // Card-embed fallback (crossposts): a proxied thumbnail (if any) plus an outbound link.
@@ -612,14 +612,14 @@ export function mediaHtml(p, full = false) {
   } else if (p.gif_url) {
     html = p.gif_is_video
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
-      : `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+      : `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" data-onerror="no-media"></div>`;
   } else if (p.gallery?.length > (full ? 0 : 1)) {
     html = renderGallery(p.gallery, full);
   } else {
     const imgSrc = p.gallery?.length ? (full ? p.gallery[0].url : galleryThumb(p.gallery[0])) : (!p.is_self ? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) : null);
     if (imgSrc) {
       const fullAttr = p.gallery?.length && !full ? ` data-full="${escHtml(p.gallery[0].url)}"` : '';
-      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}"${fullAttr} loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}"${fullAttr} loading="lazy" alt="" data-onerror="no-media"></div>`;
     } else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) {
       html = `<div class="og-placeholder ${ic}" data-og-url="${escHtml(p.url)}"></div>`;
     }

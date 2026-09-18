@@ -162,7 +162,7 @@ function applyLiveInfo(id, live) {
 
 function _renderProfileAbout(d) {
   document.getElementById('ctx-icon-wrap').innerHTML = d.icon
-    ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" onerror="this.style.display='none'">` : '';
+    ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" data-onerror="hide">` : '';
   document.getElementById('ctx-title').textContent = `u/${d.name}`;
   document.getElementById('ctx-stats').innerHTML =
     `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}`;

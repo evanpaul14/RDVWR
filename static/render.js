@@ -289,7 +289,7 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
   const postNav = `/r/${sub}/comments/${id}`;
   let thumbHtml = '';
   if (imgSrc) {
-    const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
+    const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" data-onerror="remove-parent">`;
     let thumbContent = thumbInner;
     if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
     if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
@@ -330,7 +330,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
     const imgSrc = _compactThumbSrc(mediaSrc);
     if (imgSrc) {
       const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
-      let thumbContent = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
+      let thumbContent = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" data-onerror="remove-parent">`;
       if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
       if (p.over_18)    thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
@@ -448,7 +448,7 @@ export function renderPost(p, idx, showSub=false) {
     const imgSrc = linksOut ? _compactThumbSrc(p) : ((p.gallery?.[0] && galleryMini(p.gallery[0])) ?? p.thumb_url ?? p.preview_img ?? null);
     let thumbHtml = '';
     if (imgSrc) {
-      const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
+      const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" data-onerror="remove-parent">`;
       let thumbContent = thumbInner;
       if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
       if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
@@ -569,7 +569,7 @@ export function renderCommunityCard(c, idx) {
   const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   const letter = escHtml((c.name||'?')[0].toUpperCase());
   const iconHtml = c.icon
-    ? `<img src="${escHtml(c.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
+    ? `<img src="${escHtml(c.icon)}" alt="" data-onerror="fallback-letter" data-fallback="${letter}">`
     : `<span>${letter}</span>`;
   return `<div class="community-card" tabindex="0" role="button" style="animation-delay:${delay}ms" data-nav="/r/${escHtml(c.name)}">
     <div class="community-card-icon">${iconHtml}</div>
@@ -586,7 +586,7 @@ export function renderUserCard(u, idx) {
   const delay = Math.min(idx*ANIM_DELAY_STEP, ANIM_DELAY_MAX);
   const letter = escHtml((u.name||'?')[0].toUpperCase());
   const iconHtml = u.icon
-    ? `<img src="${escHtml(u.icon)}" alt="" onerror="this.outerHTML='<span>${letter}</span>'">`
+    ? `<img src="${escHtml(u.icon)}" alt="" data-onerror="fallback-letter" data-fallback="${letter}">`
     : `<span>${letter}</span>`;
   return `<a class="user-card" style="animation-delay:${delay}ms" href="/user/${escHtml(u.name)}" data-nav="/user/${escHtml(u.name)}">
     <div class="user-card-icon">${iconHtml}</div>
