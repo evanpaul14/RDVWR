@@ -107,8 +107,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      // Without a personalized feed, local subscriptions take over the home feed.
-      if (!settings.redditCookies && getSubs().length) {
+      if (subscribedIsHome()) {
         await loadSubscribed(route.sort || 'best', route.time || 'all', route.after || null, '/home');
       } else {
         state.subsMode = false;
@@ -664,6 +663,16 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !feedsDropdown.hidden) setFeedsMenuOpen(false);
 });
 
+// Subscribed-feed subreddit list: close on outside click, Escape, or picking a subreddit
+document.addEventListener('click', e => {
+  const open = document.querySelector('.ctx-subs[open]');
+  if (open && (!open.contains(e.target) || e.target.closest('.ctx-subs-item'))) open.open = false;
+});
+document.addEventListener('keydown', e => {
+  const open = document.querySelector('.ctx-subs[open]');
+  if (e.key === 'Escape' && open) open.open = false;
+});
+
 // Bottom nav
 document.getElementById('bn-home').addEventListener('click', () => navigate('/'));
 document.getElementById('bn-search').addEventListener('click', () => {
@@ -902,6 +911,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
+    <label class="settings-row" id="s-home-feed-row"${settings.redditCookies ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed']], settings.homeFeed || 'personalized')}</label>
     <label class="settings-row settings-row--stack"><span class="settings-label">Reddit cookies <span class="settings-hint">(for personalised home feed — open reddit.com, F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, then paste below)</span></span><textarea class="settings-input settings-textarea" id="s-reddit-cookies" spellcheck="false" autocomplete="off" placeholder="loid=…; token_v2=…; session_tracker=…">${escHtml(settings.redditCookies || '')}</textarea></label>
   </div>
   <div class="settings-section">
@@ -940,7 +950,18 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); updateFeedsBtn(); });
+  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => {
+    settings.redditCookies = e.target.value.trim();
+    saveSettings();
+    updateFeedsBtn();
+    settingsBody.querySelector('#s-home-feed-row').style.display = settings.redditCookies ? '' : 'none';
+  });
+  settingsBody.querySelector('#s-home-feed').addEventListener('change', e => {
+    settings.homeFeed = e.target.value;
+    saveSettings();
+    updateFeedsBtn();
+    if (parseRoute().type === 'home') renderRoute(parseRoute());
+  });
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
@@ -970,6 +991,7 @@ function bindSettingEvents() {
     Object.assign(settings, DEFAULTS);
     state.currentCommentSort = DEFAULTS.commentSort;
     saveSettings();
+    updateFeedsBtn();
     settingsBody.innerHTML = _settingsHtml();
     bindSettingEvents();
   });
@@ -1009,6 +1031,12 @@ document.getElementById('settings-close').addEventListener('click', closeSetting
 settingsOverlay.addEventListener('click', closeSettingsPanel);
 
 // ── Feeds button mode ─────────────────────────────────────────────────────────
+/** Local subscriptions take over Home when there's no personalized feed, or when the
+ *  user picked them as the home feed in settings. */
+function subscribedIsHome() {
+  return getSubs().length > 0 && (!settings.redditCookies || settings.homeFeed === 'subscribed');
+}
+
 function updateFeedsBtn() {
   const menu = !!settings.redditCookies;
   document.getElementById('feeds-menu').classList.toggle('has-menu', menu);
@@ -1017,8 +1045,9 @@ function updateFeedsBtn() {
   if (menu) feedsBtn.setAttribute('aria-haspopup', 'menu');
   else { feedsBtn.removeAttribute('aria-haspopup'); setFeedsMenuOpen(false); }
   // Popular and the separate subscribed feed only exist alongside a personalized home feed.
-  feedsDropdown.querySelectorAll('.feeds-item[data-feed="/r/popular"], .feeds-item[data-feed="/subscribed"]')
-    .forEach(item => { item.hidden = !menu; });
+  feedsDropdown.querySelector('.feeds-item[data-feed="/r/popular"]').hidden = !menu;
+  // No separate subscribed entry when it's already what Home shows.
+  feedsDropdown.querySelector('.feeds-item[data-feed="/subscribed"]').hidden = !menu || settings.homeFeed === 'subscribed';
 }
 
 function updateFeedsActive(route) {

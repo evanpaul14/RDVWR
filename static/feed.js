@@ -236,7 +236,10 @@ export async function loadSubscribed(sort='hot', time='all', after=null, base='/
   document.getElementById('ctx-icon-wrap').innerHTML = '';
   document.getElementById('ctx-title').textContent = 'Subscribed';
   document.getElementById('ctx-stats').innerHTML = subs.length
-    ? subs.map(sub => `<a class="ctx-sub-link" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`).join(' · ')
+    ? `<details class="ctx-subs">
+        <summary><span>${subs.length}</span> subreddit${subs.length === 1 ? '' : 's'} ▾</summary>
+        <div class="ctx-subs-list">${subs.map(sub => `<a class="ctx-subs-item" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`).join('')}</div>
+      </details>`
     : 'no subreddits yet';
   ctxInfo.classList.add('visible');
   if (!subs.length) {
