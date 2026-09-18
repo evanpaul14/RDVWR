@@ -1,5 +1,5 @@
 import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl, isLocalUrl } from './utils.js';
-import { mediaHtmlCard, mediaHtmlFull } from './media.js';
+import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
@@ -299,9 +299,9 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     } else if (mediaSrc.gallery?.length > 1 && _lightboxOk(mediaSrc)) {
       thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(mediaSrc.gallery[0].url)}" data-gallery="${escHtml(JSON.stringify(_galleryUrls(mediaSrc)))}">${thumbContent}${galleryBadge}</a>`;
     } else {
-      thumbHtml = _compactHasMedia(mediaSrc)
+      thumbHtml = _compactHasMedia(mediaSrc) && !linksOutMedia(mediaSrc)
         ? `<a class="post-compact-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`
-        : `<a class="post-compact-thumb" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
+        : `<a class="post-compact-thumb" href="${escHtml(linksOutMedia(mediaSrc) ? mediaLinkHref(mediaSrc) : mediaSrc.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
     }
   } else if (!mediaSrc.is_self && mediaSrc.url && /^https?:\/\//.test(mediaSrc.url) && settings.layout !== 'minimal' && !_isVReddIt(mediaSrc.url)) {
     thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(mediaSrc.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(mediaSrc.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
@@ -351,7 +351,8 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
   if (p.poll)        badges += `<span class="badge badge-poll">poll</span>`;
   const flairHtml  = renderFlair(p, true);
   const titleExtra = (p.is_self ? ' min-title-self' : '');
-  const domainHtml = !p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it')
+  const domainHtml = linksOutMedia(p) ? `<span class="min-domain">(${escHtml(mediaLinkDomain(p))})</span>`
+    : !p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it')
     ? `<span class="min-domain">(${escHtml(p.domain)})</span>` : '';
   const editedHtml = p.edited_utc ? ` <span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
   const subLink    = showSub ? `<a class="min-sub" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a> · ` : '';
@@ -384,7 +385,11 @@ export function renderPost(p, idx, showSub=false) {
   tags += renderFlair(p, true);
   const titleClass = 'post-title'+(p.is_self?' is-italic':'');
   const isGalleryUrl = p.url && p.url.includes('/gallery/');
-  const domainHtml = !p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !_isVReddIt(p.url) && !isGalleryUrl ? `<a class="ext-link" href="${escHtml(p.url)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(p.domain)}</a>` : '';
+  // Media the "don't embed" setting links out is presented like an article link.
+  const linksOut = linksOutMedia(p);
+  const extHref = linksOut ? mediaLinkHref(p) : p.url;
+  const extDomain = linksOut ? mediaLinkDomain(p) : p.domain;
+  const domainHtml = linksOut || (!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !_isVReddIt(p.url) && !isGalleryUrl) ? `<a class="ext-link" href="${escHtml(extHref)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(extDomain)}</a>` : '';
   const subHtml = showSub ? `<a class="post-sub-link" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>` : '';
   const metaTop = (subHtml || tags) ? `<div class="post-meta-top">${subHtml}${tags}</div>` : '';
   const titleLink = `<a class="${titleClass}" href="/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
@@ -438,17 +443,17 @@ export function renderPost(p, idx, showSub=false) {
   }
 
   const isImageDomain = p.domain && (p.domain === 'i.redd.it' || p.domain === 'i.imgur.com' || /^i\.\w/.test(p.domain));
-  const isCompact = !p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain;
+  const isCompact = linksOut || (!p.is_self && !p.is_video && !p.youtube_id && !p.tiktok_id && !p.redgifs_id && !p.imgur_album_id && !p.streamable_id && !p.embed_url && !p.gif_url && !(p.gallery?.length > 1) && !isImageDomain);
   if (isCompact) {
-    const imgSrc = p.gallery?.[0]?.url ?? p.thumb_url ?? p.preview_img ?? null;
+    const imgSrc = linksOut ? _compactThumbSrc(p) : (p.gallery?.[0]?.url ?? p.thumb_url ?? p.preview_img ?? null);
     let thumbHtml = '';
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
       let thumbContent = thumbInner;
       if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
       if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
-      thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
-    } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal' && !_isVReddIt(p.url)) {
+      thumbHtml = `<a class="post-compact-thumb" href="${escHtml(extHref)}" target="_blank" rel="noopener">${thumbContent}</a>`;
+    } else if (!linksOut && p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal' && !_isVReddIt(p.url)) {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
     }
     return `
