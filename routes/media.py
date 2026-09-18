@@ -160,7 +160,7 @@ def proxy_img():
         resp.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return resp
     except Exception as e:
-        log.warning("proxy_img fetch failed url=%s: %s", url, e)
+        log.warning("proxy_img fetch failed host=%s: %s", parsed.hostname, e)
         return ('', 502)
 
 
@@ -194,7 +194,7 @@ def resolve_url():
                 break
         return jsonify({'url': url})
     except Exception:
-        log.warning("resolve_url failed url=%s", url)
+        log.warning("resolve_url failed host=%s", urlparse(url).hostname)
         return jsonify({'error': 'Request failed'}), 502
 
 

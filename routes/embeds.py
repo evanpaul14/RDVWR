@@ -127,7 +127,7 @@ def get_og_image():
         _og_cache.set(url, result, OG_CACHE_TTL)
         return cached_json(result, 3600)
     except Exception as e:
-        log.warning("get_og_image failed url=%s: %s", url, e)
+        log.warning("get_og_image failed host=%s: %s", hostname, e)
         result = {"url": None, "description": None}
         _og_cache.set(url, result, OG_FAIL_CACHE_TTL)
         return cached_json(result, 60)

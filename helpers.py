@@ -91,27 +91,38 @@ _CACHE_MISS = object()
 
 
 class TTLCache:
-    """Thread-safe in-process cache with a per-entry TTL and a size cap evicted
-    oldest-inserted-first (not true LRU, but keeps memory bounded predictably)."""
+    """Thread-safe in-process cache with a per-entry TTL and a size cap. When full,
+    expired entries are swept first; only if none have expired is the oldest-inserted
+    entry evicted (not true LRU, but keeps memory bounded predictably)."""
+    SWEEP_INTERVAL = 30  # seconds; bounds the O(n) sweep cost when the cache stays full
+
     def __init__(self, max_size):
         self._max_size = max_size
         self._lock = threading.Lock()
         self._data = {}
+        self._last_sweep = 0.0
 
     def get(self, key):
         """Returns the cached value, or the _CACHE_MISS sentinel if absent/expired
         (a cached value can itself legitimately be None, so plain None can't mean "miss")."""
+        now = time.time()
         with self._lock:
             hit = self._data.get(key)
-        if hit and hit[0] > time.time():
-            return hit[1]
-        return _CACHE_MISS
+            if hit and hit[0] <= now:
+                del self._data[key]
+                return _CACHE_MISS
+        return hit[1] if hit else _CACHE_MISS
 
     def set(self, key, value, ttl):
+        now = time.time()
         with self._lock:
+            self._data.pop(key, None)
+            if len(self._data) >= self._max_size and now - self._last_sweep >= self.SWEEP_INTERVAL:
+                self._last_sweep = now
+                self._data = {k: v for k, v in self._data.items() if v[0] > now}
             if len(self._data) >= self._max_size:
                 self._data.pop(next(iter(self._data)))
-            self._data[key] = (time.time() + ttl, value)
+            self._data[key] = (now + ttl, value)
 
     def __len__(self):
         return len(self._data)

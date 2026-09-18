@@ -135,7 +135,7 @@ def _proxy_reddit(reddit_path):
     try:
         resp = reddit_get(url, timeout=15)
     except Exception as e:
-        log.warning("proxy request failed url=%s: %s", url, e)
+        log.warning("proxy request failed path=%s: %s", reddit_path, e)
         return jsonify({"error": "upstream request failed"}), 502
     content_type = resp.headers.get("Content-Type", "application/json")
     return Response(resp.content, status=resp.status_code, content_type=content_type)

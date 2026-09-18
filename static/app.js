@@ -7,6 +7,7 @@ import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
 import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
 import { initKeyboard } from './keyboard.js';
+import { initCardHibernation } from './hibernate.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
@@ -890,6 +891,7 @@ applySettings();
 state.currentCommentSort = settings.commentSort;
 updatePopularBtn();
 initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
+initCardHibernation(feed);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
 renderRoute(parseRoute());
 

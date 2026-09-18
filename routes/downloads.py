@@ -88,7 +88,7 @@ def download_gallery():
                 ext = 'jpg'
             return ext, r.content
         except Exception as e:
-            log.warning("gallery item download failed url=%s: %s", url, e)
+            log.warning("gallery item download failed host=%s: %s", urlparse(url).hostname, e)
             return None
 
     with ThreadPoolExecutor(max_workers=8) as ex:
