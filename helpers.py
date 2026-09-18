@@ -5,7 +5,7 @@ import logging
 import threading
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
-from flask import jsonify, request, Response, make_response
+from flask import current_app, jsonify, request, Response, make_response
 from media_detection import process_post
 from reddit_client import reddit_get
 
@@ -63,10 +63,17 @@ def hydrate_linked_posts(posts):
             if raw:
                 try:
                     p['linked_post'] = process_post(raw)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.warning("linked-post process_post failed id=%s: %s", raw.get('id'), e)
     except Exception as e:
         log.warning("linked-post batch-fetch failed: %s", e)
+
+
+def error_response(status=500, message="Upstream request failed"):
+    """Call from inside an `except` block: logs the traceback server-side and returns
+    an opaque JSON error, so exception text (upstream URLs, internals) never reaches clients."""
+    log.exception("%s %s failed", request.method, request.path)
+    return jsonify({"error": message}), status
 
 
 def validate_params(**patterns):
@@ -112,6 +119,64 @@ class TTLCache:
     def clear(self):
         with self._lock:
             self._data.clear()
+
+
+class RateLimiter:
+    """Thread-safe fixed-window request counter keyed by client. In-process only, so
+    with N gunicorn workers the effective limit is up to N× the configured one."""
+    def __init__(self, limit, window):
+        self.limit, self.window = limit, window
+        self._lock = threading.Lock()
+        self._hits = {}
+
+    def hit(self, key):
+        """Count one request; returns 0 if allowed, else seconds until the window resets."""
+        now = time.time()
+        bucket = int(now // self.window)
+        with self._lock:
+            if len(self._hits) > 10000:
+                self._hits = {k: v for k, v in self._hits.items() if v[0] == bucket}
+            b, count = self._hits.get(key, (bucket, 0))
+            count = count + 1 if b == bucket else 1
+            self._hits[key] = (bucket, count)
+        if count > self.limit:
+            return int((bucket + 1) * self.window - now) + 1
+        return 0
+
+
+# (path prefix, limiter) — first match wins. Media proxies get a high ceiling since a
+# single feed page loads dozens of proxied previews and video range requests.
+RATE_LIMITS = [
+    ('/api/download',        RateLimiter(10, 60)),
+    ('/api/img',             RateLimiter(600, 60)),
+    ('/api/redgifs/media/',  RateLimiter(600, 60)),
+    ('/api/',                RateLimiter(240, 60)),
+]
+
+
+def client_ip():
+    ip = request.remote_addr or ''
+    # Behind the local nginx proxy every request comes from loopback; only then trust
+    # its X-Real-IP header (a direct client could otherwise spoof it).
+    if ip in ('127.0.0.1', '::1'):
+        ip = request.headers.get('X-Real-IP', ip)
+    return ip
+
+
+def rate_limit():
+    """before_request hook: 429 once a client exceeds its tier's limit."""
+    if not current_app.config.get('RATE_LIMIT', True):
+        return None
+    for prefix, limiter in RATE_LIMITS:
+        if request.path.startswith(prefix):
+            retry_after = limiter.hit(client_ip())
+            if retry_after:
+                resp = jsonify({"error": "Too many requests"})
+                resp.status_code = 429
+                resp.headers['Retry-After'] = str(retry_after)
+                return resp
+            return None
+    return None
 
 
 def cached_json(data, seconds):

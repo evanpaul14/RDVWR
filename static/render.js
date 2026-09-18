@@ -1,5 +1,5 @@
-import { escHtml, evictMap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
-import { mediaHtmlCard, mediaHtmlFull, nsfwWrap } from './media.js';
+import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
+import { mediaHtmlCard, mediaHtmlFull } from './media.js';
 import { isVisited } from './visited.js';
 import { settings } from './settings.js';
 
@@ -232,12 +232,6 @@ function _isNativeImage(m) {
   return !!(m.gallery?.length > 0 || isImageDomain || (m.gif_url && !m.gif_is_video));
 }
 
-function _thumbSpoilerWrap(html) {
-  return `<div class="spoiler-media-wrap spoiler-thumb-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler</span></div><div class="spoiler-content">${html}</div></div>`;
-}
-function _thumbNsfwWrap(html) {
-  return `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${html}</div></div>`;
-}
 
 // A thumb qualifies for opening straight into the lightbox (rather than
 // navigating to postview) only when it's a single static image — multi-image
@@ -275,8 +269,8 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
   if (imgSrc) {
     const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
     let thumbContent = thumbInner;
-    if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
-    if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
+    if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
+    if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
     const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
     if (_isSingleStaticImage(mediaSrc)) {
       thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`;
@@ -315,8 +309,8 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
     if (imgSrc) {
       const galleryCount = mediaSrc.gallery?.length > 1 ? mediaSrc.gallery.length : 0;
       let thumbContent = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
-      if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
-      if (p.over_18)    thumbContent = _thumbNsfwWrap(thumbContent);
+      if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
+      if (p.over_18)    thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
       thumbHtml = _isSingleStaticImage(mediaSrc)
         ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`
@@ -427,8 +421,8 @@ export function renderPost(p, idx, showSub=false) {
     if (imgSrc) {
       const thumbInner = `<img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.remove()">`;
       let thumbContent = thumbInner;
-      if (p.is_spoiler) thumbContent = _thumbSpoilerWrap(thumbContent);
-      if (p.over_18) thumbContent = _thumbNsfwWrap(thumbContent);
+      if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
+      if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
       thumbHtml = `<a class="post-compact-thumb" href="${escHtml(p.url)}" target="_blank" rel="noopener">${thumbContent}</a>`;
     } else if (p.url && /^https?:\/\//.test(p.url) && settings.layout !== 'minimal' && !_isVReddIt(p.url)) {
       thumbHtml = `<a class="post-compact-thumb og-placeholder" href="${escHtml(p.url)}" target="_blank" rel="noopener" data-og-url="${escHtml(p.url)}" data-og-nsfw="${p.over_18 ? '1' : ''}"></a>`;
@@ -451,8 +445,8 @@ export function renderPost(p, idx, showSub=false) {
     : p.selftext ? renderMd(p.selftext) : '';
   const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';
   let excerptHtml = excerptInner;
-  if (excerptContent && p.is_spoiler) excerptHtml = `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${excerptHtml}</div></div>`;
-  if (excerptContent && p.over_18) excerptHtml = `<div class="nsfw-media-wrap nsfw-text-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content">${excerptHtml}</div></div>`;
+  if (excerptContent && p.is_spoiler) excerptHtml = veilWrap('spoiler', excerptHtml);
+  if (excerptContent && p.over_18) excerptHtml = veilWrap('nsfw', excerptHtml, 'text');
   return `
     <div class="post${visitedClass}"${nsfwAttr} data-post-id="${id}" style="animation-delay:${delay}ms">
       <div class="post-header">

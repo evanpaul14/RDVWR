@@ -3,7 +3,7 @@ import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url
 from reddit_client import reddit_get
-from helpers import CACHE_TTL_FEED, FEED_LIMIT, cached_json, server_cache, hydrate_linked_posts, log
+from helpers import CACHE_TTL_FEED, FEED_LIMIT, cached_json, error_response, server_cache, hydrate_linked_posts, log
 
 bp = Blueprint("search", __name__)
 
@@ -70,8 +70,8 @@ def search_posts():
         return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/search/communities")
@@ -106,6 +106,7 @@ def search_communities():
             })
         return jsonify({"communities": results, "after": listing.get("after")})
     except Exception as e:
+        log.warning("search_communities failed q=%r: %s", q, e)
         return jsonify({"communities": [], "after": None})
 
 
@@ -140,4 +141,5 @@ def search_users():
             })
         return jsonify({"users": results, "after": listing.get("after")})
     except Exception as e:
+        log.warning("search_users failed q=%r: %s", q, e)
         return jsonify({"users": [], "after": None})

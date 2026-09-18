@@ -677,6 +677,22 @@ document.addEventListener('click', e => {
   interceptNavLink(a, e);
 }, true);
 
+// Spoiler/nsfw veils (veilWrap). Capture phase so the reveal + preventDefault land before
+// bubble-phase card/keyboard handlers, matching the old inline-handler ordering.
+document.addEventListener('click', e => {
+  const veil = e.target.closest('.spoiler-veil, .nsfw-veil');
+  if (!veil) return;
+  e.preventDefault();
+  veil.parentElement.classList.add('revealed');
+}, true);
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const veil = e.target.closest?.('.spoiler-veil, .nsfw-veil');
+  if (!veil) return;
+  e.preventDefault();
+  veil.parentElement.classList.add('revealed');
+}, true);
+
 // Middle-click
 document.addEventListener('auxclick', e => {
   if (e.button !== 1) return;

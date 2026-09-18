@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from flask import Blueprint, jsonify, request, Response
 from reddit_client import SESSION, HEADERS
-from helpers import STREAM_CHUNK_SIZE
+from helpers import STREAM_CHUNK_SIZE, error_response, log
 
 bp = Blueprint("downloads", __name__)
 
@@ -46,8 +46,8 @@ def download_media():
         if 'Content-Length' in upstream.headers:
             resp_headers['Content-Length'] = upstream.headers['Content-Length']
         return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), status=200, headers=resp_headers)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 502
+    except Exception:
+        return error_response(502)
 
 
 # ── Gallery zip download ──────────────────────────────────────────────────────
@@ -87,7 +87,8 @@ def download_gallery():
             if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
                 ext = 'jpg'
             return ext, r.content
-        except Exception:
+        except Exception as e:
+            log.warning("gallery item download failed url=%s: %s", url, e)
             return None
 
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -164,6 +165,6 @@ def download_reddit_video():
     except subprocess.TimeoutExpired:
         shutil.rmtree(tmpdir, ignore_errors=True)
         return jsonify({'error': 'Processing timed out'}), 504
-    except Exception as e:
+    except Exception:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        return jsonify({'error': str(e)}), 502
+        return error_response(502)

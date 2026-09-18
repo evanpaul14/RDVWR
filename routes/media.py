@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, jsonify, request, Response
 from reddit_client import SESSION, HEADERS
 from helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
-                     cached_json, server_cache, log)
+                     cached_json, error_response, server_cache, log)
 
 bp = Blueprint("media", __name__)
 
@@ -66,8 +66,8 @@ def get_redgifs(gif_id):
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
         urls = resp.json()["gif"]["urls"]
         return cached_json({"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}, 3600)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/redgifs/batch")
@@ -93,8 +93,8 @@ def get_redgifs_batch():
             urls = gif.get("urls", {})
             result[gid] = {"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}
         return cached_json(result, 3600)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 REDGIFS_MEDIA_RE = re.compile(r'^[A-Za-z0-9_-]+-?(?:mobile|silent)?\.mp4$')
@@ -124,8 +124,8 @@ def proxy_redgifs_media(filename):
         resp_headers["Cache-Control"] = "public, max-age=604800, immutable"
         return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE),
                         status=upstream.status_code, headers=resp_headers)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 502
+    except Exception:
+        return error_response(502)
 
 
 IMG_PROXY_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
@@ -214,8 +214,8 @@ def _imgur_from_post_data_json(html_text):
             imgs = _imgur_items_to_images(data.get(key))
             if imgs:
                 return imgs
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("imgur postDataJSON parse failed: %s", e)
     return None
 
 
@@ -241,8 +241,8 @@ def _scrape_imgur_album(album_id):
             imgs = _imgur_from_next_data(json.loads(m.group(1)))
             if imgs:
                 return imgs
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("imgur __NEXT_DATA__ parse failed album=%s: %s", album_id, e)
 
     imgs = _imgur_from_post_data_json(html_text)
     if imgs:

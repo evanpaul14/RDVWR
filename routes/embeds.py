@@ -7,7 +7,7 @@ import html as html_lib
 from urllib.parse import urlparse, urlunparse
 from flask import Blueprint, jsonify, request, make_response
 from reddit_client import SESSION, HEADERS, _get_device, recent_user_agent
-from helpers import TTLCache, _CACHE_MISS, cached_json, log
+from helpers import TTLCache, _CACHE_MISS, cached_json, error_response, log
 
 bp = Blueprint("embeds", __name__)
 
@@ -30,9 +30,8 @@ def translate_text():
             timeout=8)
         r.raise_for_status()
         return jsonify(r.json())
-    except Exception as e:
-        log.warning("translate failed: %s", e)
-        return jsonify({"error": str(e)}), 502
+    except Exception:
+        return error_response(502)
 
 
 _PRIVATE_NETS = [

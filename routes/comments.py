@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, _parse_awards
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, SUBREDDIT_RE, POST_ID_RE,
-                     cached_json, server_cache, validate_params, hydrate_linked_posts)
+                     cached_json, error_response, server_cache, validate_params, hydrate_linked_posts)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
@@ -106,8 +106,8 @@ def get_comments(subreddit, post_id):
             msg, status = err
             return jsonify({"error": msg}), status
         return cached_json(data, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/r/<subreddit>/morechildren/<post_id>")
@@ -153,5 +153,5 @@ def get_morechildren(subreddit, post_id):
             roots.append(c)
         avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
         return cached_json({"comments": roots, "avatar_prefetch": avatar_prefetch}, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)

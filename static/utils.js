@@ -111,6 +111,14 @@ export function renderAuthorFlair(c) {
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
 
+// Click-to-reveal overlay for spoiler/nsfw content. Reveal is handled by a delegated
+// listener in app.js. variant 'thumb'/'text' adds a compact modifier class + short label.
+export function veilWrap(kind, html, variant = '') {
+  const wrapCls = variant ? `${kind}-media-wrap ${kind}-${variant}-wrap` : `${kind}-media-wrap`;
+  const label   = variant ? kind : `${kind} — click to reveal`;
+  return `<div class="${wrapCls}"><div class="${kind}-veil" role="button" tabindex="0"><span class="${kind}-veil-label">${label}</span></div><div class="${kind}-content">${html}</div></div>`;
+}
+
 export function errState(msg, retryTarget, sub='') {
   const subHtml = sub ? `<div class="state-sub">${sub}</div>` : '';
   return `<div class="state"><div class="state-icon">⚠</div><div class="state-title">${msg}</div>${subHtml}<button class="state-retry-btn" data-retry="${retryTarget}">Try again</button></div>`;

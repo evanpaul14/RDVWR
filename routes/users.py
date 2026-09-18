@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
-                     add_time_param, cached_json, server_cache, validate_params,
+                     add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, log)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
@@ -78,8 +78,8 @@ def get_user_about(username):
             msg, status = err
             return jsonify({"error": msg}), status
         return cached_json(data, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/user/<username>/trophies")
@@ -122,8 +122,8 @@ def _fetch_listing_with_archive(username, after, item_key, do_live_request, pars
             if hydrate:
                 hydrate_linked_posts(items)
             return cached_json({item_key: items, "after": _arc_cursor(items, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except Exception:
+            return error_response(500)
     try:
         resp = do_live_request()
         if resp.status_code in (403, 404):
@@ -152,8 +152,8 @@ def _fetch_listing_with_archive(username, after, item_key, do_live_request, pars
         if hydrate:
             hydrate_linked_posts(items)
         return cached_json({item_key: items, "after": listing.get("after")}, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/user/<username>/posts")
@@ -267,5 +267,5 @@ def get_user_overview_api(username):
             msg, status = err
             return jsonify({"error": msg}), status
         return cached_json(data, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)

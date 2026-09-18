@@ -7,7 +7,7 @@ from media_detection import process_post, extract_posts, clean_url
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
-                     add_time_param, cached_json, server_cache, validate_params,
+                     add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, log)
 
 bp = Blueprint("subreddit", __name__)
@@ -154,6 +154,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
             return [], None
         return extract_posts(rb.json()["data"]), cursor
     except Exception as e:
+        log.warning("quarantine fallback failed sub=%s: %s", subreddit, e)
         return [], None
 
 
@@ -185,8 +186,8 @@ def get_posts(subreddit):
         return cached_json({"posts": posts, "after": fallback_after or listing.get("after")}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/r/<subreddit>/about")
@@ -213,8 +214,8 @@ def get_about(subreddit):
             "icon":        icon or "",
             "state":       state,
         }, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/r/<subreddit>/rules")
@@ -275,8 +276,8 @@ def get_duplicates(subreddit, post_id):
         posts = extract_posts(listing)
         hydrate_linked_posts(([post] if post else []) + posts)
         return cached_json({"post": post, "posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
@@ -305,8 +306,8 @@ def get_wiki(subreddit, page='index'):
             "content_html":   raw_html,
             "revision_date":  d.get("revision_date"),
         }, CACHE_TTL_SUBREDDIT)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/user/<username>/m/<multiname>")
@@ -343,5 +344,5 @@ def get_multireddit(username, multiname):
         posts   = extract_posts(listing)
         hydrate_linked_posts(posts)
         return cached_json({"posts": posts, "after": listing.get("after"), "title": display}, CACHE_TTL_FEED)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
