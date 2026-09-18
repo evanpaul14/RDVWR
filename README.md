@@ -113,6 +113,10 @@ python3 -m pytest tests/
 |---|---|---|
 | `REDDIT_OAUTH` | `1` | Spoofs Reddit OAuth. Set `0` to disable and use public JSON API. |
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
+| `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
+| `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
+| `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
+| `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
 
 ## Media proxying
 
@@ -120,6 +124,27 @@ python3 -m pytest tests/
 
 > [!WARNING]
 > All media bandwidth then flows through the server.
+
+## Rate limiting
+
+The app itself does no client-facing rate limiting — put a reverse proxy in front of it for that (same approach as [Redlib](https://github.com/redlib-org/redlib)). Example nginx config, tighter on the ffmpeg-based video download:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=rdvwr_general:10m rate=60r/m;
+limit_req_zone $binary_remote_addr zone=rdvwr_download:10m rate=6r/m;
+
+server {
+    location /api/download/ {
+        limit_req zone=rdvwr_download burst=3 nodelay;
+        proxy_pass http://127.0.0.1:8002;
+    }
+    location / {
+        limit_req zone=rdvwr_general burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8002;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
 
 ---
 

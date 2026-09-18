@@ -4,6 +4,7 @@ import re
 import shutil
 import tempfile
 import subprocess
+from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from flask import Blueprint, jsonify, request, Response
@@ -11,6 +12,17 @@ from reddit_client import SESSION, HEADERS
 from helpers import STREAM_CHUNK_SIZE, error_response, log
 
 bp = Blueprint("downloads", __name__)
+
+DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _downloads_enabled(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if DISABLE_DOWNLOADS:
+            return jsonify({'error': 'Downloads are disabled'}), 403
+        return f(*args, **kwargs)
+    return wrapper
 
 
 # ── Generic media download proxy ─────────────────────────────────────────────
@@ -25,6 +37,7 @@ DOWNLOAD_ALLOWED_HOSTS = frozenset({
 
 
 @bp.route("/api/download")
+@_downloads_enabled
 def download_media():
     url = request.args.get('url', '').strip()
     filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'media'))[:128]
@@ -55,6 +68,7 @@ def download_media():
 GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
 
 @bp.route("/api/download/gallery")
+@_downloads_enabled
 def download_gallery():
     import io, zipfile
 
@@ -113,6 +127,7 @@ def download_gallery():
 # ── Reddit video+audio merge download ────────────────────────────────────────
 
 @bp.route("/api/download/reddit-video")
+@_downloads_enabled
 def download_reddit_video():
     hls_url  = request.args.get('hls', '').strip()
     filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'video.mp4'))[:128]

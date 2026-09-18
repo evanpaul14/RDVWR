@@ -7,4 +7,19 @@ services:
       - REDDIT_OAUTH=${REDDIT_OAUTH:-1}
       - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID:-}
       - PROXY_MEDIA=${PROXY_MEDIA:-0}
+      - DISABLE_NSFW=${DISABLE_NSFW:-0}
+      - DISABLE_DOWNLOADS=${DISABLE_DOWNLOADS:-0}
+      # Only meaningful together: WEB_CONCURRENCY>1 needs REDIS_URL set (a shared
+      # response cache), otherwise each worker's cache is independent.
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
+      - REDIS_URL=${REDIS_URL:-}
     restart: unless-stopped
+
+  # Uncomment to run multiple rdvwr workers/instances behind a shared cache.
+  # Set REDIS_URL=redis://redis:6379/0 above when you do.
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+
+# No client-facing rate limiting happens in the app — put it in front, e.g. with
+# nginx's limit_req_zone. See README "Rate limiting".

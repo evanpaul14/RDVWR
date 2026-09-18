@@ -23,7 +23,7 @@ THREAD_MAX_DEPTH = 4  # mirrors static/render.js — replies past this depth are
                        # counting their authors would waste embed slots on invisible comments
 
 
-_avatar_cache = TTLCache(5000)
+_avatar_cache = TTLCache(5000, name='avatar')
 AVATAR_CACHE_TTL = 6 * 3600
 
 def _fetch_user_icon(username):

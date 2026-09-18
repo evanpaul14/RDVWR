@@ -1,5 +1,5 @@
 """Arctic Shift archive fetches — fallback for suspended/deleted/private user profiles."""
-from media_detection import process_post
+from media_detection import process_post, filter_nsfw
 from reddit_client import SESSION
 from helpers import FEED_LIMIT, hydrate_linked_posts, log
 
@@ -67,7 +67,7 @@ def _arctic_fetch(path, mapper, username, limit, before=None):
 
 
 def _fetch_archived_posts(username, limit, before=None):
-    return _arctic_fetch("/posts/search", process_post, username, limit, before)
+    return filter_nsfw(_arctic_fetch("/posts/search", process_post, username, limit, before))
 
 
 def _fetch_archived_comments(username, limit, before=None):
