@@ -198,6 +198,7 @@
 {% if initial_profile %}<script nonce="{{ csp_nonce }}">window.__INITIAL_PROFILE__={{ initial_profile | tojson | safe }};</script>{% endif %}
 <script nonce="{{ csp_nonce }}">window.__HLS_JS_V__={{ asset_v('hls.min.js') | tojson | safe }};</script>
 <script nonce="{{ csp_nonce }}">window.__DISABLE_DOWNLOADS__={{ disable_downloads | tojson | safe }};</script>
+<script nonce="{{ csp_nonce }}">window.__DEFAULT_SETTINGS__={{ default_settings | tojson | safe }};</script>
 <script type="module" src="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}"></script>
 </body>
 </html>
