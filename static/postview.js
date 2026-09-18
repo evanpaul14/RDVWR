@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap } from './utils.js';
+import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
@@ -9,7 +9,7 @@ import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, render
 const _PV_DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
 function _pvDlOk(url) {
   if (!url) return false;
-  try { return _PV_DL_HOSTS.has(new URL(url).hostname); } catch { return false; }
+  try { return _PV_DL_HOSTS.has(new URL(realMediaUrl(url)).hostname); } catch { return false; }
 }
 function _pvDlExt(url) {
   const ext = url.split('?')[0].split('.').pop().toLowerCase();
@@ -34,20 +34,18 @@ function buildDownloadBtn(p) {
   let url = '', filename = '';
   if (p.is_video && p.video_url) {
     if (p.hls_url) {
-      const href = `/api/download/reddit-video?hls=${encodeURIComponent(p.hls_url)}&filename=${encodeURIComponent(p.id + '.mp4')}`;
+      const href = `/api/download/reddit-video?hls=${encodeURIComponent(realMediaUrl(p.hls_url))}&filename=${encodeURIComponent(p.id + '.mp4')}`;
       return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(p.id + '.mp4')}" title="Download video">${_DL_SVG} download</a>`;
     }
     url = p.video_url; filename = `${p.id}.mp4`;
   } else if (p.gif_url) {
     url = p.gif_url; filename = `${p.id}.${p.gif_is_video ? 'mp4' : 'gif'}`;
   } else if (!p.youtube_id && !p.tiktok_id && !p.streamable_id && !p.embed_url && !p.is_self && p.preview_img) {
-    const rawImg = p.preview_img.startsWith('/api/img?url=')
-      ? decodeURIComponent(p.preview_img.slice('/api/img?url='.length))
-      : p.preview_img;
+    const rawImg = realMediaUrl(p.preview_img);
     url = rawImg; filename = `${p.id}.${_pvDlExt(rawImg)}`;
   }
   if (!url || !_pvDlOk(url)) return '';
-  const href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
+  const href = `/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
   return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(filename)}" title="Download media">${_DL_SVG} download</a>`;
 }
 
@@ -453,7 +451,7 @@ function _showGalleryDlModal(gallery, postId) {
 
   const itemsHtml = eligible.map((img, i) => `
     <label class="gdl-item">
-      <input type="checkbox" class="gdl-check" checked data-url="${escHtml(img.url)}">
+      <input type="checkbox" class="gdl-check" checked data-url="${escHtml(realMediaUrl(img.url))}">
       <div class="gdl-thumb"><img src="${escHtml(img.url)}" alt="${escHtml(img.caption || '')}" loading="lazy"></div>
       ${img.caption ? `<span class="gdl-caption">${escHtml(img.caption)}</span>` : `<span class="gdl-caption">${i + 1}</span>`}
     </label>`).join('');

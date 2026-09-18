@@ -22,6 +22,34 @@ export function openOnReddit(href) {
   window.open(target, '_blank', 'noopener');
 }
 
+// PROXY_MEDIA=1 on the server adds this meta tag; media URLs the frontend builds itself
+// (markdown images, comment gifs/videos) then go through /api/m/ like the API's do.
+const _PROXY_MEDIA = document.querySelector('meta[name="rdvwr-proxy-media"]')?.content === '1';
+// Keep in sync with MEDIA_PROXY_HOSTS in routes/mediaproxy.py.
+const _PROXY_HOSTS = new Set([
+  'i.redd.it', 'v.redd.it', 'preview.redd.it', 'external-preview.redd.it',
+  'a.thumbs.redditmedia.com', 'b.thumbs.redditmedia.com',
+  'styles.redditmedia.com', 'emoji.redditmedia.com', 'www.redditstatic.com',
+  'i.imgur.com', 'media.giphy.com',
+]);
+export function proxyMedia(url) {
+  if (!_PROXY_MEDIA || !url) return url;
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'https:' && _PROXY_HOSTS.has(u.hostname)) return `/api/m/${u.hostname}${u.pathname}${u.search}`;
+  } catch {}
+  return url;
+}
+// Inverse of the /api/img and /api/m/ proxies — the upstream URL, for host checks,
+// filenames and the download endpoints. Accepts relative or absolute (img.src) forms.
+export function realMediaUrl(url) {
+  if (!url) return url;
+  const path = url.startsWith(location.origin + '/') ? url.slice(location.origin.length) : url;
+  if (path.startsWith('/api/img?url=')) return decodeURIComponent(path.slice('/api/img?url='.length));
+  const m = path.match(/^\/api\/m\/([^/]+)(\/.*)?$/);
+  return m ? `https://${m[1]}${m[2] || '/'}` : url;
+}
+
 export function fmtNum(n) {
   if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
   if (n >= 1e3) return (n/1e3).toFixed(1)+'K';

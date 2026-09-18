@@ -697,6 +697,72 @@ class TestImgProxy:
         assert resp.status_code == 200
 
 
+# ── /api/m/<host>/<path> (opt-in media proxy) ─────────────────────────────────
+
+@pytest.fixture
+def proxy_media_on():
+    app.config["PROXY_MEDIA"] = True
+    yield
+    app.config["PROXY_MEDIA"] = False
+
+
+class TestMediaProxy:
+    @patch.object(reddit_client.SESSION, "get")
+    def test_allowed_host_streams_and_forwards_range(self, mock_get, client):
+        mock_get.return_value = MockResponse(
+            status_code=206,
+            headers={"Content-Type": "video/mp4", "Content-Range": "bytes 0-2/10", "Content-Length": "3"},
+            raw_bytes=b"abc",
+        )
+        resp = client.get("/api/m/v.redd.it/xyz/CMAF_720.mp4?a=1", headers={"Range": "bytes=0-2"})
+        assert resp.status_code == 206
+        assert resp.data == b"abc"
+        assert resp.headers["Content-Range"] == "bytes 0-2/10"
+        assert mock_get.call_args.args[0] == "https://v.redd.it/xyz/CMAF_720.mp4?a=1"
+        assert mock_get.call_args.kwargs["headers"]["Range"] == "bytes=0-2"
+        assert mock_get.call_args.kwargs["allow_redirects"] is False
+
+    def test_disallowed_host_rejected(self, client):
+        assert client.get("/api/m/evil.com/x.jpg").status_code == 403
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_redirect_off_allowlist_not_followed(self, mock_get, client):
+        mock_get.return_value = MockResponse(status_code=302, headers={"Location": "https://evil.com/x"})
+        assert client.get("/api/m/i.redd.it/x.jpg").status_code == 502
+        assert mock_get.call_count == 1
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_playlist_absolute_urls_rewritten(self, mock_get, client):
+        r = MockResponse(status_code=200, headers={"Content-Type": "application/vnd.apple.mpegurl"})
+        r.text = "#EXTM3U\nHLS_720.m3u8\nhttps://v.redd.it/xyz/HLS_AUDIO.m3u8\n"
+        mock_get.return_value = r
+        body = client.get("/api/m/v.redd.it/xyz/HLSPlaylist.m3u8").get_data(as_text=True)
+        assert "HLS_720.m3u8" in body
+        assert "/api/m/v.redd.it/xyz/HLS_AUDIO.m3u8" in body
+        assert "https://v.redd.it" not in body
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_api_urls_rewritten_when_enabled(self, mock_get, client, proxy_media_on):
+        post = {**_make_post(), "url": "https://i.redd.it/pic.jpg", "domain": "i.redd.it",
+                "selftext": "see https://i.redd.it/other.jpg"}
+        mock_get.return_value = _session_get(_make_listing([post]))
+        p = client.get("/api/r/python").get_json()["posts"][0]
+        assert p["url"] == "/api/m/i.redd.it/pic.jpg"
+        assert p["domain"] == "i.redd.it"
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_api_urls_untouched_when_disabled(self, mock_get, client):
+        post = {**_make_post(), "url": "https://i.redd.it/pic.jpg"}
+        mock_get.return_value = _session_get(_make_listing([post]))
+        assert client.get("/api/r/python").get_json()["posts"][0]["url"] == "https://i.redd.it/pic.jpg"
+
+    def test_spa_meta_flag(self, client, proxy_media_on):
+        html = client.get("/search").get_data(as_text=True)
+        assert 'name="rdvwr-proxy-media"' in html
+        assert 'name="referrer" content="no-referrer"' in html
+        assert "fonts.googleapis.com" not in html
+
+
 # ── /api/resolve ──────────────────────────────────────────────────────────────
 
 class TestResolve:
