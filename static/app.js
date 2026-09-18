@@ -732,13 +732,6 @@ document.addEventListener('click', e => {
   openLightbox(thumb.dataset.lightbox);
 });
 
-// ── Platform detection ────────────────────────────────────────────────────────
-let _platformPromise = null;
-function getPlatform() {
-  if (!_platformPromise) _platformPromise = fetch('/api/platform').then(r => r.json()).catch(() => ({}));
-  return _platformPromise;
-}
-
 // ── Settings panel ────────────────────────────────────────────────────────────
 const settingsPanel   = document.getElementById('settings-panel');
 const settingsOverlay = document.getElementById('settings-overlay');
@@ -786,16 +779,7 @@ function _settingsHtml() {
   </div>
   <div class="settings-section">
     <button class="settings-reset-btn" id="s-reset">Reset to defaults</button>
-  </div>`
-  + (window._androidUpdate ? `
-  <div class="settings-section" id="s-update-section">
-    <div class="settings-section-title">App</div>
-    <div class="settings-row settings-row-action">
-      <span class="settings-label">Check for updates</span>
-      <button class="settings-action-btn" id="s-update-btn">Check</button>
-    </div>
-    <div id="s-update-status" class="settings-update-status"></div>
-  </div>` : '');
+  </div>`;
 }
 
 function openSettingsPanel() {
@@ -804,15 +788,6 @@ function openSettingsPanel() {
   document.body.style.overflow = 'hidden';
   settingsBody.innerHTML = _settingsHtml();
   bindSettingEvents();
-  if (window._androidUpdate) bindUpdateEvents();
-  getPlatform().then(p => {
-    if (p.android && !window._androidUpdate) {
-      window._androidUpdate = true;
-      settingsBody.innerHTML = _settingsHtml();
-      bindSettingEvents();
-      bindUpdateEvents();
-    }
-  });
 }
 
 function bindSettingEvents() {
@@ -852,50 +827,6 @@ function bindSettingEvents() {
     saveSettings();
     settingsBody.innerHTML = _settingsHtml();
     bindSettingEvents();
-    if (window._androidUpdate) bindUpdateEvents();
-  });
-}
-
-function bindUpdateEvents() {
-  const btn = settingsBody.querySelector('#s-update-btn');
-  const statusEl = settingsBody.querySelector('#s-update-status');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    btn.textContent = '…';
-    statusEl.textContent = '';
-    statusEl.className = 'settings-update-status';
-    try {
-      const res = await fetch('/api/update', { method: 'POST' });
-      const data = await res.json();
-      if (data.status === 'updated') {
-        statusEl.textContent = `Updated (${data.changed.length} file${data.changed.length !== 1 ? 's' : ''})`;
-        statusEl.className = 'settings-update-status settings-update-ok';
-        btn.textContent = 'Restart';
-        btn.disabled = false;
-        btn.addEventListener('click', () => { window.location.href = 'rdvwr://restart'; }, { once: true });
-      } else if (data.status === 'up_to_date') {
-        statusEl.textContent = 'Already up to date';
-        statusEl.className = 'settings-update-status settings-update-ok';
-        btn.textContent = 'Check';
-        btn.disabled = false;
-      } else if (data.status === 'unsupported') {
-        statusEl.textContent = 'Updates not supported on this platform';
-        statusEl.className = 'settings-update-status settings-update-err';
-        btn.textContent = 'Check';
-        btn.disabled = false;
-      } else {
-        statusEl.textContent = data.message || 'Update failed';
-        statusEl.className = 'settings-update-status settings-update-err';
-        btn.textContent = 'Retry';
-        btn.disabled = false;
-      }
-    } catch (e) {
-      statusEl.textContent = 'Network error';
-      statusEl.className = 'settings-update-status settings-update-err';
-      btn.textContent = 'Retry';
-      btn.disabled = false;
-    }
   });
 }
 

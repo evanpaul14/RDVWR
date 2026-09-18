@@ -12,6 +12,5 @@ tests
 *.zip
 *.xpi
 *.patch
-sync_android.sh
 benchmark.py
 update_vendor.py
