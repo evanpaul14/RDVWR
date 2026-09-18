@@ -13,6 +13,14 @@ python app.py
 
 Opens at `http://localhost:8002`.
 
+### Docker
+
+```bash
+docker compose up -d --build
+```
+
+Serves on port 8002. Set `REDDIT_OAUTH=0` or `IMGUR_CLIENT_ID` in the environment (or a `.env` file) to pass them through.
+
 ## Features
 
 - Subreddit feeds with sort/time filters
