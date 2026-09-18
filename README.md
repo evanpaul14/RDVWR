@@ -25,6 +25,7 @@
    - [Running from source](#running-from-source)
 4. [Configuration](#configuration)
    - [Environment variables](#environment-variables)
+   - [Default settings](#default-settings)
    - [Media proxying](#media-proxying)
 5. [Credit](#credit)
 
@@ -117,6 +118,30 @@ python3 -m pytest tests/
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
+
+### Default settings
+
+These set the out-of-the-box value for each toggle in the settings panel. A visitor changing a
+setting always overrides these — they're only the starting point (stored in their browser via
+`localStorage`, same as [Redlib's `REDLIB_DEFAULT_*` vars](https://github.com/redlib-org/redlib)).
+
+| Name | Default | Allowed values |
+|---|---|---|
+| `RDVWR_DEFAULT_THEME` | `dark` | `dark`, `light`, `system` |
+| `RDVWR_DEFAULT_LAYOUT` | `card` | `card`, `compact`, `minimal` |
+| `RDVWR_DEFAULT_SUB_SORT` | `hot` | `hot`, `new`, `top`, `rising`, `controversial` |
+| `RDVWR_DEFAULT_SUB_TIME` | `day` | `hour`, `day`, `week`, `month`, `year`, `all` |
+| `RDVWR_DEFAULT_COMMENT_SORT` | `confidence` | `confidence`, `top`, `new`, `controversial`, `old`, `qa` |
+| `RDVWR_DEFAULT_HOME_FEED` | `personalized` | `personalized`, `subscribed` |
+| `RDVWR_DEFAULT_PAGINATION` | `0` | `1` disables infinite scroll in favor of a "load more" button |
+| `RDVWR_DEFAULT_SHOW_AVATARS` | `0` | `1` shows profile pictures |
+| `RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA` | `0` | `1` links out to third-party media instead of embedding it |
+| `RDVWR_DEFAULT_NSFW_BLUR` | `0` | `1` blurs NSFW thumbnails |
+| `RDVWR_DEFAULT_NSFW_HIDE` | `0` | `1` hides NSFW posts |
+| `RDVWR_DEFAULT_NSFW_SEARCH_HIDE` | `0` | `1` hides NSFW content in search |
+| `RDVWR_DEFAULT_MARK_READ` | `1` | `0` stops marking posts as read on scroll |
+| `RDVWR_DEFAULT_HIDE_READ_HOME` | `0` | `1` hides read posts on the home feed |
+| `RDVWR_DEFAULT_HIDE_READ_SUB` | `0` | `1` hides read posts in subreddits |
 
 ## Media proxying
 

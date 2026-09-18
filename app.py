@@ -3,7 +3,7 @@ import secrets
 import logging
 from flask import Flask, g
 from flask_compress import Compress
-from helpers import CACHE_TTL_STATIC
+from helpers import CACHE_TTL_STATIC, DEFAULT_SETTINGS
 from routes import register_all
 
 
@@ -21,7 +21,8 @@ def _inject_asset_version():
             return str(int(os.path.getmtime(os.path.join(app.static_folder, filename))))
         except OSError:
             return '0'
-    return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''))
+    return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
+                default_settings=DEFAULT_SETTINGS)
 
 
 @app.before_request

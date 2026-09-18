@@ -22,15 +22,19 @@ export const DEFAULTS = {
 };
 
 function _load() {
+  // Deployer-configurable defaults (RDVWR_DEFAULT_* env vars, see helpers.py) come
+  // between the hardcoded DEFAULTS and whatever a visitor has saved locally, so a
+  // visitor's own choices always win.
+  const serverDefaults = window.__DEFAULT_SETTINGS__ || {};
   try {
     const saved = JSON.parse(storeGet(KEY) || '{}');
     if (!saved.layout) {
       if (saved.minimal) saved.layout = 'minimal';
       else if (saved.compact) saved.layout = 'compact';
     }
-    return { ...DEFAULTS, ...saved };
+    return { ...DEFAULTS, ...serverDefaults, ...saved };
   }
-  catch { return { ...DEFAULTS }; }
+  catch { return { ...DEFAULTS, ...serverDefaults }; }
 }
 
 export const settings = _load();

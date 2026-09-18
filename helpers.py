@@ -69,6 +69,48 @@ def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
         params["t"] = t
 
 
+def _bool_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _enum_env(name, default, allowed):
+    raw = os.environ.get(name, '').strip()
+    if not raw:
+        return default
+    if raw in allowed:
+        return raw
+    log.warning("Ignoring invalid %s=%r (expected one of %s)", name, raw, ', '.join(sorted(allowed)))
+    return default
+
+
+# Deployer-configurable defaults for the client-side settings a visitor would otherwise
+# only get from settings.js's own DEFAULTS. Each maps to the matching key in that file's
+# DEFAULTS object; anything a visitor changes in the settings panel is saved to their own
+# localStorage and always wins over these (see settings.js _load()). `redditCookies` isn't
+# here since it's a per-visitor credential, not a deployment-wide default.
+DEFAULT_SETTINGS = {
+    'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', {'dark', 'light', 'system'}),
+    'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', {'card', 'compact', 'minimal'}),
+    'subSort':           _enum_env('RDVWR_DEFAULT_SUB_SORT', 'hot', FEED_SORTS - {'best'}),
+    'subTime':           _enum_env('RDVWR_DEFAULT_SUB_TIME', 'day', TIME_FILTERS),
+    'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence',
+                                    {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}),
+    'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed'}),
+    'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
+    'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
+    'linkExternalMedia': _bool_env('RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA', False),
+    'nsfwBlur':          _bool_env('RDVWR_DEFAULT_NSFW_BLUR', False),
+    'nsfwHide':          _bool_env('RDVWR_DEFAULT_NSFW_HIDE', False),
+    'nsfwSearchHide':    _bool_env('RDVWR_DEFAULT_NSFW_SEARCH_HIDE', False),
+    'markRead':          _bool_env('RDVWR_DEFAULT_MARK_READ', True),
+    'hideReadHome':      _bool_env('RDVWR_DEFAULT_HIDE_READ_HOME', False),
+    'hideReadSub':       _bool_env('RDVWR_DEFAULT_HIDE_READ_SUB', False),
+}
+
+
 def parallel(*fns):
     """Run each zero-arg callable in its own thread and return results in order."""
     with ThreadPoolExecutor(max_workers=len(fns)) as ex:
