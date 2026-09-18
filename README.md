@@ -19,7 +19,9 @@ Opens at `http://localhost:8002`.
 docker compose up -d --build
 ```
 
-Serves on port 8002. Set `REDDIT_OAUTH=0` or `IMGUR_CLIENT_ID` in the environment (or a `.env` file) to pass them through.
+Serves on port 8002. Set `REDDIT_OAUTH=0`, `IMGUR_CLIENT_ID` or `PROXY_MEDIA=1` in the environment (or a `.env` file) to pass them through.
+
+`PROXY_MEDIA=1` routes images, videos and gifs from Reddit, Imgur and Giphy through the server (`/api/m/`), so the browser never contacts those CDNs directly. All media bandwidth then flows through the server.
 
 ## Features
 
