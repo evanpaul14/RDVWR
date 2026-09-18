@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull } from './media.js';
+import { rememberPost, saveBtnHtml } from './saved.js';
 import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
@@ -325,6 +326,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
     state._pvData = data;
 
     const p = data.post;
+    rememberPost(p);
     pvOpen.href = p.permalink;
     pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
     document.title = p.title + ' — RDVWR';
@@ -356,6 +358,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         <button class="share-btn min-share" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">share</button>
+        ${saveBtnHtml(p, { minimal: true })}
         ${renderAwards(p.awards)}
       </div>` : `
       <div class="pv-meta">
@@ -369,6 +372,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           share
         </button>
+        ${saveBtnHtml(p)}
         ${buildDownloadBtn(p)}
         ${renderAwards(p.awards)}
       </div>`}

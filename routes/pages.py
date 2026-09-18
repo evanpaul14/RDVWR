@@ -24,6 +24,7 @@ _POST_PERMALINK_RE = re.compile(r'^([A-Za-z0-9_]+)/comments/([A-Za-z0-9]+)(?:/[^
 @bp.route("/user/<username>/m/<multiname>/<path:rest>", strict_slashes=False)
 @bp.route("/u/<username>", strict_slashes=False)
 @bp.route("/search", strict_slashes=False)
+@bp.route("/saved", strict_slashes=False)
 @bp.route("/r/<subreddit>/duplicates/<post_id>", strict_slashes=False)
 @bp.route("/r/<subreddit>/wiki", strict_slashes=False)
 @bp.route("/r/<subreddit>/wiki/<path:page>", strict_slashes=False)

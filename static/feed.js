@@ -3,6 +3,7 @@ import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
+import { getSavedPosts } from './saved.js';
 import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -177,6 +178,40 @@ export async function loadHome(sort='best', time='all', after=null) {
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
   await loadHomeFeed(sort, time, after);
+}
+
+// ── Saved posts (local) ───────────────────────────────────────────────────────
+export async function loadSaved() {
+  state.feedGen++;
+  const myGen = state.feedGen;
+  state.savedMode   = true;
+  state.homeMode    = false;
+  state.profileMode = false;
+  state.multiMode   = false;
+  state.currentSub  = '';
+  state.afterToken  = null;
+  state.loading     = false;
+  document.title = 'Saved — RDVWR';
+  subInput.value = '';
+  pvSubInput.value = '';
+  setMainOpen('');
+  sortBar.style.display = 'none';
+  const posts = getSavedPosts();
+  document.getElementById('ctx-icon-wrap').innerHTML = '';
+  document.getElementById('ctx-title').textContent = 'Saved posts';
+  document.getElementById('ctx-stats').innerHTML = `<span>${fmtNum(posts.length)}</span> saved on this device`;
+  ctxInfo.classList.add('visible');
+  sentinel.innerHTML = '';
+  sentinel.classList.remove('active', 'loading');
+  if (!posts.length) {
+    feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No saved posts</div><div class="state-sub">Use the save button on any post to keep it here.</div></div>';
+    return;
+  }
+  await waitForMdLibs();
+  if (myGen !== state.feedGen) return;
+  feed.innerHTML = posts.map((p, i) => renderPost(p, i, true)).join('');
+  initMedia(feed);
+  initGifVideos(feed);
 }
 
 // ── Subreddit feed ────────────────────────────────────────────────────────────

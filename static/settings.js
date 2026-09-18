@@ -46,6 +46,4 @@ export function applySettings() {
   document.body.classList.toggle('minimal-mode', settings.layout === 'minimal');
   document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
   document.body.classList.add(`theme-${settings.theme || 'dark'}`);
-  const popularBtn = document.getElementById('popular-btn');
-  if (popularBtn) popularBtn.hidden = !settings.redditCookies;
 }
