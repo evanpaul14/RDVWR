@@ -1275,3 +1275,37 @@ class TestTTLCache:
         cache.set("c", 3, 600)
         assert cache.get("a") is helpers._CACHE_MISS
         assert cache.get("c") == 3
+
+
+# ── server_cache ──────────────────────────────────────────────────────────────
+
+class TestServerCache:
+    def _app(self):
+        from flask import Flask, jsonify
+        calls = []
+        mini = Flask("server_cache_test")
+
+        @mini.route("/x")
+        @helpers.server_cache(60)
+        def view():
+            calls.append(1)
+            return jsonify({"n": len(calls), "s": "é"})
+
+        return mini, calls
+
+    def test_hit_serves_identical_bytes_without_calling_view(self):
+        mini, calls = self._app()
+        with mini.test_client() as c:
+            first = c.get("/x?a=1")
+            second = c.get("/x?a=1")
+        assert len(calls) == 1
+        assert second.data == first.data
+        assert second.is_json and second.get_json() == {"n": 1, "s": "é"}
+        assert second.headers["Cache-Control"] == "public, max-age=60"
+
+    def test_distinct_query_is_separate_entry(self):
+        mini, calls = self._app()
+        with mini.test_client() as c:
+            c.get("/x?a=1")
+            c.get("/x?a=2")
+        assert len(calls) == 2

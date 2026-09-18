@@ -209,13 +209,15 @@ def server_cache(ttl):
             key = request.full_path
             hit = _view_cache.get(key)
             if hit is not _CACHE_MISS:
-                return cached_json(hit, ttl)
+                # Serve the stored JSON bytes as-is rather than re-serializing the payload.
+                return Response(hit, mimetype='application/json',
+                                headers={'Cache-Control': f'public, max-age={ttl}'})
             resp = f(*args, **kwargs)
             cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
-            if isinstance(resp, Response) and resp.status_code == 200 and 'no-store' not in cache_control and 'private' not in cache_control:
-                data = resp.get_json(silent=True)
-                if data is not None:
-                    _view_cache.set(key, data, ttl)
+            if (isinstance(resp, Response) and resp.status_code == 200 and resp.is_json
+                    and not resp.direct_passthrough and not resp.is_streamed
+                    and 'no-store' not in cache_control and 'private' not in cache_control):
+                _view_cache.set(key, resp.get_data(), ttl)
             return resp
         return wrapper
     return decorator

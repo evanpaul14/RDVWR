@@ -188,6 +188,29 @@ class TestProcessPost:
         assert result["gallery"][0]["width"] == 800
         assert "amp;" not in result["gallery"][0]["url"]
 
+    def test_gallery_downscaled_renditions(self):
+        res = [{"u": f"https://preview.redd.it/1.jpg?width={w}&amp;s=x", "x": w, "y": w} for w in (108, 216, 320, 640, 960)]
+        p = _post(
+            is_gallery=True,
+            gallery_data={"items": [{"media_id": "m1"}]},
+            media_metadata={"m1": {"status": "valid", "p": res,
+                                   "s": {"u": "https://preview.redd.it/1.jpg?width=4000", "x": 4000, "y": 3000}}},
+        )
+        g = process_post(p)["gallery"][0]
+        assert g["url"].endswith("width=4000")
+        assert "width=640" in g["thumb"] and "amp;" not in g["thumb"]
+        assert "width=216" in g["mini"]
+
+    def test_gallery_animated_item_keeps_original(self):
+        p = _post(
+            is_gallery=True,
+            gallery_data={"items": [{"media_id": "m1"}]},
+            media_metadata={"m1": {"status": "valid", "p": [{"u": "https://preview.redd.it/still.jpg", "x": 640, "y": 480}],
+                                   "s": {"gif": "https://i.redd.it/anim.gif", "x": 800, "y": 600}}},
+        )
+        g = process_post(p)["gallery"][0]
+        assert g["thumb"] == g["mini"] == g["url"] == "https://i.redd.it/anim.gif"
+
     def test_gallery_skips_invalid_items(self):
         p = _post(
             is_gallery=True,

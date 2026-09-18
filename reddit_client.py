@@ -14,6 +14,12 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+# requests keeps only 10 idle connections per host by default; with 16 gunicorn threads
+# and a feed's worth of proxied media hitting the same CDN host, the rest would be
+# discarded and every request would pay a fresh TLS handshake.
+_ADAPTER = requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=32)
+SESSION.mount("https://", _ADAPTER)
+SESSION.mount("http://", _ADAPTER)
 
 REDDIT_OAUTH = os.environ.get('REDDIT_OAUTH', '1').strip().lower() not in ('0', 'false', 'no', 'off')
 

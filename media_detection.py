@@ -117,8 +117,16 @@ def process_post(p):
                 s = meta[mid].get("s", {})
                 url = clean_url(s.get("u") or s.get("gif"))
                 if url:
+                    # Downscaled renditions for feed cards / strip thumbnails, so only the
+                    # post view and lightbox pull the full-size original. Animated items
+                    # ("gif" source) only have still previews, so they keep the original.
+                    res = (meta[mid].get("p") or []) if s.get("u") else []
+                    card = next((r for r in res if r.get("x", 0) >= 640), None) or (res[-1] if res else None)
+                    mini = next((r for r in res if r.get("x", 0) >= 216), None)
                     gallery.append({
                         "url":     url,
+                        "thumb":   clean_url(card["u"]) if card and card.get("u") else url,
+                        "mini":    clean_url(mini["u"]) if mini and mini.get("u") else url,
                         "width":   s.get("x", 0),
                         "height":  s.get("y", 0),
                         "caption": item.get("caption", ""),

@@ -453,15 +453,23 @@ export function initOgDescriptions(container) {
   });
 }
 
-export function renderGallery(images) {
+// Gallery items carry downscaled `thumb` (≥640px, for feed cards) and `mini` (strip
+// thumbnails) renditions; Imgur albums and older payloads only have `url`.
+export const galleryThumb = g => g.thumb || g.url;
+export const galleryMini  = g => g.mini || g.thumb || g.url;
+
+// `full` (post view) shows originals on the stage; feed cards show the card rendition.
+// data-full always holds the original, for the lightbox and downloads.
+export function renderGallery(images, full = true) {
   if (!images?.length) return '';
+  const stageSrc = img => full ? img.url : galleryThumb(img);
   const thumbsHtml = images.map((img,i) =>
-    `<img class="gallery-thumb${i===0?' active':''}" src="${escHtml(img.url)}" data-idx="${i}" data-caption="${escHtml(img.caption||'')}" data-w="${img.width||''}" data-h="${img.height||''}" loading="lazy" alt="${escHtml(img.caption||'')}">`
+    `<img class="gallery-thumb${i===0?' active':''}" src="${escHtml(galleryMini(img))}" data-main="${escHtml(stageSrc(img))}" data-full="${escHtml(img.url)}" data-idx="${i}" data-caption="${escHtml(img.caption||'')}" data-w="${img.width||''}" data-h="${img.height||''}" loading="lazy" alt="${escHtml(img.caption||'')}">`
   ).join('');
   return `
     <div class="gallery">
       <div class="gallery-stage">
-        <img class="gallery-main-img" src="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}"${images[0].width ? ` width="${images[0].width}" height="${images[0].height}"` : ''}>
+        <img class="gallery-main-img" src="${escHtml(stageSrc(images[0]))}" data-full="${escHtml(images[0].url)}" alt="${escHtml(images[0].caption||'')}"${images[0].width ? ` width="${images[0].width}" height="${images[0].height}"` : ''}>
         ${images.length > 1 ? `
           <div class="gallery-nav">
             <button class="gallery-btn gallery-prev" aria-label="Previous image" disabled>‹</button>
@@ -530,7 +538,8 @@ function _linkedMediaHtml(p, full) {
 // ── Minimal mode: plain thumbnail + link, no video/iframe/gallery-nav embeds ──
 function _minimalMediaHtml(p, full) {
   const ic = full ? 'pv-media' : 'post-media';
-  const thumb = p.gallery?.[0]?.url ?? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) ?? null;
+  const g0 = p.gallery?.[0];
+  const thumb = (g0 && (full ? g0.url : galleryThumb(g0))) ?? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) ?? null;
   const thumbHtml = thumb ? `<img src="${escHtml(thumb)}" loading="lazy" alt="">` : '';
   let label = '', href = p.url || '';
   if (p.is_video)                  { label = 'video ↗'; href = p.video_url || p.url; }
@@ -543,7 +552,7 @@ function _minimalMediaHtml(p, full) {
   else if (p.gif_url && p.gif_is_video) { label = 'gif ↗'; href = p.gif_url; }
   else if (p.gif_url)              { return `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt=""></div>`; }
   else if (p.gallery?.length > 1)  {
-    const imgs = p.gallery.map(img => `<img src="${escHtml(img.url)}" loading="lazy" alt="${escHtml(img.caption||'')}">`).join('');
+    const imgs = p.gallery.map(img => `<img src="${escHtml(full ? img.url : galleryThumb(img))}" loading="lazy" alt="${escHtml(img.caption||'')}">`).join('');
     return `<div class="${ic} minimal-gallery-stack">${imgs}</div>`;
   }
   else if (thumb)                  { return `<div class="${ic}">${thumbHtml}</div>`; }
@@ -605,11 +614,12 @@ export function mediaHtml(p, full = false) {
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
       : `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
   } else if (p.gallery?.length > (full ? 0 : 1)) {
-    html = renderGallery(p.gallery);
+    html = renderGallery(p.gallery, full);
   } else {
-    const imgSrc = p.gallery?.length ? p.gallery[0].url : (!p.is_self ? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) : null);
+    const imgSrc = p.gallery?.length ? (full ? p.gallery[0].url : galleryThumb(p.gallery[0])) : (!p.is_self ? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) : null);
     if (imgSrc) {
-      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}" loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
+      const fullAttr = p.gallery?.length && !full ? ` data-full="${escHtml(p.gallery[0].url)}"` : '';
+      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}"${fullAttr} loading="lazy" alt="" onerror="this.parentElement.classList.add('no-media')"></div>`;
     } else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) {
       html = `<div class="og-placeholder ${ic}" data-og-url="${escHtml(p.url)}"></div>`;
     }
@@ -648,7 +658,8 @@ document.addEventListener('click', e => {
   if (thumb) idx = parseInt(thumb.dataset.idx);
 
   const t = thumbs[idx];
-  mainImg.src = t.src; mainImg.alt = t.alt;
+  mainImg.src = t.dataset.main || t.src; mainImg.alt = t.alt;
+  mainImg.dataset.full = t.dataset.full || t.src;
   if (t.dataset.w) { mainImg.width = t.dataset.w; mainImg.height = t.dataset.h; }
   else { mainImg.removeAttribute('width'); mainImg.removeAttribute('height'); }
   if (counter) counter.textContent = `${idx+1} / ${thumbs.length}`;
@@ -658,9 +669,10 @@ document.addEventListener('click', e => {
   thumbs.forEach((t,i) => t.classList.toggle('active', i === idx));
   // Update pv-meta gallery download button if present
   const pvDlGallery = document.querySelector('.pv-dl-gallery');
-  if (pvDlGallery && _dlOk(t.src)) {
-    const fn = _dlFilenamePos(t.src, idx + 1);
-    pvDlGallery.href = _dlHref(t.src, fn);
+  const fullSrc = mainImg.dataset.full;
+  if (pvDlGallery && _dlOk(fullSrc)) {
+    const fn = _dlFilenamePos(fullSrc, idx + 1);
+    pvDlGallery.href = _dlHref(fullSrc, fn);
     pvDlGallery.download = fn;
   }
 });
