@@ -920,6 +920,10 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Show profile pictures</span>${chk('s-show-avatars', settings.showAvatars)}</label>
   </div>
   <div class="settings-section">
+    <div class="settings-section-title">Privacy</div>
+    <label class="settings-row"><span class="settings-label">Link instead of embedding third-party media <span class="settings-hint">(YouTube, TikTok, Streamable and other players, plus any image or video the server doesn't proxy, become links that open in a new tab)</span></span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
+  </div>
+  <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
@@ -976,6 +980,11 @@ function bindSettingEvents() {
     settings.showAvatars = e.target.checked;
     saveSettings();
     if (postView.classList.contains('open')) changeCommentSort(state.currentCommentSort);
+  });
+  settingsBody.querySelector('#s-link-external-media').addEventListener('change', e => {
+    settings.linkExternalMedia = e.target.checked;
+    saveSettings();
+    retryFeedLoad();
   });
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });

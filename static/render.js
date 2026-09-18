@@ -1,4 +1,4 @@
-import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl } from './utils.js';
+import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl, isLocalUrl } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -32,11 +32,19 @@ function _initMarked() {
   const r = new marked.Renderer();
   const _img  = r.image.bind(r);
   const _link = r.link.bind(r);
+  // "Link instead of embedding" setting: unproxied inline media becomes a plain link.
+  const _asLink = (url, label) => (settings.linkExternalMedia && !isLocalUrl(url))
+    ? `<a class="md-media-link" href="${escHtml(realMediaUrl(url))}" target="_blank" rel="noopener noreferrer">${label} ↗</a>` : null;
   r.image = (href, title, text) => {
-    if (href?.startsWith('giphy|'))   return `<img class="gif-anim-img" src="${proxyMedia(`https://media.giphy.com/media/${href.slice(6)}/giphy.gif`)}" alt="${text||'gif'}" loading="lazy">`;
+    if (href?.startsWith('giphy|')) {
+      const src = proxyMedia(`https://media.giphy.com/media/${href.slice(6)}/giphy.gif`);
+      return _asLink(src, 'gif') ?? `<img class="gif-anim-img" src="${src}" alt="${text||'gif'}" loading="lazy">`;
+    }
     if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
     if (href?.startsWith('redditvid|')) {
       const base = proxyMedia(`https://v.redd.it/${href.slice(10)}`);
+      const link = _asLink(base, 'video');
+      if (link) return link;
       return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
     }
     try {
@@ -46,13 +54,14 @@ function _initMarked() {
       else
         href = proxyMedia(href);
     } catch (_) {}
-    return _img(href, title, text);
+    return _asLink(href, escHtml(text || 'image')) ?? _img(href, title, text);
   };
   r.link = (href, title, text) => {
     const decodedText = text ? text.replace(/&amp;/g, '&') : text;
-    if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href)) {
-      const proxied = (href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
-        ? `/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href);
+    const proxied = href && ((href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
+      ? `/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href));
+    // Unproxied image links stay plain links under the "link instead of embedding" setting.
+    if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && !(settings.linkExternalMedia && !isLocalUrl(proxied))) {
       const img = `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
       if (decodedText && decodedText !== href)
         return `<span class="md-img-block">${img}<span class="md-img-caption">${text}</span></span>`;
@@ -220,7 +229,11 @@ export function renderLinkedPostFull(linked) { return renderLinkedPostEmbed(link
 
 // ── Compact mode row ─────────────────────────────────────────────────────────
 function _compactThumbSrc(m) {
-  return m.gallery?.[0]?.url ?? m.thumb_url ?? m.preview_img ?? null;
+  const src = m.gallery?.[0]?.url ?? m.thumb_url ?? m.preview_img ?? null;
+  // Under "link instead of embedding", fall back to a proxied thumbnail or none.
+  if (src && settings.linkExternalMedia && !isLocalUrl(src))
+    return [m.thumb_url, m.preview_img].find(isLocalUrl) ?? null;
+  return src;
 }
 
 function _compactHasMedia(m) {
@@ -245,6 +258,12 @@ function _isSingleStaticImage(m) {
   if (m.gallery?.length > 1) return false;
   const isImageDomain = m.domain && (m.domain === 'i.redd.it' || m.domain === 'i.imgur.com' || /^i\.\w/.test(m.domain));
   return !!(m.gallery?.length === 1 || isImageDomain || (m.gif_url && !m.gif_is_video));
+}
+
+// Under "link instead of embedding", only open the lightbox when every image in it is proxied.
+function _lightboxOk(m) {
+  if (!settings.linkExternalMedia) return true;
+  return m.gallery?.length > 1 ? m.gallery.every(g => isLocalUrl(g.url)) : isLocalUrl(_fullImgSrc(m));
 }
 
 function _fullImgSrc(m) {
@@ -275,9 +294,9 @@ function renderCompactRow(p, { sub, id, delay, visitedClass, nsfwAttr, metaTop, 
     if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
     if (p.over_18) thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
     const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
-    if (_isSingleStaticImage(mediaSrc)) {
+    if (_isSingleStaticImage(mediaSrc) && _lightboxOk(mediaSrc)) {
       thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`;
-    } else if (mediaSrc.gallery?.length > 1) {
+    } else if (mediaSrc.gallery?.length > 1 && _lightboxOk(mediaSrc)) {
       thumbHtml = `<a class="post-compact-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(mediaSrc.gallery[0].url)}" data-gallery="${escHtml(JSON.stringify(_galleryUrls(mediaSrc)))}">${thumbContent}${galleryBadge}</a>`;
     } else {
       thumbHtml = _compactHasMedia(mediaSrc)
@@ -315,9 +334,9 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       if (p.is_spoiler) thumbContent = veilWrap('spoiler', thumbContent, 'thumb');
       if (p.over_18)    thumbContent = veilWrap('nsfw', thumbContent, 'thumb');
       const galleryBadge = galleryCount ? `<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>${galleryCount}</span>` : '';
-      thumbHtml = _isSingleStaticImage(mediaSrc)
+      thumbHtml = _isSingleStaticImage(mediaSrc) && _lightboxOk(mediaSrc)
         ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(_fullImgSrc(mediaSrc))}">${thumbContent}</a>`
-        : mediaSrc.gallery?.length > 1
+        : mediaSrc.gallery?.length > 1 && _lightboxOk(mediaSrc)
         ? `<a class="min-thumb thumb-lightbox" href="${postNav}" data-nav="${postNav}" data-lightbox="${escHtml(mediaSrc.gallery[0].url)}" data-gallery="${escHtml(JSON.stringify(_galleryUrls(mediaSrc)))}">${thumbContent}${galleryBadge}</a>`
         : `<a class="min-thumb" href="${postNav}" data-nav="${postNav}">${thumbContent}${galleryBadge}</a>`;
     }
