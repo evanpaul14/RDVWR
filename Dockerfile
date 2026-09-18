@@ -10,7 +10,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py media_detection.py reddit_client.py ./
+COPY app.py helpers.py shreddit.py archive.py media_detection.py reddit_client.py ./
+COPY routes/ routes/
 COPY static/ static/
 COPY templates/ templates/
 

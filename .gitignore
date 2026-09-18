@@ -7,5 +7,5 @@ CLAUDE.md
 AUDIT.md
 extension/
 sync_android.sh
-android_app.py.patch
+android_networking.patch
 benchmark.py
