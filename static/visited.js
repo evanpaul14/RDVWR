@@ -1,8 +1,10 @@
+import { storeGet, storeSet, storeRemove } from './storage.js';
+
 const KEY = 'rdvwr_visited';
 const MAX = 2000;
 
 function _load() {
-  try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); }
+  try { return new Set(JSON.parse(storeGet(KEY) || '[]')); }
   catch { return new Set(); }
 }
 
@@ -14,7 +16,7 @@ export function markVisited(id) {
   if (_visited.size > MAX) {
     _visited.delete(_visited.values().next().value);
   }
-  localStorage.setItem(KEY, JSON.stringify([..._visited]));
+  storeSet(KEY, JSON.stringify([..._visited]));
   return true;
 }
 
@@ -22,5 +24,5 @@ export function isVisited(id) { return Boolean(id && _visited.has(id)); }
 
 export function clearVisited() {
   _visited.clear();
-  localStorage.removeItem(KEY);
+  storeRemove(KEY);
 }

@@ -5,7 +5,7 @@ import json
 import time
 import threading
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
 from reddit_client import SESSION, HEADERS
 from helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
@@ -23,6 +23,26 @@ _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 _rg_token     = None
 _rg_token_exp = 0.0
 _rg_lock      = threading.Lock()
+
+
+def invalidate_redgifs_token(stale):
+    """Drop the cached token after upstream rejects it, unless another thread already replaced it."""
+    global _rg_token, _rg_token_exp
+    with _rg_lock:
+        if _rg_token == stale:
+            _rg_token, _rg_token_exp = None, 0.0
+
+
+def redgifs_api_get(url):
+    """GET a RedGifs API URL with the shared token, refreshing it once on a 401."""
+    for attempt in range(2):
+        token = get_redgifs_token()
+        resp = SESSION.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        if resp.status_code != 401 or attempt:
+            return resp
+        log.info("redgifs token rejected, refreshing")
+        invalidate_redgifs_token(token)
+    return resp
 
 
 def get_redgifs_token():
@@ -55,11 +75,7 @@ def get_redgifs(gif_id):
     if not REDGIFS_ID_VALID_RE.match(gif_id):
         return jsonify({"error": "Invalid ID"}), 400
     try:
-        token = get_redgifs_token()
-        resp  = SESSION.get(
-            f"https://api.redgifs.com/v2/gifs/{gif_id}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10)
+        resp = redgifs_api_get(f"https://api.redgifs.com/v2/gifs/{gif_id}")
         if resp.status_code == 404:
             return jsonify({"error": "Not found"}), 404
         if resp.status_code != 200:
@@ -77,11 +93,7 @@ def get_redgifs_batch():
     if not ids:
         return jsonify({}), 200
     try:
-        token = get_redgifs_token()
-        resp = SESSION.get(
-            f"https://api.redgifs.com/v2/gifs?ids={','.join(ids)}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10)
+        resp = redgifs_api_get(f"https://api.redgifs.com/v2/gifs?ids={','.join(ids)}")
         if resp.status_code != 200:
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
         gifs = resp.json().get("gifs") or []
@@ -152,6 +164,14 @@ def proxy_img():
         return ('', 502)
 
 
+RESOLVE_MAX_REDIRECTS = 5
+
+
+def _is_reddit_url(parsed):
+    hostname = parsed.hostname or ''
+    return parsed.scheme in ('http', 'https') and (hostname == 'reddit.com' or hostname.endswith('.reddit.com'))
+
+
 @bp.route("/api/resolve")
 def resolve_url():
     url = request.args.get('url', '').strip()
@@ -159,12 +179,20 @@ def resolve_url():
         parsed = urlparse(url)
     except Exception:
         return jsonify({'error': 'Invalid URL'}), 400
-    hostname = parsed.hostname or ''
-    if parsed.scheme not in ('http', 'https') or not (hostname == 'reddit.com' or hostname.endswith('.reddit.com')):
+    if not _is_reddit_url(parsed):
         return jsonify({'error': 'Only reddit.com URLs supported'}), 400
     try:
-        r = requests.head(url, allow_redirects=True, timeout=5, headers=HEADERS)
-        return jsonify({'url': r.url})
+        # Follow redirects by hand so a hop off reddit.com (e.g. an outbound-link
+        # redirect) is returned to the client instead of being requested server-side.
+        for _ in range(RESOLVE_MAX_REDIRECTS):
+            r = requests.head(url, allow_redirects=False, timeout=5, headers=HEADERS)
+            location = r.headers.get('Location') if r.status_code in (301, 302, 303, 307, 308) else None
+            if not location:
+                break
+            url = urljoin(url, location)
+            if not _is_reddit_url(urlparse(url)):
+                break
+        return jsonify({'url': url})
     except Exception:
         log.warning("resolve_url failed url=%s", url)
         return jsonify({'error': 'Request failed'}), 502

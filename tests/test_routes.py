@@ -40,6 +40,9 @@ class MockResponse:
     def iter_content(self, chunk_size=None):
         yield self._raw
 
+    def close(self):
+        pass
+
 
 def _make_listing(posts=None, after=None):
     """Build a Reddit listing envelope."""
@@ -699,6 +702,17 @@ class TestResolve:
         assert resp.status_code == 200
         assert "url" in resp.get_json()
 
+    @patch("requests.head")
+    def test_stops_at_off_reddit_redirect(self, mock_head, client):
+        mock_head.side_effect = [
+            MockResponse(status_code=302, headers={"Location": "/r/python/comments/abc/"}),
+            MockResponse(status_code=301, headers={"Location": "http://192.168.1.1/admin"}),
+        ]
+        resp = client.get("/api/resolve?url=https://reddit.com/r/python/s/xyz")
+        assert resp.get_json()["url"] == "http://192.168.1.1/admin"
+        assert mock_head.call_count == 2
+        assert all(c.kwargs["allow_redirects"] is False for c in mock_head.call_args_list)
+
     def test_non_reddit_url_rejected(self, client):
         resp = client.get("/api/resolve?url=https://evil.com/redirect")
         assert resp.status_code == 400
@@ -779,6 +793,17 @@ class TestRedgifs:
         resp = client.get("/api/redgifs/NotFoundGif")
         assert resp.status_code == 404
 
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_401_refreshes_token_and_retries(self, mock_get, client):
+        media_routes._rg_token = "revoked_token"
+        media_routes._rg_token_exp = float("inf")
+        gif_resp = MockResponse({"gif": {"urls": {"hd": "https://media.redgifs.com/Ok.mp4", "sd": None}}})
+        mock_get.side_effect = [_session_get(status_code=401), MockResponse({"token": "new_token"}), gif_resp]
+        resp = client.get("/api/redgifs/RetryGif")
+        assert resp.status_code == 200
+        assert media_routes._rg_token == "new_token"
+        assert mock_get.call_args_list[2].kwargs["headers"]["Authorization"] == "Bearer new_token"
 
 # ── /api/redgifs/media/<filename> ────────────────────────────────────────────
 
@@ -869,6 +894,32 @@ class TestOgImage:
         assert resp.status_code == 200
         assert resp.get_json()["url"] is None
 
+
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", side_effect=lambda h: None if h == "internal.test" else "93.184.216.34")
+    @patch.object(reddit_client.SESSION, "get")
+    def test_redirect_to_private_host_blocked(self, mock_get, _resolve, client):
+        mock_get.return_value = MockResponse(status_code=302, headers={"Location": "http://internal.test/"})
+        embeds_routes._og_cache.clear()
+        resp = client.get("/api/og-image?url=https://example.com/redir")
+        assert resp.status_code == 403
+        assert mock_get.call_count == 1
+
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
+    @patch.object(reddit_client.SESSION, "get", side_effect=TimeoutError)
+    def test_failure_cached_briefly(self, _get, _resolve, client):
+        embeds_routes._og_cache.clear()
+        with patch.object(embeds_routes._og_cache, "set") as cache_set:
+            client.get("/api/og-image?url=https://example.com/slow")
+        assert cache_set.call_args.args[2] == embeds_routes.OG_FAIL_CACHE_TTL
+
+    @pytest.mark.parametrize("ip", ["127.0.0.1", "192.168.1.5", "100.100.1.1", "0.0.0.0", "::ffff:10.0.0.1", "fe80::1"])
+    def test_non_public_ips_disallowed(self, ip):
+        import ipaddress
+        assert not embeds_routes._ip_allowed(ipaddress.ip_address(ip))
+
+    def test_public_ip_allowed(self):
+        import ipaddress
+        assert embeds_routes._ip_allowed(ipaddress.ip_address("93.184.216.34"))
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 

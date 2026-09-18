@@ -1,17 +1,19 @@
+import { storeGet, storeSet } from './storage.js';
+
 export function setMutePref(muted) {
   state.userPrefersMuted = muted;
-  localStorage.setItem('mutePreference', muted ? 'muted' : 'unmuted');
+  storeSet('mutePreference', muted ? 'muted' : 'unmuted');
 }
 
 export function setVolumePref(vol) {
   state.userVolume = vol;
-  localStorage.setItem('volumePreference', String(vol));
+  storeSet('volumePreference', String(vol));
 }
 
 export const state = {
-  userPrefersMuted: localStorage.getItem('mutePreference') !== 'unmuted',
+  userPrefersMuted: storeGet('mutePreference') !== 'unmuted',
   userVolume: (() => {
-    const v = parseFloat(localStorage.getItem('volumePreference'));
+    const v = parseFloat(storeGet('volumePreference'));
     return isFinite(v) && v >= 0 && v <= 1 ? v : 1;
   })(),
 

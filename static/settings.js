@@ -1,3 +1,5 @@
+import { storeGet, storeSet } from './storage.js';
+
 const KEY = 'rdvwr_settings';
 
 export const DEFAULTS = {
@@ -19,7 +21,7 @@ export const DEFAULTS = {
 
 function _load() {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    const saved = JSON.parse(storeGet(KEY) || '{}');
     if (!saved.layout) {
       if (saved.minimal) saved.layout = 'minimal';
       else if (saved.compact) saved.layout = 'compact';
@@ -32,7 +34,7 @@ function _load() {
 export const settings = _load();
 
 export function saveSettings() {
-  localStorage.setItem(KEY, JSON.stringify(settings));
+  storeSet(KEY, JSON.stringify(settings));
   applySettings();
 }
 
