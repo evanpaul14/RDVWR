@@ -13,6 +13,7 @@ export const DEFAULTS = {
   hideReadHome: false,
   hideReadSub: false,
   redditCookies: '',
+  homeFeed: 'personalized',
   theme: 'dark',
   pagination: false,
   layout: 'card',
