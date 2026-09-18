@@ -2,7 +2,7 @@
 import re
 from flask import Blueprint, jsonify, request
 from reddit_client import reddit_get
-from helpers import cached_json, parallel
+from helpers import cached_json, error_response, parallel
 
 bp = Blueprint("live", __name__)
 
@@ -54,8 +54,8 @@ def get_live_thread(thread_id):
             "updates":      updates,
             "after":        after,
         }, 30)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)
 
 
 @bp.route("/api/live/<thread_id>/updates")
@@ -78,5 +78,5 @@ def get_live_updates(thread_id):
             "updates": _parse_live_updates(listing.get("children", [])),
             "after":   listing.get("after"),
         }, 15)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)

@@ -67,6 +67,7 @@ def no_oauth(monkeypatch):
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
+    app.config["RATE_LIMIT"] = False
     with app.test_client() as c:
         yield c
 
@@ -1050,6 +1051,7 @@ class TestTranslate:
         mock_get.side_effect = Exception("network error")
         resp = client.get("/api/translate?text=hello")
         assert resp.status_code == 502
+        assert "network error" not in resp.get_data(as_text=True)
 
     @patch.object(reddit_client.SESSION, "get")
     def test_text_truncated_to_1000_chars(self, mock_get, client):
@@ -1059,3 +1061,48 @@ class TestTranslate:
         assert resp.status_code == 200
         called_params = mock_get.call_args[1].get("params", {})
         assert len(called_params.get("q", "")) <= 1000
+
+
+# ── rate limiting ────────────────────────────────────────────────────────────
+
+class TestRateLimit:
+    def test_limiter_blocks_after_limit(self):
+        lim = helpers.RateLimiter(2, 60)
+        assert lim.hit("a") == 0
+        assert lim.hit("a") == 0
+        assert 0 < lim.hit("a") <= 61
+        assert lim.hit("b") == 0
+
+    def test_returns_429_with_retry_after(self, client, monkeypatch):
+        app.config["RATE_LIMIT"] = True
+        monkeypatch.setattr(helpers, "RATE_LIMITS", [("/api/", helpers.RateLimiter(1, 60))])
+        try:
+            client.get("/api/download?url=")
+            resp = client.get("/api/download?url=")
+            assert resp.status_code == 429
+            assert int(resp.headers["Retry-After"]) > 0
+        finally:
+            app.config["RATE_LIMIT"] = False
+
+    def test_non_api_paths_not_limited(self, client, monkeypatch):
+        app.config["RATE_LIMIT"] = True
+        monkeypatch.setattr(helpers, "RATE_LIMITS", [("/api/", helpers.RateLimiter(0, 60))])
+        try:
+            assert client.get("/").status_code == 200
+        finally:
+            app.config["RATE_LIMIT"] = False
+
+    def test_x_real_ip_trusted_only_from_loopback(self, client, monkeypatch):
+        app.config["RATE_LIMIT"] = True
+        monkeypatch.setattr(helpers, "RATE_LIMITS", [("/api/", helpers.RateLimiter(1, 60))])
+        try:
+            # Test client is loopback, so distinct X-Real-IP values get distinct buckets
+            assert client.get("/api/download?url=", headers={"X-Real-IP": "1.1.1.1"}).status_code != 429
+            assert client.get("/api/download?url=", headers={"X-Real-IP": "2.2.2.2"}).status_code != 429
+            # A non-loopback peer's spoofed header is ignored
+            env = {"REMOTE_ADDR": "9.9.9.9"}
+            client.get("/api/download?url=", headers={"X-Real-IP": "3.3.3.3"}, environ_base=env)
+            resp = client.get("/api/download?url=", headers={"X-Real-IP": "4.4.4.4"}, environ_base=env)
+            assert resp.status_code == 429
+        finally:
+            app.config["RATE_LIMIT"] = False

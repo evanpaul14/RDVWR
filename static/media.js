@@ -1,6 +1,6 @@
 import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, evictMap, renderPoll, GALLERY_SWIPE_MIN } from './utils.js';
+import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
@@ -420,7 +420,7 @@ export function initOgImages(container) {
           img.alt = '';
           img.onerror = () => wrap.remove();
           if (wrap.dataset.ogNsfw) {
-            wrap.innerHTML = `<div class="nsfw-media-wrap nsfw-thumb-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="event.preventDefault();this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.parentElement.classList.add('revealed')}"><span class="nsfw-veil-label">nsfw</span></div><div class="nsfw-content"></div></div>`;
+            wrap.innerHTML = veilWrap('nsfw', '', 'thumb');
             wrap.querySelector('.nsfw-content').appendChild(img);
           } else {
             wrap.appendChild(img);
@@ -470,14 +470,6 @@ export function renderGallery(images) {
     </div>`;
 }
 
-export function spoilerWrap(html) {
-  return `<div class="spoiler-media-wrap"><div class="spoiler-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="spoiler-veil-label">spoiler — click to reveal</span></div><div class="spoiler-content">${html}</div></div>`;
-}
-
-export function nsfwWrap(html) {
-  return `<div class="nsfw-media-wrap"><div class="nsfw-veil" role="button" tabindex="0" onclick="this.parentElement.classList.add('revealed')" onkeydown="if(event.key==='Enter'||event.key===' '){this.parentElement.classList.add('revealed');event.preventDefault()}"><span class="nsfw-veil-label">nsfw — click to reveal</span></div><div class="nsfw-content">${html}</div></div>`;
-}
-
 // ── Minimal mode: plain thumbnail + link, no video/iframe/gallery-nav embeds ──
 function _minimalMediaHtml(p, full) {
   const ic = full ? 'pv-media' : 'post-media';
@@ -509,8 +501,8 @@ export function mediaHtml(p, full = false) {
   if (settings.layout === 'minimal') {
     let html = _minimalMediaHtml(p, full);
     if (!html) return '';
-    if (p.is_spoiler) html = spoilerWrap(html);
-    if (p.over_18)   html = nsfwWrap(html);
+    if (p.is_spoiler) html = veilWrap('spoiler', html);
+    if (p.over_18)   html = veilWrap('nsfw', html);
     return html;
   }
   if (p.is_devvit) {
@@ -563,8 +555,8 @@ export function mediaHtml(p, full = false) {
     }
   }
   if (!html) return '';
-  if (p.is_spoiler) html = spoilerWrap(html);
-  if (p.over_18)   html = nsfwWrap(html);
+  if (p.is_spoiler) html = veilWrap('spoiler', html);
+  if (p.over_18)   html = veilWrap('nsfw', html);
   return html;
 }
 

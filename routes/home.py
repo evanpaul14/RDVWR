@@ -9,7 +9,7 @@ from curl_cffi import requests as cffi_requests
 from media_detection import process_post, extract_posts
 from reddit_client import reddit_get
 from shreddit import _parse_shreddit_post
-from helpers import CACHE_TTL_FEED, FEED_LIMIT, add_time_param, cached_json, hydrate_linked_posts, log
+from helpers import CACHE_TTL_FEED, FEED_LIMIT, add_time_param, cached_json, error_response, hydrate_linked_posts, log
 
 bp = Blueprint("home", __name__)
 
@@ -142,5 +142,5 @@ def get_home():
         return cached_json({"posts": posts, "after": listing.get("after"), "via": "anonymous"}, CACHE_TTL_FEED)
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return error_response(500)

@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, jsonify, request
 from media_detection import clean_url
 from reddit_client import reddit_get
-from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json
+from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, log
 
 bp = Blueprint("avatars", __name__)
 
@@ -37,7 +37,8 @@ def _fetch_user_icon(username):
         if resp.status_code == 200:
             d = resp.json().get("data", {})
             icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or None
-    except Exception:
+    except Exception as e:
+        log.warning("avatar fetch failed user=%s: %s", username, e)
         icon = None
     _avatar_cache.set(username, icon, AVATAR_CACHE_TTL)
     return icon
@@ -95,7 +96,8 @@ def _fetch_user_icons_batch(pairs):
             resp = reddit_get("https://www.reddit.com/api/user_data_by_account_ids",
                                params={"ids": ",".join(chunk)}, timeout=8)
             data = resp.json() if resp.status_code == 200 else {}
-        except Exception:
+        except Exception as e:
+            log.warning("avatar batch fetch failed (%d ids): %s", len(chunk), e)
             data = {}
         for fullname in chunk:
             author = to_fetch[fullname]

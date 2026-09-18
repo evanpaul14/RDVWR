@@ -2,13 +2,14 @@ import os
 import logging
 from flask import Flask
 from flask_compress import Compress
-from helpers import CACHE_TTL_STATIC
+from helpers import CACHE_TTL_STATIC, rate_limit
 from routes import register_all
 
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 Compress(app)
+app.before_request(rate_limit)
 
 
 @app.context_processor
