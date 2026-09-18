@@ -7,12 +7,13 @@ import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
 import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
 import { initKeyboard } from './keyboard.js';
-import { initCardHibernation } from './hibernate.js';
+import { initCardHibernation, cardContent } from './hibernate.js';
+import { toggleSaved, saveBtnLabel } from './saved.js';
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
   loadHome, loadHomeFeed, buildHomeSortHtml,
-  loadDuplicatesPage,
+  loadDuplicatesPage, loadSaved,
   sortBar, setMainOpen, buildSubSortHtml,
 } from './feed.js';
 import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js';
@@ -49,12 +50,16 @@ export function navigate(path, { replace=false }={}) {
 function updateBottomNav(route) {
   const bnHome   = document.getElementById('bn-home');
   const bnSearch = document.getElementById('bn-search');
+  const bnSaved  = document.getElementById('bn-saved');
   if (!bnHome) return;
-  [bnHome, bnSearch].forEach(b => b.classList.remove('active'));
+  [bnHome, bnSearch, bnSaved].forEach(b => b?.classList.remove('active'));
   const headerSearchBtn = document.getElementById('header-search-btn');
   if (document.body.classList.contains('mobile-search-open') || route.type === 'search') {
     bnSearch?.classList.add('active');
     headerSearchBtn?.classList.add('active');
+  } else if (route.type === 'saved') {
+    bnSaved?.classList.add('active');
+    headerSearchBtn?.classList.remove('active');
   } else {
     bnHome.classList.add('active');
     headerSearchBtn?.classList.remove('active');
@@ -92,6 +97,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'home') state.homeMode = false;
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
+  if (route.type !== 'saved') state.savedMode = false;
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
     case 'home':
@@ -146,6 +152,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       state.searchMode = false;
       state.profileMode = false;
       await loadWikiPage(route.sub, route.page);
+      break;
+    case 'saved':
+      closePostView();
+      closeSidebar();
+      state.searchMode = false;
+      state.duplicatesMode = false;
+      await loadSaved();
       break;
     case 'live':
       closePostView();
@@ -235,7 +248,9 @@ function retryFeedLoad() {
     loadWikiPage(state._wikiSub, state._wikiPage);
     return;
   }
-  if (state.liveMode) {
+  if (state.savedMode) {
+    loadSaved();
+  } else if (state.liveMode) {
     loadLiveThread(state.liveThreadId);
   } else if (state.duplicatesMode) {
     loadDuplicatesPage(state.duplicatesSub, state.duplicatesPostId);
@@ -451,7 +466,7 @@ mobileSearchInput.addEventListener('blur', () => {
 
 // Infinite scroll
 function loadMore() {
-  if (state.loading || state.wikiMode) return;
+  if (state.loading || state.wikiMode || state.savedMode) return;
   if (state.duplicatesMode) {
     if (state.duplicatesAfter) loadDuplicatesPage(state.duplicatesSub, state.duplicatesPostId, state.duplicatesAfter, true);
   } else if (state.searchMode) {
@@ -589,7 +604,31 @@ feed.addEventListener('keydown', e => {
 
 // Logo
 document.getElementById('logo-btn').addEventListener('click', () => navigate('/'));
-document.getElementById('popular-btn').addEventListener('click', () => navigate('/r/popular'));
+
+// Feeds menu: a plain "saved" link, or a saved/popular dropdown when cookies enable popular
+const feedsBtn      = document.getElementById('feeds-btn');
+const feedsDropdown = document.getElementById('feeds-dropdown');
+function setFeedsMenuOpen(open) {
+  feedsDropdown.hidden = !open;
+  feedsBtn.setAttribute('aria-expanded', String(open));
+}
+feedsBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (!settings.redditCookies) { navigate('/saved'); return; }
+  setFeedsMenuOpen(feedsDropdown.hidden);
+});
+feedsDropdown.addEventListener('click', e => {
+  const item = e.target.closest('.feeds-item[data-feed]');
+  if (!item) return;
+  setFeedsMenuOpen(false);
+  navigate(item.dataset.feed);
+});
+document.addEventListener('click', e => {
+  if (!feedsDropdown.hidden && !e.target.closest('#feeds-menu')) setFeedsMenuOpen(false);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !feedsDropdown.hidden) setFeedsMenuOpen(false);
+});
 
 // Bottom nav
 document.getElementById('bn-home').addEventListener('click', () => navigate('/'));
@@ -601,6 +640,7 @@ document.getElementById('bn-search').addEventListener('click', () => {
     openMobileSearch();
   }
 });
+document.getElementById('bn-saved').addEventListener('click', () => navigate('/saved'));
 document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
 
 // Post-view search toggle (mobile)
@@ -702,6 +742,32 @@ document.addEventListener('auxclick', e => {
   if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('download')) return;
   interceptNavLink(a, e);
 }, true);
+
+// Save / unsave (local)
+function _setSaveBtn(btn, saved) {
+  btn.classList.toggle('is-saved', saved);
+  btn.setAttribute('aria-pressed', String(saved));
+  btn.title = saved ? 'Remove from saved' : 'Save post';
+  btn.setAttribute('aria-label', btn.title);
+  btn.innerHTML = saveBtnLabel(saved, btn.dataset.minimal === '1');
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.save-btn[data-save]');
+  if (!btn) return;
+  e.stopPropagation();
+  const id = btn.dataset.save;
+  const saved = toggleSaved(id);
+  if (saved === null) {
+    btn.title = 'Could not save (storage full or unavailable)';
+    return;
+  }
+  const sel = `.save-btn[data-save="${CSS.escape(id)}"]`;
+  document.querySelectorAll(sel).forEach(b => _setSaveBtn(b, saved));
+  // A hibernated feed card holds its buttons outside the document.
+  const card = feed.querySelector(`[data-post-id="${CSS.escape(id)}"]`);
+  if (card) cardContent(card).querySelectorAll(sel).forEach(b => _setSaveBtn(b, saved));
+});
 
 // Share / copy link
 document.addEventListener('click', e => {
@@ -812,7 +878,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); updatePopularBtn(); });
+  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => { settings.redditCookies = e.target.value.trim(); saveSettings(); updateFeedsBtn(); });
   settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
     settings.commentSort = e.target.value;
     state.currentCommentSort = e.target.value;
@@ -880,16 +946,19 @@ document.getElementById('settings-btn').addEventListener('click', openSettingsPa
 document.getElementById('settings-close').addEventListener('click', closeSettingsPanel);
 settingsOverlay.addEventListener('click', closeSettingsPanel);
 
-// ── Popular button visibility ─────────────────────────────────────────────────
-function updatePopularBtn() {
-  const btn = document.getElementById('popular-btn');
-  if (btn) btn.hidden = !settings.redditCookies;
+// ── Feeds button mode ─────────────────────────────────────────────────────────
+function updateFeedsBtn() {
+  const menu = !!settings.redditCookies;
+  feedsBtn.textContent = menu ? 'feeds ▾' : 'saved';
+  feedsBtn.setAttribute('aria-label', menu ? 'Feeds' : 'Saved posts');
+  if (menu) feedsBtn.setAttribute('aria-haspopup', 'menu');
+  else { feedsBtn.removeAttribute('aria-haspopup'); setFeedsMenuOpen(false); }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 applySettings();
 state.currentCommentSort = settings.commentSort;
-updatePopularBtn();
+updateFeedsBtn();
 initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
 initCardHibernation(feed);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });

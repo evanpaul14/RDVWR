@@ -1,6 +1,7 @@
 import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull } from './media.js';
 import { isVisited } from './visited.js';
+import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
 
 const THREAD_MAX_DEPTH = 4;
@@ -339,7 +340,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>${fmtNum(p.score)}</div>
       <div class="min-body">
         <div class="min-title-row">${badges}<a class="min-title${titleExtra}" href="${postNav}" data-nav="${postNav}">${escHtml(p.title)}</a>${domainHtml ? ' '+domainHtml : ''}${flairHtml ? ' '+flairHtml : ''}</div>
-        <div class="min-meta">${subLink}<a class="min-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button></div>
+        <div class="min-meta">${subLink}<a class="min-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button> · ${saveBtnHtml(p, { minimal: true })}</div>
       </div>
       ${thumbHtml}
     </div>`;
@@ -347,6 +348,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
 
 // ── Post card ─────────────────────────────────────────────────────────────────
 export function renderPost(p, idx, showSub=false) {
+  rememberPost(p);
   const sub    = escHtml(p.subreddit);
   const author = escHtml(p.author);
   const id     = escHtml(p.id);
@@ -387,6 +389,7 @@ export function renderPost(p, idx, showSub=false) {
           <button class="share-btn" data-share="/r/${sub}/comments/${id}" title="Copy link">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           </button>
+          ${saveBtnHtml(p)}
         </div>
       </div>`;
 

@@ -42,6 +42,7 @@ export function parseRoute(path=location.pathname) {
     const params = _qs(path);
     return { type:'user', username:mUser[1], after: params.get('after') || null, page: parseInt(params.get('page')) || 1 };
   }
+  if (pathname === '/saved' || pathname === '/saved/') return { type: 'saved' };
   if (pathname === '/search') {
     const params = _qs(path);
     const q = params.get('q') || '';
