@@ -197,6 +197,7 @@
 {% if initial_post %}<script>window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}
 {% if initial_profile %}<script>window.__INITIAL_PROFILE__={{ initial_profile | tojson | safe }};</script>{% endif %}
 <script>window.__HLS_JS_V__={{ asset_v('hls.min.js') | tojson | safe }};</script>
+<script>window.__DISABLE_DOWNLOADS__={{ disable_downloads | tojson | safe }};</script>
 <script type="module" src="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}"></script>
 </body>
 </html>

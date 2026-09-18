@@ -3,7 +3,7 @@ import re
 from flask import Blueprint, jsonify, request, render_template, Response
 from media_detection import extract_posts, clean_url
 from reddit_client import reddit_get
-from helpers import FEED_LIMIT, add_time_param, parallel, log
+from helpers import FEED_LIMIT, DISABLE_DOWNLOADS, add_time_param, parallel, log
 from routes.users import _fetch_user_about, _fetch_user_overview
 from routes.comments import _fetch_comments_data
 
@@ -36,7 +36,7 @@ def spa(**kwargs):
     username = kwargs.get('username')
     if username and 'multiname' not in kwargs:
         initial_profile = _try_inject_profile(username)
-    resp = render_template("index.html", initial_profile=initial_profile)
+    resp = render_template("index.html", initial_profile=initial_profile, disable_downloads=DISABLE_DOWNLOADS)
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
@@ -127,7 +127,7 @@ def r_json_or_spa(reddit_path):
                     initial_post = data
             except Exception as e:
                 log.warning("inject post sub=%s post=%s: %s", sub, post_id, e)
-    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post)
+    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post, disable_downloads=DISABLE_DOWNLOADS)
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
