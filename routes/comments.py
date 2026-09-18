@@ -1,6 +1,6 @@
 """Post comment trees and 'load more' children."""
 from flask import Blueprint, jsonify, request
-from media_detection import process_post, _parse_awards
+from media_detection import process_post, _parse_awards, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts)
@@ -61,6 +61,8 @@ def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence',
         return None, ("Post not found", 404)
     post_raw = children[0]["data"]
     post     = process_post(post_raw)
+    if DISABLE_NSFW and post.get("over_18"):
+        return None, ("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view
     hydrate_linked_posts([post])
 

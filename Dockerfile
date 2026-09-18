@@ -18,5 +18,9 @@ COPY templates/ templates/
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8002
 
-# Single worker so the OAuth token pool in reddit_client is shared; threads for concurrency
-CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--workers", "1", "--threads", "16", "--timeout", "200", "app:app"]
+# WEB_CONCURRENCY defaults to 1 worker (threads handle concurrency within it). Each
+# worker keeps its own OAuth device pool and, without REDIS_URL set, its own
+# in-process cache/rate-limit state — so raising this past 1 only makes sense once
+# REDIS_URL points at a shared Redis instance (see helpers.py).
+ENV WEB_CONCURRENCY=1
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:8002 --workers ${WEB_CONCURRENCY} --threads 16 --timeout 200 app:app"]

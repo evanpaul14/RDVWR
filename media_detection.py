@@ -1,3 +1,4 @@
+import os
 import re
 import time as _time
 import logging
@@ -6,6 +7,16 @@ from urllib.parse import quote as url_quote, urlparse
 log = logging.getLogger(__name__)
 
 SELFTEXT_MAX_LEN = 600
+
+DISABLE_NSFW = os.environ.get('DISABLE_NSFW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def filter_nsfw(posts):
+    """Drops over_18 posts when DISABLE_NSFW is set. Call on every list of processed
+    posts before it reaches a client."""
+    if not DISABLE_NSFW:
+        return posts
+    return [p for p in posts if not p.get('over_18')]
 
 YOUTUBE_RE      = re.compile(r'(?:youtube\.com/watch.*?[?&]v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE      = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
@@ -336,4 +347,4 @@ def extract_posts(listing):
             posts.append(process_post(c["data"]))
         except (KeyError, TypeError) as e:
             log.warning("extract_posts: skipping malformed post id=%s: %s", c.get("data", {}).get("id"), e)
-    return posts
+    return filter_nsfw(posts)

@@ -2,7 +2,7 @@ import os
 import logging
 from flask import Flask
 from flask_compress import Compress
-from helpers import CACHE_TTL_STATIC, rate_limit
+from helpers import CACHE_TTL_STATIC
 from routes import register_all
 
 
@@ -11,7 +11,6 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 # Route Reddit/Imgur media through /api/m/ instead of letting the browser hit the CDNs.
 app.config['PROXY_MEDIA'] = os.environ.get('PROXY_MEDIA', '0') == '1'
 Compress(app)
-app.before_request(rate_limit)
 
 
 @app.context_processor

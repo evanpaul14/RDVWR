@@ -1,7 +1,7 @@
 """Post, community, and user search plus subreddit autocomplete."""
 import requests
 from flask import Blueprint, jsonify, request
-from media_detection import extract_posts, clean_url
+from media_detection import extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import CACHE_TTL_FEED, FEED_LIMIT, cached_json, error_response, server_cache, hydrate_linked_posts, log
 
@@ -18,7 +18,8 @@ def subreddit_search():
     try:
         resp = reddit_get(
             "https://www.reddit.com/api/subreddit_autocomplete_v2.json",
-            params={"query": q, "include_over_18": "true", "include_profiles": "false", "limit": 8},
+            params={"query": q, "include_over_18": str(not DISABLE_NSFW).lower(),
+                    "include_profiles": "false", "limit": 8},
             timeout=5)
         if resp.status_code != 200:
             return jsonify({"subs": []})
@@ -28,7 +29,9 @@ def subreddit_search():
             "icon":        clean_url(c["data"].get("icon_img") or c["data"].get("community_icon") or ""),
             "subscribers": c["data"].get("subscribers", 0),
             "over18":      bool(c["data"].get("over18")),
-        } for c in children if c.get("data", {}).get("display_name")]
+        } for c in children
+            if c.get("data", {}).get("display_name")
+            and not (DISABLE_NSFW and c["data"].get("over18"))]
         return jsonify({"subs": subs[:8]})
     except Exception as e:
         log.warning("subreddit_search failed q=%r: %s", q, e)
@@ -52,7 +55,7 @@ def search_posts():
     if sort not in SEARCH_SORTS:
         sort = "relevance"
     url    = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
-    nsfw   = request.args.get("nsfw", "0") == "1"
+    nsfw   = not DISABLE_NSFW and request.args.get("nsfw", "0") == "1"
     params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1, "include_over_18": int(nsfw)}
     if sub:
         params["restrict_sr"] = 1
@@ -95,6 +98,8 @@ def search_communities():
             if c.get("kind") != "t5":
                 continue
             d = c["data"]
+            if DISABLE_NSFW and d.get("over_18"):
+                continue
             icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
             results.append({
                 "name":        d.get("display_name", ""),

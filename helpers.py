@@ -1,11 +1,13 @@
 """Shared constants, caching, and request helpers used across route modules."""
+import os
 import re
+import json
 import time
 import logging
 import threading
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
-from flask import current_app, jsonify, request, Response, make_response
+from flask import jsonify, request, Response, make_response
 from media_detection import process_post
 from reddit_client import reddit_get
 
@@ -20,6 +22,33 @@ STREAM_CHUNK_SIZE    = 65536
 
 
 log = logging.getLogger(__name__)
+
+# Sharing cache/rate-limit state across processes (e.g. multiple gunicorn workers or
+# horizontally-scaled instances) requires an external store. Set REDIS_URL to opt in;
+# with it unset (the default, single-Pi deployment), everything stays in-process as
+# before. The OAuth device pool in reddit_client is NOT shared this way — each process
+# keeps its own, which is harmless (just more rotating identities).
+REDIS_URL = os.environ.get('REDIS_URL', '').strip()
+
+_redis_client = None
+if REDIS_URL:
+    import redis as _redis_mod
+    _redis_client = _redis_mod.Redis.from_url(REDIS_URL, decode_responses=False)
+
+
+def _redis_cache_encode(value):
+    """Cached values are either raw JSON bytes (server_cache) or plain JSON-able
+    Python objects (dict/str/None from the smaller route-level caches); tag which so
+    decode knows whether to json.loads it back."""
+    if isinstance(value, bytes):
+        return b'B' + value
+    return b'J' + json.dumps(value).encode()
+
+
+def _redis_cache_decode(raw):
+    if raw[:1] == b'B':
+        return raw[1:]
+    return json.loads(raw[1:])
 
 SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
@@ -91,20 +120,35 @@ _CACHE_MISS = object()
 
 
 class TTLCache:
-    """Thread-safe in-process cache with a per-entry TTL and a size cap. When full,
-    expired entries are swept first; only if none have expired is the oldest-inserted
-    entry evicted (not true LRU, but keeps memory bounded predictably)."""
+    """Thread-safe cache with a per-entry TTL and a size cap. When full, expired
+    entries are swept first; only if none have expired is the oldest-inserted entry
+    evicted (not true LRU, but keeps memory bounded predictably).
+
+    In-process by default (one dict per worker). Pass `name=` to make an instance
+    share state via Redis instead, when REDIS_URL is set — needed for a cache to stay
+    coherent across multiple gunicorn workers or horizontally-scaled instances. Two
+    TTLCache instances with the same `name` share the same Redis-backed keyspace, so
+    `name` must be unique per logical cache (e.g. 'view', 'og', 'avatar')."""
     SWEEP_INTERVAL = 30  # seconds; bounds the O(n) sweep cost when the cache stays full
 
-    def __init__(self, max_size):
+    def __init__(self, max_size, name=None):
         self._max_size = max_size
         self._lock = threading.Lock()
         self._data = {}
         self._last_sweep = 0.0
+        self._redis = _redis_client if (_redis_client and name) else None
+        self._prefix = f'ttlc:{name}:' if self._redis else None
 
     def get(self, key):
         """Returns the cached value, or the _CACHE_MISS sentinel if absent/expired
         (a cached value can itself legitimately be None, so plain None can't mean "miss")."""
+        if self._redis:
+            try:
+                raw = self._redis.get(self._prefix + str(key))
+            except Exception as e:
+                log.warning("redis cache get failed, treating as miss: %s", e)
+                return _CACHE_MISS
+            return _redis_cache_decode(raw) if raw is not None else _CACHE_MISS
         now = time.time()
         with self._lock:
             hit = self._data.get(key)
@@ -114,6 +158,12 @@ class TTLCache:
         return hit[1] if hit else _CACHE_MISS
 
     def set(self, key, value, ttl):
+        if self._redis:
+            try:
+                self._redis.set(self._prefix + str(key), _redis_cache_encode(value), ex=ttl)
+            except Exception as e:
+                log.warning("redis cache set failed, dropping entry: %s", e)
+            return
         now = time.time()
         with self._lock:
             self._data.pop(key, None)
@@ -132,64 +182,8 @@ class TTLCache:
             self._data.clear()
 
 
-class RateLimiter:
-    """Thread-safe fixed-window request counter keyed by client. In-process only, so
-    with N gunicorn workers the effective limit is up to N× the configured one."""
-    def __init__(self, limit, window):
-        self.limit, self.window = limit, window
-        self._lock = threading.Lock()
-        self._hits = {}
-
-    def hit(self, key):
-        """Count one request; returns 0 if allowed, else seconds until the window resets."""
-        now = time.time()
-        bucket = int(now // self.window)
-        with self._lock:
-            if len(self._hits) > 10000:
-                self._hits = {k: v for k, v in self._hits.items() if v[0] == bucket}
-            b, count = self._hits.get(key, (bucket, 0))
-            count = count + 1 if b == bucket else 1
-            self._hits[key] = (bucket, count)
-        if count > self.limit:
-            return int((bucket + 1) * self.window - now) + 1
-        return 0
-
-
-# (path prefix, limiter) — first match wins. Media proxies get a high ceiling since a
-# single feed page loads dozens of proxied previews and video range requests.
-RATE_LIMITS = [
-    ('/api/download',        RateLimiter(10, 60)),
-    ('/api/img',             RateLimiter(600, 60)),
-    ('/api/redgifs/media/',  RateLimiter(600, 60)),
-    # HLS playback fetches a playlist per rendition plus a request per segment.
-    ('/api/m/',              RateLimiter(3000, 60)),
-    ('/api/',                RateLimiter(240, 60)),
-]
-
-
-def client_ip():
-    ip = request.remote_addr or ''
-    # Behind the local nginx proxy every request comes from loopback; only then trust
-    # its X-Real-IP header (a direct client could otherwise spoof it).
-    if ip in ('127.0.0.1', '::1'):
-        ip = request.headers.get('X-Real-IP', ip)
-    return ip
-
-
-def rate_limit():
-    """before_request hook: 429 once a client exceeds its tier's limit."""
-    if not current_app.config.get('RATE_LIMIT', True):
-        return None
-    for prefix, limiter in RATE_LIMITS:
-        if request.path.startswith(prefix):
-            retry_after = limiter.hit(client_ip())
-            if retry_after:
-                resp = jsonify({"error": "Too many requests"})
-                resp.status_code = 429
-                resp.headers['Retry-After'] = str(retry_after)
-                return resp
-            return None
-    return None
+# Rate limiting is left to the reverse proxy in front of this app (nginx/Caddy/etc.)
+# rather than handled in-process — see README "Rate limiting" for an nginx example.
 
 
 def cached_json(data, seconds):
@@ -197,7 +191,7 @@ def cached_json(data, seconds):
     resp.headers['Cache-Control'] = f'public, max-age={seconds}'
     return resp
 
-_view_cache = TTLCache(500)
+_view_cache = TTLCache(500, name='view')
 
 def server_cache(ttl):
     """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full

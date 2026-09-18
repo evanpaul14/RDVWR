@@ -1,6 +1,6 @@
 """User profile endpoints (about, trophies, posts, comments, overview) with archive fallback."""
 from flask import Blueprint, jsonify, request
-from media_detection import process_post, extract_posts, clean_url
+from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
@@ -238,7 +238,9 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow
         d    = child.get("data", {})
         if kind == "t3":
             try:
-                items.append({"type": "post", "data": process_post(d)})
+                post = process_post(d)
+                if not (DISABLE_NSFW and post.get("over_18")):
+                    items.append({"type": "post", "data": post})
             except Exception as e:
                 log.warning("overview process_post failed id=%s: %s", d.get("id"), e)
         elif kind == "t1":

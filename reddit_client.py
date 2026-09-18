@@ -262,6 +262,10 @@ _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
 _CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131", "firefox133"]
 _TOKEN_POOL_SIZE          = 3
 _TOKEN_ROTATE_SECS        = 1800  # rotate device identity every 30 min
+# Preemptively rotate a device once Reddit reports its per-token request budget is
+# this low, rather than waiting for it to run out and get 429s (mirrors redlib's
+# OAUTH_RATELIMIT_REMAINING approach).
+_RATELIMIT_LOW_WATERMARK = 10
 
 
 class _OAuthDevice:
@@ -277,6 +281,7 @@ class _OAuthDevice:
         android_v        = random.randint(9, 14)
         self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
         self.extra        = {}  # loid, session headers from auth response
+        self.ratelimit_remaining = None  # last x-ratelimit-remaining seen for this token
         # Reused across requests (thread-local curl handle under the hood) so
         # repeated calls for this device get TCP/TLS connection keep-alive
         # instead of a fresh handshake every time.
@@ -284,6 +289,8 @@ class _OAuthDevice:
 
     def needs_refresh(self):
         now = time.time()
+        if self.ratelimit_remaining is not None and self.ratelimit_remaining < _RATELIMIT_LOW_WATERMARK:
+            return True
         return (not self.token
                 or now >= self.expires_at
                 or now - self.acquired_at >= _TOKEN_ROTATE_SECS)
@@ -334,14 +341,16 @@ def recent_user_agent():
 
 
 def _refresh_device(device: _OAuthDevice):
+    low_ratelimit = device.ratelimit_remaining
     device.reset_identity()
-    log.info("token refresh: device_id=%s ua=%s", device.device_id, device.user_agent)
+    log.info("token refresh: device_id=%s ua=%s low_ratelimit=%s", device.device_id, device.user_agent, low_ratelimit)
     try:
         token, expires_in, extra = _fetch_android_token(device)
         device.token       = token
         device.expires_at  = time.time() + expires_in - 120
         device.acquired_at = time.time()
         device.extra       = extra
+        device.ratelimit_remaining = None  # fresh token, fresh budget
         log.info("token refresh ok: method=_fetch_android_token expires_in=%s", expires_in)
     except Exception as e:
         log.warning("token refresh failed: method=_fetch_android_token error=%s", e)
@@ -443,6 +452,18 @@ def _get_quarantine_session() -> "requests.Session":
     return _quarantine_session
 
 
+def _record_ratelimit(device: _OAuthDevice, resp):
+    """Track Reddit's per-token request budget from the response headers, so
+    needs_refresh() can rotate this device before it actually runs dry."""
+    remaining = resp.headers.get("x-ratelimit-remaining")
+    if remaining is None:
+        return
+    try:
+        device.ratelimit_remaining = float(remaining)
+    except ValueError:
+        pass
+
+
 def reddit_get(url, *, quarantine=False, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
     Pass quarantine=True to use the quarantine-opted-in session instead of OAuth."""
@@ -461,6 +482,7 @@ def reddit_get(url, *, quarantine=False, **kwargs):
         except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
             return SESSION.get(url, headers=headers, **kwargs)
+        _record_ratelimit(device, resp)
         if resp.status_code == 429:
             time.sleep(min(int(resp.headers.get("Retry-After", 5)), 5))
             continue

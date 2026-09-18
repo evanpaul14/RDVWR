@@ -14,7 +14,7 @@ bp = Blueprint("embeds", __name__)
 
 OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
 OG_DESC_RE          = re.compile(r'<meta[^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])', re.I)
-_og_cache = TTLCache(1000)
+_og_cache = TTLCache(1000, name='og')
 OG_CACHE_TTL = 365 * 86400  # effectively permanent; entries are evicted by size cap, not expiry
 
 
@@ -134,7 +134,7 @@ def get_og_image():
 
 
 _DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')
-_devvit_cache = TTLCache(200)
+_devvit_cache = TTLCache(200, name='devvit')
 DEVVIT_CACHE_TTL = 3600  # the embedded signedRequestContext JWT is only valid ~24h; keep this well under that
 
 @bp.route("/api/devvit")
