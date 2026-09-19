@@ -111,6 +111,11 @@ def get_home():
                                     post['gallery'] = full['gallery']
                                     if full.get('preview_img'):
                                         post['preview_img'] = full['preview_img']
+                                if full.get('is_video') and full.get('hls_url'):
+                                    post['is_video'] = True
+                                    post['video_url'] = full['video_url']
+                                    post['hls_url'] = full['hls_url']
+                                    post['audio_url'] = full['audio_url']
                     except Exception as ge:
                         log.warning("home-feed flair/gallery batch-fetch failed: %s", ge)
                 hydrate_linked_posts(posts)
