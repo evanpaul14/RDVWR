@@ -3,6 +3,7 @@ import os
 import re
 import json
 import time
+import secrets
 import logging
 import threading
 from functools import wraps
@@ -248,6 +249,16 @@ def is_same_site_request():
     sec_fetch_site = request.headers.get('Sec-Fetch-Site')
     if sec_fetch_site is not None:
         return sec_fetch_site in SAME_SITE_VALUES
+    # Double-submit cookie fallback: app.js echoes the rdvwr_csrf cookie back as a
+    # header on every fetch() it makes (see static/app.js). Some browser privacy
+    # hardening (Firefox's privacy.resistFingerprinting) strips Sec-Fetch-Site,
+    # Origin, and Referer from every request, which would otherwise be
+    # indistinguishable from a non-browser client here. A cross-site page can't read
+    # this origin's cookie to forge the matching header, regardless of SameSite.
+    csrf_cookie = request.cookies.get('rdvwr_csrf')
+    csrf_header = request.headers.get('X-Rdvwr-Fetch')
+    if csrf_cookie and csrf_header and secrets.compare_digest(csrf_cookie, csrf_header):
+        return True
     # Hostname-only comparison for the Origin/Referer fallback: a reverse proxy in
     # front of Flask (e.g. nginx's `proxy_set_header Host $host;`) commonly strips
     # the port from the Host header it forwards, while a browser's Origin/Referer
