@@ -2,7 +2,7 @@
 
 > A minimal Reddit viewer
 
-![RDVWR UI](https://i.imgur.com/3NwifGP.png)
+![RDVWR UI](https://files.catbox.moe/gh1ne8.png)
 
 **10-second pitch:** RDVWR is a lightweight front-end for Reddit. Browse subreddits, posts, comments, user profiles, and search — no Reddit account required.
 
