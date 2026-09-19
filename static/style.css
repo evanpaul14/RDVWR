@@ -355,6 +355,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 .search-wrap:focus-within { border-color:var(--ac); }
 .search-prefix {
+  display:flex; align-items:center;
   font-family:var(--mono); font-size:13px; color:var(--ac);
   padding:0 10px 0 14px; pointer-events:none;
 }
@@ -367,7 +368,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .pv-search-wrap { width:100%; }
 #search-btn, #pv-search-btn, #mobile-search-btn {
   background:transparent; border:none; border-left:1px solid var(--b2);
-  cursor:pointer; padding:0 14px; height:100%; color:var(--tx2);
+  cursor:pointer; padding:0 14px; align-self:stretch; color:var(--tx2);
   transition:color .15s,background .15s; display:flex; align-items:center;
 }
 #search-btn:hover, #pv-search-btn:hover, #mobile-search-btn:hover { color:var(--ac); background:var(--bg3); }
