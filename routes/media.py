@@ -4,7 +4,6 @@ import os
 import json
 import time
 import threading
-import requests
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
 from reddit_client import SESSION, HEADERS
@@ -185,7 +184,7 @@ def resolve_url():
         # Follow redirects by hand so a hop off reddit.com (e.g. an outbound-link
         # redirect) is returned to the client instead of being requested server-side.
         for _ in range(RESOLVE_MAX_REDIRECTS):
-            r = requests.head(url, allow_redirects=False, timeout=5, headers=HEADERS)
+            r = SESSION.head(url, allow_redirects=False, timeout=5)
             location = r.headers.get('Location') if r.status_code in (301, 302, 303, 307, 308) else None
             if not location:
                 break
