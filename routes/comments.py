@@ -1,6 +1,6 @@
 """Post comment trees and 'load more' children."""
 from flask import Blueprint, jsonify, request
-from media_detection import process_post, _parse_awards, DISABLE_NSFW
+from media_detection import process_post, _parse_awards, clean_reddit_html, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts)
@@ -20,12 +20,14 @@ def _parse_comment_fields(d):
         "id":                    d["id"],
         "author":                d.get("author", "[deleted]"),
         "body":                  d.get("body", ""),
+        "body_html":             clean_reddit_html(d.get("body_html")),
         "score":                 d.get("score", 0),
         "created_utc":           d.get("created_utc", 0),
         "edited_utc":            edited_utc,
         "depth":                 d.get("depth", 0),
         "replies":               [],
         "distinguished":         d.get("distinguished"),
+        "is_submitter":          d.get("is_submitter", False),
         "stickied":              d.get("stickied", False),
         "author_flair_text":     d.get("author_flair_text") or "",
         "author_flair_richtext": d.get("author_flair_richtext") or [],

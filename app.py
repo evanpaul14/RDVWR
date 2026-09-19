@@ -1,4 +1,5 @@
 import os
+import time
 import secrets
 import logging
 from flask import Flask, g, jsonify, request
@@ -13,6 +14,20 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 # Route Reddit/Imgur media through /api/m/ instead of letting the browser hit the CDNs.
 app.config['PROXY_MEDIA'] = os.environ.get('PROXY_MEDIA', '0') == '1'
 Compress(app)
+
+
+@app.template_filter('timeago')
+def _timeago(utc):
+    """Matches static/utils.js timeAgo()'s format, for the noscript templates."""
+    if not utc:
+        return ''
+    s = int(time.time()) - int(utc)
+    if s < 60:      return f"{s}s"
+    if s < 3600:    return f"{s // 60}m"
+    if s < 86400:   return f"{s // 3600}h"
+    if s < 2592000: return f"{s // 86400}d"
+    if s < 31536000: return f"{s // 2592000}mo"
+    return f"{s // 31536000}y"
 
 
 @app.context_processor

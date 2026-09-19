@@ -2,6 +2,8 @@ import os
 import re
 import time as _time
 import logging
+import html as html_lib
+from html.parser import HTMLParser
 from urllib.parse import quote as url_quote, urlparse
 
 log = logging.getLogger(__name__)
@@ -9,6 +11,76 @@ log = logging.getLogger(__name__)
 SELFTEXT_MAX_LEN = 600
 
 DISABLE_NSFW = os.environ.get('DISABLE_NSFW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+# ── Shared allowlist HTML sanitizer ──────────────────────────────────────────
+# Used to render Reddit's pre-rendered *_html fields (selftext_html, body_html,
+# description_html, wiki content_html) for the no-JS fallback, which can't pull in
+# a client-side sanitizer like DOMPurify since it needs JS to run. Strips every tag
+# and attribute except a small safe set — no script/style/event-handler/class/id
+# attrs can survive.
+_SANITIZE_ALLOWED_TAGS = {
+    'p', 'br', 'a', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr', 'del', 'sup', 'sub',
+}
+
+
+class _AllowlistHtmlSanitizer(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in _SANITIZE_ALLOWED_TAGS:
+            return
+        if tag == 'a':
+            href = dict(attrs).get('href') or ''
+            if href.startswith('http://') or href.startswith('https://') or href.startswith('/'):
+                self.out.append(f'<a href="{html_lib.escape(href, quote=True)}" target="_blank" rel="noopener noreferrer">')
+            else:
+                self.out.append('<a>')
+        else:
+            self.out.append(f'<{tag}>')
+
+    def handle_endtag(self, tag):
+        if tag in _SANITIZE_ALLOWED_TAGS:
+            self.out.append(f'</{tag}>')
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in ('br', 'hr'):
+            self.out.append(f'<{tag}>')
+
+    def handle_data(self, data):
+        self.out.append(html_lib.escape(data))
+
+    def get_html(self):
+        return ''.join(self.out)
+
+
+def sanitize_reddit_html(raw_html):
+    """Sanitize one of Reddit's pre-rendered *_html fields down to a small safe tag
+    allowlist. `raw_html` is expected already HTML-unescaped and SC_OFF/SC_ON-stripped."""
+    if not raw_html:
+        return ''
+    parser = _AllowlistHtmlSanitizer()
+    try:
+        parser.feed(raw_html)
+        parser.close()
+    except Exception:
+        return ''
+    return parser.get_html()
+
+
+_SC_MARKER_RE = re.compile(r'<!--\s*SC_(?:OFF|ON)\s*-->')
+
+
+def clean_reddit_html(raw_html):
+    """Unescape + strip Reddit's markdown-region markers + sanitize one of its
+    pre-rendered *_html fields, ready to render with `| safe`."""
+    if not raw_html:
+        return ''
+    unescaped = _SC_MARKER_RE.sub('', html_lib.unescape(raw_html)).strip()
+    return sanitize_reddit_html(unescaped)
 
 
 def filter_nsfw(posts):
@@ -300,6 +372,8 @@ def process_post(p):
     edited = p.get("edited")
     edited_utc = edited if isinstance(edited, (int, float)) and edited else None
 
+    selftext_html = clean_reddit_html(p.get("selftext_html")) if p.get("is_self") else ""
+
     return {
         "id":             p.get("id", ""),
         "title":          p.get("title", ""),
@@ -313,6 +387,7 @@ def process_post(p):
         "permalink":      f"https://www.reddit.com{p.get('permalink', '')}",
         "is_self":        p.get("is_self", False),
         "selftext":       p.get("selftext", "")[:SELFTEXT_MAX_LEN] if p.get("is_self") else "",
+        "selftext_html":  selftext_html,
         "preview_img":    preview_img,
         "thumb_url":      thumb_url,
         "gallery":        gallery,

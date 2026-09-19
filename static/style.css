@@ -1944,16 +1944,26 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .ns-video { width:100%; max-height:520px; border-radius:4px; background:#000; }
 .ns-selftext { white-space:pre-wrap; font-size:13.5px; color:var(--tx2); line-height:1.5; margin-top:6px; }
 .ns-comments-heading { font-size:15px; margin:20px 0 10px; }
-.ns-comment-list { list-style:none; margin:0; padding:0; }
-.ns-comment { border-left:2px solid var(--b2); padding:6px 0 6px 10px; margin-top:6px; }
-.ns-comment-meta { color:var(--tx3); font-size:11.5px; }
-.ns-comment-body { white-space:pre-wrap; font-size:13px; color:var(--tx2); line-height:1.45; }
+.ns-comment-list { margin:0; padding:0; }
+.ns-more { margin:6px 0; }
 .ns-more a { color:var(--ac); font-size:12.5px; text-decoration:none; }
-.ns-searchbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.comment-body-plain { white-space:pre-wrap; }
+/* Native <details>/<summary> stand in for JS's collapse button: hide the default
+   marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
+details.comment > summary.comment-header { list-style:none; }
+details.comment > summary.comment-header::-webkit-details-marker { display:none; }
+details.comment > summary.comment-header::before {
+  content:'\2212'; order:-1; flex-shrink:0; width:14px; text-align:center;
+  font-family:var(--mono); font-size:11px; color:var(--tx3); border:1px solid var(--b2); border-radius:3px;
+}
+details.comment:not([open]) > summary.comment-header::before { content:'+'; }
+details.comment:not([open]) > summary.comment-header { margin-bottom:0; }
+.ns-searchbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
 .ns-searchbar input[type="text"] { flex:1; min-width:120px; background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 10px; font-size:13px; }
-.ns-searchbar input.ns-search-sub { flex:0 1 160px; }
+.ns-searchbar input.ns-search-flair { flex:0 1 120px; }
 .ns-searchbar select { background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 10px; font-size:13px; }
 .ns-searchbar button { background:var(--bg3); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 14px; font-size:13px; cursor:pointer; }
+.ns-scope-check { display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--tx2); white-space:nowrap; }
 .ns-quicknav { display:flex; gap:10px; font-size:12.5px; }
 .ns-quicknav a { color:var(--tx2); text-decoration:none; }
 .ns-quicknav a:hover { color:var(--ac); }
@@ -1971,10 +1981,7 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .ns-link-post { margin:8px 0; font-size:13px; }
 .ns-link-post a { color:var(--ac); text-decoration:none; }
 .ns-community-result, .ns-user-result { overflow:hidden; }
-.ns-badge { display:inline-block; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--tx2); background:var(--bg3); border-radius:3px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
-.ns-badge-nsfw { color:#e05a5a; }
-.ns-badge-spoiler { color:var(--tx3); }
-.ns-badge-sticky { color:#4caf6f; }
+.ns-post-title .flair, .ns-post-title .badge, .ns-post-title .nsfw-tag { margin-left:6px; vertical-align:middle; }
 .ns-poll { margin:8px 0; }
 .ns-poll-opt { background:var(--bg3); border-radius:4px; padding:6px 10px; margin-bottom:4px; font-size:13px; }
 .ns-wiki { font-size:13.5px; line-height:1.6; color:var(--tx2); }
