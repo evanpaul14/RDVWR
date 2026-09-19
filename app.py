@@ -57,6 +57,16 @@ def _gate_api():
 # and connect-src 'self' blocks fetch()/XHR exfil to an attacker-controlled host.
 # img-src/media-src/frame-src stay open to https: since posts embed arbitrary
 # third-party media/oEmbed hosts by design.
+# Double-submit cookie for the same-site gate: app.js echoes this back as a request
+# header on every fetch() (see app.js), so the gate has a fallback that doesn't depend
+# on Sec-Fetch-Site/Origin/Referer, which some browser privacy hardening strips entirely.
+@app.after_request
+def _set_csrf_cookie(resp):
+    if 'rdvwr_csrf' not in request.cookies:
+        resp.set_cookie('rdvwr_csrf', secrets.token_urlsafe(24), max_age=31536000, samesite='Lax')
+    return resp
+
+
 @app.after_request
 def _set_csp_header(resp):
     nonce = g.get('csp_nonce', '')
