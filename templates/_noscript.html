@@ -23,8 +23,7 @@
     <p class="ns-note">HLS playback (Safari only) &mdash; <a href="{{ ns_hls_toggle_url(0) }}">disable</a></p>
   {% elif post.video_url %}
     <div class="{{ cls }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ post.preview_img or '' }}"><source src="{{ post.video_url }}" type="video/mp4"></video></div>
-    <p class="ns-note">No JavaScript: video plays without audio (audio is a separate track normally synced by the player).
-      Safari can play the original stream with audio &mdash; <a href="{{ ns_hls_toggle_url(1) }}">enable HLS playback</a>.</p>
+    <p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(1) }}">enable HLS for audio (Safari only)</a></p>
   {% endif %}
 {% endmacro %}
 
@@ -150,9 +149,12 @@
         <span class="meta-item">{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
       </div>
       <div class="footer-right">
-        <a class="comments-link" href="{{ post_link(post.subreddit, post.id) }}">{{ post.num_comments | fmtnum }} comments</a>
-        <a class="meta-item link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>
-        <a class="meta-item link" href="{{ post.permalink }}" target="_blank" rel="noopener">view on reddit.com &rarr;</a>
+        <a class="comments-link" href="{{ post_link(post.subreddit, post.id) }}">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          {{ post.num_comments | fmtnum }} comments
+        </a>
+        <a class="ext-link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>
+        <a class="ext-link" href="{{ post.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
       </div>
     </div>
   </div>
@@ -258,7 +260,7 @@
         <a href="/r/popular">popular</a>
         <a href="/r/all">all</a>
       </nav>
-      <form class="search-container" action="/search" method="get">
+      <form class="ns-search-form" action="/search" method="get">
         <div class="search-wrap">
           <span class="search-prefix" aria-hidden="true">r /</span>
           <input type="text" name="q" placeholder="search reddit" value="{{ ns_search.q if ns_search else '' }}" aria-label="Search">
