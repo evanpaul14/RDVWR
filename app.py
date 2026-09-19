@@ -1,5 +1,7 @@
 import os
+import re
 import time
+import datetime
 import secrets
 import logging
 from flask import Flask, g, jsonify, request
@@ -28,6 +30,37 @@ def _timeago(utc):
     if s < 2592000: return f"{s // 86400}d"
     if s < 31536000: return f"{s // 2592000}mo"
     return f"{s // 31536000}y"
+
+
+@app.template_filter('fmtnum')
+def _fmtnum(n):
+    """Matches static/utils.js fmtNum()'s format, for the noscript templates."""
+    n = n or 0
+    if n >= 1e6: return f"{n/1e6:.1f}M"
+    if n >= 1e3: return f"{n/1e3:.1f}K"
+    return str(n)
+
+
+@app.template_filter('usable_bg')
+def _usable_bg(hex_color):
+    """Matches static/utils.js isUsableBg(): filters out unset/transparent/too-light
+    flair background colors, for the noscript templates."""
+    if not hex_color or hex_color == 'transparent':
+        return False
+    m = re.match(r'^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$', hex_color, re.I)
+    if not m:
+        return False
+    r, g, b = (int(x, 16) for x in m.groups())
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    return lum < 180
+
+
+@app.template_filter('fmtdate')
+def _fmtdate(utc):
+    """Matches static/utils.js fmtDate()'s format, for the noscript templates."""
+    if not utc:
+        return ''
+    return datetime.datetime.utcfromtimestamp(int(utc)).strftime('%b %-d, %Y')
 
 
 @app.context_processor

@@ -1921,33 +1921,49 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 /* ── Settings panel swipe-to-close: disable transition while dragging ────── */
 .settings-panel.settings-dragging { transition:none !important; }
 
-/* ── No-JS fallback (server-rendered, shown only inside <noscript>) ── */
-.ns-page { max-width:700px; margin:0 auto; padding:16px; }
-.ns-topbar { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--b); }
-.ns-brand { font-weight:700; letter-spacing:.02em; color:var(--tx); text-decoration:none; }
-.ns-note { color:var(--tx3); font-size:12.5px; }
-.ns-note code { font-family:var(--mono); background:var(--bg3); padding:1px 5px; border-radius:3px; }
-.ns-sub-header h1 { font-size:18px; margin:0 0 4px; }
-.ns-sub-header p { margin:2px 0; color:var(--tx2); font-size:13px; }
-.ns-sort-links { display:flex; gap:14px; margin:14px 0; font-size:13px; }
-.ns-sort-links a { color:var(--tx2); text-decoration:none; }
-.ns-sort-links a.active { color:var(--ac); font-weight:600; }
-.ns-feed { display:flex; flex-direction:column; gap:14px; }
-.ns-post { background:var(--bg2); border:1px solid var(--b2); border-radius:8px; padding:14px; }
-.ns-post-meta { color:var(--tx3); font-size:12px; margin-bottom:4px; }
-.ns-post-title { font-size:15px; margin:0 0 8px; line-height:1.35; }
-.ns-post-title a { color:var(--tx); text-decoration:none; }
-.ns-post-link { margin:8px 0 0; font-size:12.5px; }
-.ns-media { margin:8px 0; }
-.ns-media img { max-width:100%; height:auto; border-radius:4px; display:block; }
-.ns-media iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:4px; }
-.ns-video { width:100%; max-height:520px; border-radius:4px; background:#000; }
-.ns-selftext { white-space:pre-wrap; font-size:13.5px; color:var(--tx2); line-height:1.5; margin-top:6px; }
-.ns-comments-heading { font-size:15px; margin:20px 0 10px; }
-.ns-comment-list { margin:0; padding:0; }
-.ns-more { margin:6px 0; }
-.ns-more a { color:var(--ac); font-size:12.5px; text-decoration:none; }
-.comment-body-plain { white-space:pre-wrap; }
+/* ── No-JS fallback (server-rendered, shown only inside <noscript>) ──────────
+   The markup here reuses the JS app's own classes (post, post-header, comment,
+   sort-bar, ctx-info, sidebar-section, pv-*, wiki-*, community-card, user-card…)
+   so the fallback looks like the real site. Only glue for things the JS never
+   renders standalone (a plain-link search form, an inline "about" disclosure,
+   a feed wrapper outside #app-shell) lives here. */
+.ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; white-space:nowrap; }
+.ns-note code { background:var(--bg3); padding:1px 5px; border-radius:3px; }
+.header-inner .ns-note { margin-left:auto; }
+.ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; }
+.ns-quicknav a { color:var(--tx2); text-decoration:none; }
+.ns-quicknav a:hover { color:var(--ac); }
+/* Feed wrapper (JS uses id="feed" on an element inside #app-shell, which the
+   noscript markup must not collide with — same box model, different selector). */
+.feed-list { max-width:720px; margin:0 auto; padding:20px 20px 80px; display:flex; flex-direction:column; gap:14px; }
+.ns-pv-wrap.pv-wrap { padding-top:20px; }
+.ns-next { max-width:720px; margin:4px auto 24px; padding:0 20px; }
+/* Search input/button live in .search-wrap without the JS shell's #subreddit-input id. */
+.search-wrap input[type="text"] { flex:1; background:transparent; border:none; outline:none; font-family:var(--mono); font-size:13px; color:var(--tx); padding:10px 4px; min-width:0; }
+.search-wrap input[type="text"]::placeholder { color:var(--tx3); }
+.search-wrap button[type="submit"] { background:transparent; border:none; border-left:1px solid var(--b2); cursor:pointer; padding:0 14px; align-self:stretch; color:var(--tx2); transition:color .15s,background .15s; display:flex; align-items:center; }
+.search-wrap button[type="submit"]:hover { color:var(--ac); background:var(--bg3); }
+/* Anchors standing in for the JS shell's <button> sort/type/load-more controls. */
+a.sort-btn, a.search-type-btn, a.load-more-btn { text-decoration:none; display:inline-block; }
+/* Secondary search-refinement row (flair filter, subreddit-scope checkbox) shown
+   only on the results page, since a single plain input can't branch like the JS
+   header search (see the noscript limitations note). */
+.ns-searchbar { max-width:720px; margin:12px auto 0; padding:0 20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.ns-searchbar input.ns-search-flair { background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:7px 10px; font-family:var(--mono); font-size:12px; width:140px; }
+.ns-searchbar button { background:var(--bg3); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:7px 14px; font-family:var(--mono); font-size:11px; cursor:pointer; }
+/* Inline "about community" disclosures standing in for the JS slide-out sidebar panel. */
+.ns-about-panel { max-width:720px; margin:0 auto; padding:12px 20px 0; display:flex; flex-direction:column; gap:8px; }
+.ns-about { border:1px solid var(--b); border-radius:6px; padding:0 14px; }
+.ns-about[open] { padding-bottom:12px; }
+.ns-about summary { list-style:none; cursor:pointer; padding:10px 0; font-family:var(--mono); font-size:11px; color:var(--tx2); letter-spacing:.04em; }
+.ns-about summary::-webkit-details-marker { display:none; }
+.ns-about .sidebar-section { margin:0; }
+/* Native <details> reveal stands in for the JS click-to-reveal spoiler veil. */
+.ns-spoiler summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:var(--tx3); background:var(--bg3); border-radius:4px; list-style:none; }
+.ns-spoiler summary::-webkit-details-marker { display:none; }
+.ns-spoiler[open] summary { border-radius:4px 4px 0 0; margin-bottom:0; }
+.ns-poll { margin:0 16px 10px; }
+.ns-poll-opt { background:var(--bg3); border-radius:4px; padding:6px 10px; margin-bottom:4px; font-size:13px; }
 /* Native <details>/<summary> stand in for JS's collapse button: hide the default
    marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
 details.comment > summary.comment-header { list-style:none; }
@@ -1958,38 +1974,5 @@ details.comment > summary.comment-header::before {
 }
 details.comment:not([open]) > summary.comment-header::before { content:'+'; }
 details.comment:not([open]) > summary.comment-header { margin-bottom:0; }
-.ns-searchbar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
-.ns-searchbar input[type="text"] { flex:1; min-width:120px; background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 10px; font-size:13px; }
-.ns-searchbar input.ns-search-flair { flex:0 1 120px; }
-.ns-searchbar select { background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 10px; font-size:13px; }
-.ns-searchbar button { background:var(--bg3); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:8px 14px; font-size:13px; cursor:pointer; }
-.ns-scope-check { display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--tx2); white-space:nowrap; }
-.ns-quicknav { display:flex; gap:10px; font-size:12.5px; }
-.ns-quicknav a { color:var(--tx2); text-decoration:none; }
-.ns-quicknav a:hover { color:var(--ac); }
-.ns-sub-icon { width:32px; height:32px; border-radius:50%; object-fit:cover; float:left; margin:0 8px 4px 0; }
-.ns-details { margin:8px 0; font-size:13px; }
-.ns-details summary { cursor:pointer; color:var(--tx2); font-size:12.5px; }
-.ns-details .ns-wiki { margin-top:8px; }
-.ns-rules { margin:8px 0 0; padding-left:20px; color:var(--tx2); font-size:13px; line-height:1.6; }
-.ns-mods { margin:8px 0 0; font-size:13px; }
-.ns-mods a { color:var(--ac); text-decoration:none; }
-.ns-gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; }
-.ns-gallery a { position:relative; display:block; }
-.ns-gallery img { width:100%; height:140px; object-fit:cover; border-radius:4px; display:block; }
-.ns-gallery-caption { display:block; font-size:11px; color:var(--tx3); margin-top:2px; }
-.ns-link-post { margin:8px 0; font-size:13px; }
-.ns-link-post a { color:var(--ac); text-decoration:none; }
-.ns-community-result, .ns-user-result { overflow:hidden; }
-.ns-post-title .flair, .ns-post-title .badge, .ns-post-title .nsfw-tag { margin-left:6px; vertical-align:middle; }
-.ns-poll { margin:8px 0; }
-.ns-poll-opt { background:var(--bg3); border-radius:4px; padding:6px 10px; margin-bottom:4px; font-size:13px; }
-.ns-wiki { font-size:13.5px; line-height:1.6; color:var(--tx2); }
-.ns-wiki a { color:var(--ac); }
-.ns-wiki pre, .ns-wiki code { background:var(--bg3); border-radius:3px; }
-.ns-wiki pre { padding:10px; overflow-x:auto; }
-.ns-wiki code { padding:1px 5px; }
-.ns-wiki table { border-collapse:collapse; margin:10px 0; }
-.ns-wiki th, .ns-wiki td { border:1px solid var(--b2); padding:4px 8px; }
-.ns-time-links { margin-top:-6px; }
-.ns-next { margin:16px 0; }
+details.comment:not([open]) > .comment-body,
+details.comment:not([open]) > .comment-replies { display:none; }

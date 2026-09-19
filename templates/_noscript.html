@@ -1,55 +1,78 @@
 {# Server-rendered fallback shown only when JavaScript is disabled (wrapped in <noscript> by index.html).
    Reuses the SSR data (initial_data/initial_post/initial_profile/initial_about/ns_search/ns_wiki/
-   ns_duplicates) that pages.py already fetches for hydration — no extra Reddit requests here. #}
+   ns_duplicates) that pages.py already fetches for hydration — no extra Reddit requests here.
+   Markup intentionally reuses the same classes as the JS-rendered app (static/render.js,
+   feed.js, postview.js, style.css) so this fallback looks like the real site instead of a
+   separate skin — see "impossible to replicate" notes at the bottom of _noscript.html's
+   sibling doc for what can't be done without JS. #}
 
 {% macro post_link(sub, id) -%}
 /r/{{ sub }}/comments/{{ id }}
 {%- endmacro %}
 
-{% macro video_block(post, ns_hls) %}
+{% macro award_list(awards) %}
+  {%- if awards -%}
+    <span class="awards">{% for a in awards %}<span class="award-item" title="{{ a.name }}{% if a.count > 1 %} &times;{{ a.count }}{% endif %}"><img src="{{ a.icon }}" alt="{{ a.name }}" loading="lazy" width="16" height="16">{% if a.count > 1 %}<span class="award-count">{{ a.count }}</span>{% endif %}</span>{% endfor %}</span>
+  {%- endif -%}
+{% endmacro %}
+
+{% macro video_block(post, full, ns_hls) %}
+  {% set cls = 'pv-media' if full else 'post-video' %}
   {% if ns_hls and post.hls_url %}
-    <video class="ns-video" controls preload="none" poster="{{ post.preview_img or '' }}">
-      <source src="{{ post.hls_url }}" type="application/vnd.apple.mpegurl">
-    </video>
+    <div class="{{ cls }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ post.preview_img or '' }}"><source src="{{ post.hls_url }}" type="application/vnd.apple.mpegurl"></video></div>
     <p class="ns-note">HLS playback (Safari only) &mdash; <a href="{{ ns_hls_toggle_url(0) }}">disable</a></p>
   {% elif post.video_url %}
-    <video class="ns-video" controls preload="none" poster="{{ post.preview_img or '' }}">
-      <source src="{{ post.video_url }}" type="video/mp4">
-    </video>
+    <div class="{{ cls }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ post.preview_img or '' }}"><source src="{{ post.video_url }}" type="video/mp4"></video></div>
     <p class="ns-note">No JavaScript: video plays without audio (audio is a separate track normally synced by the player).
       Safari can play the original stream with audio &mdash; <a href="{{ ns_hls_toggle_url(1) }}">enable HLS playback</a>.</p>
   {% endif %}
 {% endmacro %}
 
-{% macro media_block(post, ns_hls) %}
-  {% if post.gallery %}
-    <div class="ns-media ns-gallery">
+{% macro media_block(post, full, ns_hls) %}
+  {% set cls = 'pv-media' if full else 'post-media' %}
+  {% set vcls = 'pv-media' if full else 'post-video' %}
+  {% if post.gallery and post.gallery | length > (0 if full else 1) %}
+    <div class="{{ cls }} minimal-gallery-stack">
       {% for img in post.gallery %}
-        <a href="{{ img.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ img.thumb or img.url }}" alt="{{ img.caption or '' }}">{% if img.caption %}<span class="ns-gallery-caption">{{ img.caption }}</span>{% endif %}</a>
+        <img loading="lazy" src="{{ (img.url if full else (img.thumb or img.url)) }}" alt="{{ img.caption or '' }}">
       {% endfor %}
     </div>
   {% elif post.is_video %}
-    <div class="ns-media">{{ video_block(post, ns_hls) }}</div>
+    {{ video_block(post, full, ns_hls) }}
   {% elif post.gif_url and post.gif_is_video %}
-    <div class="ns-media"><video class="ns-video" controls preload="none"><source src="{{ post.gif_url }}" type="video/mp4"></video></div>
+    <div class="{{ vcls }}"><video controls preload="none"><source src="{{ post.gif_url }}" type="video/mp4"></video></div>
   {% elif post.gif_url %}
-    <div class="ns-media"><img loading="lazy" src="{{ post.gif_url }}" alt=""></div>
+    <div class="{{ cls }}"><img loading="lazy" src="{{ post.gif_url }}" alt=""></div>
   {% elif post.redgifs_id %}
-    <div class="ns-media"><iframe src="https://www.redgifs.com/ifr/{{ post.redgifs_id }}" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+    <div class="{{ vcls }}"><iframe src="https://www.redgifs.com/ifr/{{ post.redgifs_id }}" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
   {% elif post.youtube_id %}
-    <div class="ns-media"><iframe src="https://www.youtube.com/embed/{{ post.youtube_id }}" loading="lazy" allowfullscreen></iframe></div>
+    <div class="{{ vcls }}"><iframe src="https://www.youtube-nocookie.com/embed/{{ post.youtube_id }}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
   {% elif post.tiktok_id %}
-    <div class="ns-media"><iframe src="https://www.tiktok.com/player/v1/{{ post.tiktok_id }}" loading="lazy" allowfullscreen></iframe></div>
+    <div class="{{ vcls }} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/{{ post.tiktok_id }}" loading="lazy" allowfullscreen sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>
   {% elif post.streamable_id %}
-    <div class="ns-media"><iframe src="https://streamable.com/e/{{ post.streamable_id }}" loading="lazy" allowfullscreen></iframe></div>
+    <div class="{{ vcls }}"><iframe src="https://streamable.com/e/{{ post.streamable_id }}" loading="lazy" allowfullscreen></iframe></div>
   {% elif post.imgur_album_id %}
-    <div class="ns-media"><p class="ns-note">Imgur album &mdash; <a href="https://imgur.com/a/{{ post.imgur_album_id }}" target="_blank" rel="noopener">view on imgur.com &rarr;</a></p></div>
+    <div class="pv-article-box"><a class="pv-article-link" href="https://imgur.com/a/{{ post.imgur_album_id }}" target="_blank" rel="noopener"><span>Imgur album &mdash; view on imgur.com &rarr;</span></a></div>
+  {% elif post.is_devvit %}
+    {% if post.preview_img %}<div class="{{ cls }}"><img loading="lazy" src="{{ post.preview_img }}" alt=""></div>{% endif %}
+    <p class="ns-note">Interactive app (Devvit) &mdash; <a href="{{ post.permalink }}" target="_blank" rel="noopener">open on reddit.com &rarr;</a></p>
   {% elif post.embed_url %}
-    <div class="ns-media"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
-  {% elif post.preview_img %}
-    <div class="ns-media"><a href="{{ post.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ post.preview_img }}" alt=""></a></div>
+    <div class="{{ vcls }}"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
+  {% elif post.preview_img or post.thumb_url %}
+    <div class="{{ cls }}"><img loading="lazy" src="{{ post.preview_img or post.thumb_url }}" alt=""></div>
   {% elif not post.is_self and post.url %}
-    <p class="ns-link-post"><a href="{{ post.url }}" target="_blank" rel="noopener">{{ post.domain }} &rarr;</a></p>
+    <div class="pv-article-box"><a class="pv-article-link" href="{{ post.url }}" target="_blank" rel="noopener"><span>{{ post.domain }} &rarr;</span></a></div>
+  {% endif %}
+{% endmacro %}
+
+{% macro media_wrap(post, full, ns_hls) %}
+  {% set inner %}{{ media_block(post, full, ns_hls) }}{% endset %}
+  {% if inner.strip() %}
+    {% if post.is_spoiler %}
+      <details class="ns-spoiler"><summary>Spoiler &mdash; click to reveal</summary>{{ inner | safe }}</details>
+    {% else %}
+      {{ inner | safe }}
+    {% endif %}
   {% endif %}
 {% endmacro %}
 
@@ -66,279 +89,402 @@
 
 {% macro flair(post) %}
   {%- if post.flair -%}
-    <span class="flair"{% if post.flair_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ post.flair }}</span>
+    <span class="flair"{% if post.flair_bg | usable_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ post.flair }}</span>
   {%- endif -%}
 {% endmacro %}
 
 {% macro author_flair(c) %}
   {%- if c.author_flair_text -%}
-    <span class="author-flair"{% if c.author_flair_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ c.author_flair_text }}</span>
+    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ c.author_flair_text }}</span>
   {%- endif -%}
 {% endmacro %}
 
 {% macro badges(post) %}
-  {%- if post.is_stickied %} <span class="badge badge-sticky">pinned</span>{% endif -%}
+  {%- if post.is_stickied %} <span class="badge badge-sticky">&#128204; pinned</span>{% endif -%}
   {%- if post.over_18 %} <span class="nsfw-tag">nsfw</span>{% endif -%}
   {%- if post.is_spoiler %} <span class="badge badge-spoiler">spoiler</span>{% endif -%}
   {%- if post.locked %} <span class="badge badge-locked">locked</span>{% endif -%}
   {%- if post.is_oc %} <span class="badge badge-oc">oc</span>{% endif -%}
+  {%- if post.poll %} <span class="badge badge-poll">poll</span>{% endif -%}
   {%- if post.flair %} {{ flair(post) }}{% endif -%}
-  {%- if post.awards %} <span class="badge">{{ post.awards | length }} award{{ 's' if post.awards | length != 1 }}</span>{% endif -%}
+  {%- if post.awards %} {{ award_list(post.awards) }}{% endif -%}
 {% endmacro %}
 
-{% macro post_card(post, ns_hls) %}
-  <article class="ns-post">
-    <div class="ns-post-meta"><a class="post-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a> &middot; <a class="post-author" href="/user/{{ post.author }}">u/{{ post.author }}</a> &middot; {{ post.score }} pts &middot; {{ post.created_utc | timeago }}{% if post.edited_utc %} &middot; edited{% endif %}</div>
-    <h3 class="ns-post-title"><a href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a>{{ badges(post) }}</h3>
+{% macro post_card(post, ns_hls, show_sub=True) %}
+  <div class="post" data-post-id="{{ post.id }}">
+    <div class="post-header">
+      <div class="post-meta-top">
+        {% if show_sub %}<a class="post-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a>{% endif %}
+        {{ badges(post) }}
+      </div>
+      <a class="post-title{{ ' is-italic' if post.is_self }}" href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a>
+    </div>
     {% if post.crosspost_from %}
-      <p class="ns-note">crossposted from <a href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">r/{{ post.crosspost_from.subreddit }}</a></p>
+      <div class="crosspost-embed">
+        <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
+        <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
+        {{ media_wrap(post.crosspost_from, False, ns_hls) }}
+      </div>
     {% elif post.linked_post %}
-      <p class="ns-note">links to <a href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">a post in r/{{ post.linked_post.subreddit }}</a></p>
+      <div class="crosspost-embed">
+        <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
+        <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
+        {{ media_wrap(post.linked_post, False, ns_hls) }}
+      </div>
+    {% else %}
+      {{ media_wrap(post, False, ns_hls) }}
     {% endif %}
-    {{ media_block(post, ns_hls) }}
     {{ poll_block(post.poll) }}
     {% if post.is_self and post.selftext_html %}
-      <div class="ns-wiki">{{ post.selftext_html | safe }}</div>
+      <div class="post-excerpt"><div class="md">{{ post.selftext_html | safe }}</div></div>
     {% elif post.is_self and post.selftext %}
-      <div class="ns-selftext">{{ post.selftext }}</div>
+      <div class="post-excerpt"><div class="md"><p>{{ post.selftext }}</p></div></div>
     {% endif %}
-    <p class="ns-post-link"><a href="{{ post_link(post.subreddit, post.id) }}">Comments ({{ post.num_comments }})</a> &nbsp;|&nbsp; <a href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">Duplicates</a> &nbsp;|&nbsp; <a href="{{ post.permalink }}" target="_blank" rel="noopener">View on reddit.com &rarr;</a></p>
-  </article>
+    <div class="post-footer">
+      <div class="footer-left">
+        <div class="score-block">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
+          <span class="score-num">{{ post.score | fmtnum }}</span>
+        </div>
+        <a class="post-author" href="/user/{{ post.author }}">u/{{ post.author }}</a>
+        <span class="meta-item">{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
+      </div>
+      <div class="footer-right">
+        <a class="comments-link" href="{{ post_link(post.subreddit, post.id) }}">{{ post.num_comments | fmtnum }} comments</a>
+        <a class="meta-item link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>
+        <a class="meta-item link" href="{{ post.permalink }}" target="_blank" rel="noopener">view on reddit.com &rarr;</a>
+      </div>
+    </div>
+  </div>
 {% endmacro %}
 
-{% macro comment_block(c, base_path, depth=0) %}
+{% macro pv_detail(post, ns_hls) %}
+  <a class="pv-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a>
+  {% set b %}{{ badges(post) }}{% endset %}
+  {% if b.strip() %}<div class="post-meta-top" style="margin-bottom:10px">{{ b | safe }}</div>{% endif %}
+  <h1 class="pv-title{{ ' is-italic' if post.is_self }}">{{ post.title }}</h1>
+  <div class="pv-meta">
+    <span class="up">&#9650; {{ post.score | fmtnum }}</span>
+    <span>{{ post.upvote_ratio }}% upvoted</span>
+    <a class="meta-item link" href="/user/{{ post.author }}">u/{{ post.author }}</a>
+    <span>{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
+    <span>{{ post.num_comments | fmtnum }} comments</span>
+    {% if not post.is_self and not post.crosspost_from and not post.linked_post %}<a class="meta-item link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>{% endif %}
+    <a class="meta-item link" href="{{ post.permalink }}" target="_blank" rel="noopener">view on reddit.com &rarr;</a>
+  </div>
+  {% if post.crosspost_from %}
+    <div class="crosspost-embed crosspost-embed-full">
+      <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
+      <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
+      {{ media_wrap(post.crosspost_from, True, ns_hls) }}
+      {% if post.crosspost_from.selftext %}<div class="xp-excerpt xp-excerpt-full md"><p>{{ post.crosspost_from.selftext }}</p></div>{% endif %}
+    </div>
+  {% elif post.linked_post %}
+    <div class="crosspost-embed crosspost-embed-full">
+      <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
+      <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
+      {{ media_wrap(post.linked_post, True, ns_hls) }}
+    </div>
+  {% else %}
+    {{ media_wrap(post, True, ns_hls) }}
+  {% endif %}
+  {{ poll_block(post.poll) }}
+  {% if post.is_self and post.selftext_html %}
+    <div class="pv-body md">{{ post.selftext_html | safe }}</div>
+  {% elif post.is_self and post.selftext %}
+    <div class="pv-body md"><p>{{ post.selftext }}</p></div>
+  {% endif %}
+{% endmacro %}
+
+{% macro comment_block(c, base_path, sub, post_id, post_author, depth=0) %}
   {% if c.kind == 'more' %}
-    <div class="comment-replies"><p class="ns-more"><a href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a></p></div>
+    <div class="more-comments-wrap" data-depth="{{ depth }}"><a class="load-more-btn" href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a></div>
   {% else %}
     {% set deleted = not c.body or c.body in ('[deleted]', '[removed]') %}
     {% set is_mod = c.distinguished == 'moderator' %}
     {% set is_admin = c.distinguished == 'admin' %}
+    {% set is_op = post_author and post_author != '[deleted]' and not deleted and c.author == post_author %}
     {% set start_collapsed = c.author == 'AutoModerator' %}
     <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not start_collapsed %} open{% endif %}>
       <summary class="comment-header">
         <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
         {% if is_mod %}<span class="comment-mod">MOD</span>{% endif %}
         {% if is_admin %}<span class="comment-admin">ADMIN</span>{% endif %}
-        {% if c.is_submitter %}<span class="comment-op">OP</span>{% endif %}
-        {% if c.stickied %}<span class="badge badge-sticky">stickied</span>{% endif %}
+        {% if is_op %}<span class="comment-op">OP</span>{% endif %}
+        {% if c.stickied %}<span class="badge badge-sticky">&#128204; stickied</span>{% endif %}
         {{ author_flair(c) }}
-        <span class="comment-score">&#9650; {{ c.score }}</span>
-        <span class="comment-time">{{ c.created_utc | timeago }}{% if c.edited_utc %} &middot; edited{% endif %}</span>
+        <span class="comment-score">&#9650; {{ c.score | fmtnum }}</span>
+        <span class="comment-time">{{ c.created_utc | timeago }}{% if c.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
+        {{ award_list(c.awards) }}
       </summary>
-      <div class="comment-body md{% if deleted %} comment-body-plain{% elif not c.body_html %} comment-body-plain{% endif %}">{% if deleted %}<em>[{{ c.body or 'deleted' }}]</em>{% elif c.body_html %}{{ c.body_html | safe }}{% else %}{{ c.body }}{% endif %}</div>
+      <div class="comment-body md">{% if deleted %}<em>[{{ c.body or 'deleted' }}]</em>{% elif c.body_html %}{{ c.body_html | safe }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
       {% if c.replies and depth < 6 %}
         <div class="comment-replies">
-          {% for r in c.replies %}{{ comment_block(r, base_path, depth + 1) }}{% endfor %}
+          {% for r in c.replies %}{{ comment_block(r, base_path, sub, post_id, post_author, depth + 1) }}{% endfor %}
         </div>
+      {% elif c.replies %}
+        <div class="comment-replies"><a class="continue-thread" href="/r/{{ sub }}/comments/{{ post_id }}/_/{{ c.id }}">Continue thread &rarr;</a></div>
       {% endif %}
     </details>
   {% endif %}
 {% endmacro %}
 
-{% macro next_link(url) %}{% if url %}<p class="ns-note ns-next"><a href="{{ url }}">Next page &rarr;</a></p>{% endif %}{% endmacro %}
+{% macro next_link(url) %}{% if url %}<div class="ns-next"><a class="load-more-btn" href="{{ url }}">Next page &rarr;</a></div>{% endif %}{% endmacro %}
+
+{% macro empty_state(label) %}<div class="state"><div class="state-icon">&empty;</div><div class="state-title">{{ label }}</div></div>{% endmacro %}
+
+{% macro sort_bar(items, base, active, extra='') %}
+  <div class="sort-bar ns-sort-bar">
+    {% for s in items %}<a class="sort-btn{% if s == active %} active{% endif %}" href="{{ base }}/{{ s }}">{{ s | capitalize }}</a>{% endfor %}
+    {{ extra | safe }}
+  </div>
+{% endmacro %}
+
+{% macro time_links(links, active) %}
+  {% if links %}
+    <div class="comment-sort-bar ns-time-bar">
+      {% for opt, url in links.items() %}<a class="sort-btn{% if opt == active %} active{% endif %}" href="{{ url }}">{{ opt }}</a>{% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
 
 {% set ns_current_sub = initial_about._sub if initial_about else (initial_data._sub if initial_data else (ns_wiki._sub if ns_wiki else (ns_duplicates._sub if ns_duplicates else (ns_search._sub if ns_search and ns_search._sub else None)))) %}
 
-<div class="ns-page">
-  <div class="ns-topbar">
-    <a class="ns-brand" href="/">RDVWR</a>
-    <nav class="ns-quicknav">
-      <a href="/r/popular">popular</a>
-      <a href="/r/all">all</a>
-    </nav>
-    <span class="ns-note">JavaScript is disabled.</span>
-  </div>
-
-  <form class="ns-searchbar" action="/search" method="get">
-    <input type="text" name="q" placeholder="search reddit" value="{{ ns_search.q if ns_search else '' }}" aria-label="Search">
-    <input type="text" name="flair" placeholder="flair" value="{{ ns_search._flair if ns_search else '' }}" class="ns-search-flair" aria-label="Filter by flair">
-    <select name="stype" aria-label="Result type">
-      {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
-        <option value="{{ opt }}"{% if ns_search and ns_search._stype == opt %} selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-    <select name="sort" aria-label="Sort">
-      {% for opt in ('relevance', 'hot', 'top', 'new') %}
-        <option value="{{ opt }}"{% if ns_search and ns_search._sort == opt %} selected{% endif %}>{{ opt }}</option>
-      {% endfor %}
-    </select>
-    <select name="t" aria-label="Time range, applies to Top sort">
-      {% for opt in ('hour', 'day', 'week', 'month', 'year', 'all') %}
-        <option value="{{ opt }}"{% if ns_search and ns_search._t == opt %} selected{% endif %}>top of {{ opt }}</option>
-      {% endfor %}
-    </select>
-    {% if ns_current_sub %}
-      <label class="ns-scope-check"><input type="checkbox" name="sub" value="{{ ns_current_sub }}"{% if ns_search and ns_search._sub == ns_current_sub %} checked{% endif %}> r/{{ ns_current_sub }} only</label>
-    {% endif %}
-    <button type="submit">Search</button>
-  </form>
+<div class="ns-root">
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/">RDVWR</a>
+      <nav class="ns-quicknav">
+        <a href="/r/popular">popular</a>
+        <a href="/r/all">all</a>
+      </nav>
+      <form class="search-container" action="/search" method="get">
+        <div class="search-wrap">
+          <span class="search-prefix" aria-hidden="true">r /</span>
+          <input type="text" name="q" placeholder="search reddit" value="{{ ns_search.q if ns_search else '' }}" aria-label="Search">
+          <button type="submit" title="Search" aria-label="Search">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 10L14 14M11 6A5 5 0 1 1 1 6a5 5 0 0 1 10 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </form>
+      <span class="ns-note">JavaScript is disabled</span>
+    </div>
+  </header>
 
   {% if initial_about %}
-    <div class="ns-sub-header">
-      {% if initial_about.icon %}<img class="ns-sub-icon" src="{{ initial_about.icon }}" alt="" loading="lazy">{% endif %}
-      <h1>r/{{ initial_about._sub }}</h1>
-      <p>{{ initial_about.description }}</p>
-      <p class="ns-note">{{ initial_about.subscribers }} subscribers{% if initial_about.active %} &middot; {{ initial_about.active }} online{% endif %}</p>
-      {% if initial_about.sidebar %}
-        <details class="ns-details"><summary>About community</summary><div class="ns-wiki">{{ initial_about.sidebar | safe }}</div></details>
-      {% endif %}
-      {% if initial_about._rules %}
-        <details class="ns-details"><summary>Rules ({{ initial_about._rules | length }})</summary>
-          <ol class="ns-rules">{% for r in initial_about._rules %}<li>{{ r }}</li>{% endfor %}</ol>
-        </details>
-      {% endif %}
-      {% if initial_about._mods %}
-        <details class="ns-details"><summary>Moderators ({{ initial_about._mods | length }})</summary>
-          <p class="ns-mods">{% for m in initial_about._mods %}<a href="/user/{{ m }}">u/{{ m }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
-        </details>
-      {% endif %}
-      <p class="ns-note"><a href="/r/{{ initial_about._sub }}/wiki">Wiki</a></p>
+    <div class="ctx-info visible">
+      {% if initial_about.icon %}<img class="ctx-icon" src="{{ initial_about.icon }}" alt="" loading="lazy">{% endif %}
+      <div class="ctx-meta">
+        <div class="ctx-title">{{ initial_about.title or ('r/' ~ initial_about._sub) }}</div>
+        <div class="ctx-stats"><span>{{ initial_about.subscribers | fmtnum }}</span> members{% if initial_about.active %} &middot; <span>{{ initial_about.active | fmtnum }}</span> online{% endif %}</div>
+      </div>
     </div>
+    {% if initial_about.description or initial_about._rules or initial_about._mods %}
+      <div class="ns-about-panel">
+        {% if initial_about.sidebar or initial_about.description %}
+          <details class="ns-about"><summary>About community</summary>
+            <div class="sidebar-section"><div class="sidebar-desc md">{{ (initial_about.sidebar or initial_about.description) | safe }}</div></div>
+          </details>
+        {% endif %}
+        {% if initial_about._rules %}
+          <details class="ns-about"><summary>Rules ({{ initial_about._rules | length }})</summary>
+            <div class="sidebar-section"><ul class="sidebar-rules">{% for r in initial_about._rules %}<li class="sidebar-rule"><span class="sidebar-rule-num">{{ loop.index }}.</span>{{ r }}</li>{% endfor %}</ul></div>
+          </details>
+        {% endif %}
+        {% if initial_about._mods %}
+          <details class="ns-about"><summary>Moderators ({{ initial_about._mods | length }})</summary>
+            <div class="sidebar-section"><div class="sidebar-mods">{% for m in initial_about._mods %}<a class="sidebar-mod-name" href="/user/{{ m }}">u/{{ m }}</a>{% endfor %}</div></div>
+          </details>
+        {% endif %}
+      </div>
+    {% endif %}
   {% endif %}
 
   {% if initial_data %}
-    <div class="ns-sort-links">
-      {% for s in ('hot', 'new', 'top', 'rising', 'controversial') %}
-        <a href="/r/{{ initial_data._sub }}/{{ s }}"{% if s == initial_data._sort %} class="active"{% endif %}>{{ s }}</a>
-      {% endfor %}
-    </div>
-    {% if initial_data._time_links %}
-      <div class="ns-sort-links ns-time-links">
-        {% for opt, url in initial_data._time_links.items() %}
-          <a href="{{ url }}"{% if opt == initial_data._time %} class="active"{% endif %}>{{ opt }}</a>
-        {% endfor %}
-      </div>
-    {% endif %}
-    <div class="ns-feed">
-      {% for post in initial_data.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
+    {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, '<a class="sort-btn sort-btn-wiki" href="/r/' ~ initial_data._sub ~ '/wiki">wiki</a>') }}
+    {{ time_links(initial_data._time_links, initial_data._time) }}
+    <div class="feed-list">
+      {% for post in initial_data.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
     </div>
     {{ next_link(initial_data._next_url) }}
 
   {% elif initial_post %}
-    {{ post_card(initial_post.post, ns_hls) }}
-    <h2 class="ns-comments-heading">Comments</h2>
-    {% if initial_post._comment_sort_links %}
-      <div class="ns-sort-links">
-        {% for s, url in initial_post._comment_sort_links.items() %}
-          <a href="{{ url }}"{% if s == initial_post._comment_sort %} class="active"{% endif %}>{{ s }}</a>
-        {% endfor %}
+    <div class="pv-wrap ns-pv-wrap">
+      {{ pv_detail(initial_post.post, ns_hls) }}
+      <div class="pv-divider"><div class="pv-divider-line"></div><span class="pv-divider-label">{{ initial_post.post.num_comments | fmtnum }} comments</span><div class="pv-divider-line"></div></div>
+      {% if initial_post._comment_sort_links %}
+        <div class="comment-sort-bar">
+          {% for s, url in initial_post._comment_sort_links.items() %}<a class="sort-btn{% if s == initial_post._comment_sort %} active{% endif %}" href="{{ url }}">{{ s }}</a>{% endfor %}
+        </div>
+      {% endif %}
+      <div class="pv-comments-area">
+        {% if initial_post.comments %}
+          <div class="pv-comments">
+            {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink, initial_post.post.subreddit, initial_post.post.id, initial_post.post.author) }}{% endfor %}
+          </div>
+        {% else %}
+          {{ empty_state('No comments yet') }}
+        {% endif %}
       </div>
-    {% endif %}
-    <div class="ns-comment-list">
-      {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink) }}{% endfor %}
     </div>
 
   {% elif initial_profile %}
-    <div class="ns-sub-header">
-      <h1>u/{{ initial_profile._username }}</h1>
-      {% if initial_profile._about %}<p class="ns-note">{{ initial_profile._about.karma_total }} karma{% if initial_profile._about.description %} &middot; {{ initial_profile._about.description }}{% endif %}</p>{% endif %}
+    <div class="ctx-info visible">
+      <div class="ctx-meta">
+        <div class="ctx-title">u/{{ initial_profile._username }}</div>
+        {% if initial_profile._about %}
+          <div class="ctx-stats"><span>{{ initial_profile._about.karma_post | fmtnum }}</span> post karma &middot; <span>{{ initial_profile._about.karma_comment | fmtnum }}</span> comment karma{% if initial_profile._about.created_utc %} &middot; joined {{ initial_profile._about.created_utc | fmtdate }}{% endif %}</div>
+        {% endif %}
+      </div>
     </div>
-    <div class="ns-feed">
+    {% if initial_profile._about and initial_profile._about.description %}
+      <div class="ns-about-panel"><div class="sidebar-section"><div class="sidebar-desc md">{{ initial_profile._about.description }}</div></div></div>
+    {% endif %}
+    <div class="feed-list">
       {% for item in initial_profile['items'] %}
         {% if item.type == 'post' %}
           {{ post_card(item.data, ns_hls) }}
         {% else %}
-          <article class="ns-post">
-            <div class="ns-post-meta">comment on <a class="post-sub-link" href="/r/{{ item.data.subreddit }}">r/{{ item.data.subreddit }}</a> &middot; {{ item.data.score }} pts &middot; {{ item.data.created_utc | timeago }}</div>
-            <h3 class="ns-post-title"><a href="{{ item.data.link_permalink }}" target="_blank" rel="noopener">{{ item.data.link_title }}</a></h3>
-            {% if item.data.body_html %}<div class="ns-wiki">{{ item.data.body_html | safe }}</div>{% else %}<div class="ns-selftext">{{ item.data.body }}</div>{% endif %}
-          </article>
+          <div class="user-comment-card">
+            <div class="ucc-context">
+              <span>in <a href="/r/{{ item.data.subreddit }}">r/{{ item.data.subreddit }}</a></span>
+              <span>&middot;</span>
+              <a href="{{ item.data.link_permalink }}" target="_blank" rel="noopener">{{ item.data.link_title }}</a>
+            </div>
+            <div class="ucc-body md">{% if item.data.body_html %}{{ item.data.body_html | safe }}{% else %}<p>{{ item.data.body }}</p>{% endif %}</div>
+            <div class="ucc-footer">
+              <span class="ucc-score">&#9650; {{ item.data.score | fmtnum }}</span>
+              <span>{{ item.data.created_utc | timeago }}</span>
+            </div>
+          </div>
         {% endif %}
+      {% else %}
+        {{ empty_state('Nothing here yet') }}
       {% endfor %}
     </div>
     {{ next_link(initial_profile._next_url) }}
 
   {% elif ns_multi %}
     {% if ns_multi.error %}
-      <p class="ns-note">{{ ns_multi.error }}</p>
+      {{ empty_state(ns_multi.error) }}
     {% else %}
-      <div class="ns-sub-header"><h1>{{ ns_multi.title }}</h1><p class="ns-note">multireddit by u/{{ ns_multi._username }}</p></div>
-      <div class="ns-sort-links">
-        {% for s in ('hot', 'new', 'top', 'rising', 'controversial') %}
-          <a href="/user/{{ ns_multi._username }}/m/{{ ns_multi._multiname }}/{{ s }}"{% if s == ns_multi._sort %} class="active"{% endif %}>{{ s }}</a>
-        {% endfor %}
+      <div class="ctx-info visible">
+        <div class="ctx-meta">
+          <div class="ctx-title">{{ ns_multi.title }}</div>
+          <div class="ctx-stats">u/{{ ns_multi._username }} multireddit</div>
+        </div>
       </div>
-      <div class="ns-feed">
-        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
+      {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/user/' ~ ns_multi._username ~ '/m/' ~ ns_multi._multiname, ns_multi._sort) }}
+      <div class="feed-list">
+        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
       </div>
       {{ next_link(ns_multi._next_url) }}
     {% endif %}
 
   {% elif ns_duplicates %}
-    {% if ns_duplicates.post %}{{ post_card(ns_duplicates.post, ns_hls) }}{% endif %}
-    <h2 class="ns-comments-heading">Other discussions of this link</h2>
-    <div class="ns-feed">
-      {% for post in ns_duplicates.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
+    <div class="ctx-info visible">
+      <div class="ctx-meta">
+        <div class="ctx-title">{{ ns_duplicates.post.title if ns_duplicates.post else 'Duplicates' }}</div>
+        {% if ns_duplicates.post %}<div class="ctx-stats"><a class="ctx-sub-link" href="/r/{{ ns_duplicates.post.subreddit }}">r/{{ ns_duplicates.post.subreddit }}</a></div>{% endif %}
+      </div>
+    </div>
+    <div class="dupes-header">
+      <a class="dupes-back" href="{{ post_link(ns_duplicates._sub, ns_duplicates._post_id) }}">&larr; back to post</a>
+      <span class="dupes-count">{{ ns_duplicates.posts | length }} other post{{ 's' if ns_duplicates.posts | length != 1 }} linking to this URL</span>
+    </div>
+    <div class="feed-list">
+      {% for post in ns_duplicates.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No duplicates found') }}{% endfor %}
     </div>
     {{ next_link(ns_duplicates._next_url) }}
 
   {% elif ns_wiki %}
-    <div class="ns-sub-header"><h1>r/{{ ns_wiki._sub }} wiki{% if ns_wiki._page and ns_wiki._page != 'index' %} &mdash; {{ ns_wiki._page }}{% endif %}</h1></div>
-    {% if ns_wiki.error %}
-      <p class="ns-note">{{ ns_wiki.error }}</p>
-    {% else %}
-      <div class="ns-wiki">{{ ns_wiki.html | safe }}</div>
-    {% endif %}
+    <div class="wiki-page">
+      <div class="wiki-header">
+        <span class="wiki-sub"><a href="/r/{{ ns_wiki._sub }}">r/{{ ns_wiki._sub }}</a></span>
+        <span class="wiki-sep">/</span>
+        <span class="wiki-title">wiki{% if ns_wiki._page and ns_wiki._page != 'index' %}/{{ ns_wiki._page }}{% endif %}</span>
+      </div>
+      {% if ns_wiki.error %}
+        {{ empty_state(ns_wiki.error) }}
+      {% else %}
+        <div class="wiki-body md">{{ ns_wiki.html | safe }}</div>
+      {% endif %}
+    </div>
 
   {% elif ns_search %}
     {% if not ns_search.q %}
-      <p class="ns-note">Enter a search term above.</p>
+      <div class="feed-list">{{ empty_state('Enter a search term above') }}</div>
     {% elif ns_search.error %}
-      <p class="ns-note">{{ ns_search.error }}</p>
+      <div class="feed-list">{{ empty_state(ns_search.error) }}</div>
     {% else %}
-      <h1>Results for &ldquo;{{ ns_search.q }}&rdquo;</h1>
-      <div class="ns-sort-links">
+      <div class="ctx-info visible"><div class="ctx-meta"><div class="ctx-title">Results for &ldquo;{{ ns_search.q }}&rdquo;</div></div></div>
+      <div class="search-type-bar ns-search-type-bar">
         {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
-          <a href="/search?q={{ ns_search.q | urlencode }}&amp;stype={{ opt }}"{% if opt == ns_search._stype %} class="active"{% endif %}>{{ label }}</a>
+          <a class="search-type-btn{% if opt == ns_search._stype %} active{% endif %}" href="/search?q={{ ns_search.q | urlencode }}&amp;stype={{ opt }}">{{ label }}</a>
         {% endfor %}
       </div>
+      <form class="ns-searchbar" action="/search" method="get">
+        <input type="hidden" name="q" value="{{ ns_search.q }}">
+        <input type="hidden" name="stype" value="{{ ns_search._stype }}">
+        <input type="text" name="flair" placeholder="flair" value="{{ ns_search._flair or '' }}" class="ns-search-flair" aria-label="Filter by flair">
+        {% if ns_current_sub %}
+          <label class="scope-check-label"><input type="checkbox" name="sub" value="{{ ns_current_sub }}"{% if ns_search._sub == ns_current_sub %} checked{% endif %}><span>r/{{ ns_current_sub }} only</span></label>
+        {% endif %}
+        <button type="submit">Apply</button>
+      </form>
 
       {% if ns_search._stype == 'communities' %}
-        <div class="ns-feed">
+        <div class="feed-list">
           {% for c in ns_search.communities %}
-            <article class="ns-post ns-community-result">
-              {% if c.icon %}<img class="ns-sub-icon" src="{{ c.icon }}" alt="" loading="lazy">{% endif %}
-              <h3 class="ns-post-title"><a href="/r/{{ c.name }}">r/{{ c.name }}</a></h3>
-              <p class="ns-note">{{ c.subscribers }} subscribers</p>
-              {% if c.description %}<p>{{ c.description }}</p>{% endif %}
-            </article>
+            <div class="community-card">
+              <div class="community-card-icon">{% if c.icon %}<img src="{{ c.icon }}" alt="" loading="lazy">{% else %}<span>{{ c.name[0] | upper if c.name else '?' }}</span>{% endif %}</div>
+              <div class="community-card-body">
+                <div class="community-card-name"><a href="/r/{{ c.name }}">r/{{ c.name }}</a></div>
+                {% if c.title %}<div class="community-card-title">{{ c.title }}</div>{% endif %}
+                {% if c.description %}<div class="community-card-desc">{{ c.description }}</div>{% endif %}
+                <div class="community-card-stats"><span>{{ c.subscribers | fmtnum }}</span> members</div>
+              </div>
+            </div>
           {% else %}
-            <p class="ns-note">No communities found.</p>
+            {{ empty_state('No communities found') }}
           {% endfor %}
         </div>
         {{ next_link(ns_search._next_url) }}
 
       {% elif ns_search._stype == 'users' %}
-        <div class="ns-feed">
+        <div class="feed-list">
           {% for u in ns_search.users %}
-            <article class="ns-post ns-user-result">
-              <h3 class="ns-post-title"><a href="/user/{{ u.name }}">u/{{ u.name }}</a></h3>
-              <p class="ns-note">{{ u.karma_post }} post karma &middot; {{ u.karma_comment }} comment karma</p>
-            </article>
+            <a class="user-card" href="/user/{{ u.name }}">
+              <div class="user-card-icon"><span>{{ u.name[0] | upper if u.name else '?' }}</span></div>
+              <div class="user-card-body">
+                <div class="user-card-name">u/{{ u.name }}</div>
+                <div class="user-card-stats"><span>{{ u.karma_post | fmtnum }}</span> post karma &middot; <span>{{ u.karma_comment | fmtnum }}</span> comment karma</div>
+              </div>
+            </a>
           {% else %}
-            <p class="ns-note">No users found.</p>
+            {{ empty_state('No users found') }}
           {% endfor %}
         </div>
         {{ next_link(ns_search._next_url) }}
 
       {% else %}
-        <div class="ns-sort-links ns-time-links">
+        <div class="sort-bar ns-sort-bar">
           {% for s in ('relevance', 'hot', 'top', 'new') %}
-            <a href="/search?q={{ ns_search.q | urlencode }}&amp;sort={{ s }}"{% if s == ns_search._sort %} class="active"{% endif %}>{{ s }}</a>
+            <a class="sort-btn{% if s == ns_search._sort %} active{% endif %}" href="/search?q={{ ns_search.q | urlencode }}&amp;sort={{ s }}{% if ns_search._sub %}&amp;sub={{ ns_search._sub | urlencode }}{% endif %}">{{ s | capitalize }}</a>
           {% endfor %}
         </div>
-        <div class="ns-feed">
-          {% for post in ns_search.posts %}{{ post_card(post, ns_hls) }}{% else %}<p class="ns-note">No posts found.</p>{% endfor %}
+        <div class="feed-list">
+          {% for post in ns_search.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
         </div>
         {{ next_link(ns_search._next_url) }}
       {% endif %}
     {% endif %}
 
   {% elif request.path.startswith('/saved') or request.path.startswith('/subscribed') %}
-    <p class="ns-note">This page needs your logged-in Reddit session (sent via JavaScript) &mdash; enable JavaScript to view it.</p>
+    <div class="feed-list">{{ empty_state('This page needs your logged-in Reddit session (sent via JavaScript) — enable JavaScript to view it.') }}</div>
   {% elif request.path.startswith('/live') %}
-    <p class="ns-note">Live threads update in real time and need JavaScript.</p>
+    <div class="feed-list">{{ empty_state('Live threads update in real time and need JavaScript.') }}</div>
   {% else %}
-    <p class="ns-note">Enter a subreddit or user in the URL to browse, e.g. <code>/r/popular</code> or <code>/user/spez</code>.</p>
+    <div class="feed-list"><div class="state"><div class="state-icon">&#8981;</div><div class="state-title">Browse a subreddit or user</div><div class="state-sub">e.g. <code>/r/popular</code> or <code>/user/spez</code></div></div></div>
   {% endif %}
 </div>
