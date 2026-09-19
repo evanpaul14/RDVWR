@@ -9,7 +9,7 @@ from curl_cffi import requests as cffi_requests
 from media_detection import process_post, extract_posts
 from reddit_client import reddit_get
 from shreddit import _parse_shreddit_post
-from helpers import CACHE_TTL_FEED, FEED_LIMIT, add_time_param, cached_json, error_response, hydrate_linked_posts, log
+from helpers import CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, add_time_param, cached_json, error_response, hydrate_linked_posts, log
 
 bp = Blueprint("home", __name__)
 
@@ -26,7 +26,7 @@ def get_home():
     except ValueError:
         distance = 4
 
-    cookie = request.headers.get("X-Reddit-Cookie", "").strip()
+    cookie = "" if DISABLE_PERSONALIZED_HOME else request.headers.get("X-Reddit-Cookie", "").strip()
     if cookie:
         shreddit_sort = {"best": "HOT", "hot": "HOT", "new": "NEW",
                          "top": "TOP", "rising": "RISING",
