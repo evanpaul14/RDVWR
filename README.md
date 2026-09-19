@@ -140,8 +140,8 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_NSFW_HIDE` | `0` | `1` hides NSFW posts |
 | `RDVWR_DEFAULT_NSFW_SEARCH_HIDE` | `0` | `1` hides NSFW content in search |
 | `RDVWR_DEFAULT_MARK_READ` | `1` | `0` stops marking posts as read on scroll |
-| `RDVWR_DEFAULT_HIDE_READ_HOME` | `0` | `1` hides read posts on the home feed |
-| `RDVWR_DEFAULT_HIDE_READ_SUB` | `0` | `1` hides read posts in subreddits |
+| `RDVWR_DEFAULT_HIDE_READ_HOME` *(experimental)* | `0` | `1` hides read posts on the home feed. No settings-panel toggle; set via env var only. |
+| `RDVWR_DEFAULT_HIDE_READ_SUB` *(experimental)* | `0` | `1` hides read posts in subreddits. No settings-panel toggle; set via env var only. |
 
 ## Media proxying
 
