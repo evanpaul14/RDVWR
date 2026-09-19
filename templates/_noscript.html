@@ -10,10 +10,18 @@
 /r/{{ sub }}/comments/{{ id }}
 {%- endmacro %}
 
+{% macro current_path() -%}
+{{ request.path }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}
+{%- endmacro %}
+
 {% macro award_list(awards) %}
   {%- if awards -%}
     <span class="awards">{% for a in awards %}<span class="award-item" title="{{ a.name }}{% if a.count > 1 %} &times;{{ a.count }}{% endif %}"><img src="{{ a.icon }}" alt="{{ a.name }}" loading="lazy" width="16" height="16">{% if a.count > 1 %}<span class="award-count">{{ a.count }}</span>{% endif %}</span>{% endfor %}</span>
   {%- endif -%}
+{% endmacro %}
+
+{% macro nsfw_details(inner, label='NSFW') %}
+  <details class="ns-nsfw"><summary>{{ label }} &mdash; click to reveal</summary>{{ inner | safe }}</details>
 {% endmacro %}
 
 {% macro video_block(post, full, ns_hls) %}
@@ -64,11 +72,13 @@
   {% endif %}
 {% endmacro %}
 
-{% macro media_wrap(post, full, ns_hls) %}
+{% macro media_wrap(post, full, ns_hls, nsfw_blur=False) %}
   {% set inner %}{{ media_block(post, full, ns_hls) }}{% endset %}
   {% if inner.strip() %}
     {% if post.is_spoiler %}
       <details class="ns-spoiler"><summary>Spoiler &mdash; click to reveal</summary>{{ inner | safe }}</details>
+    {% elif post.over_18 and nsfw_blur %}
+      {{ nsfw_details(inner) }}
     {% else %}
       {{ inner | safe }}
     {% endif %}
@@ -109,7 +119,7 @@
   {%- if post.awards %} {{ award_list(post.awards) }}{% endif -%}
 {% endmacro %}
 
-{% macro post_card(post, ns_hls, show_sub=True) %}
+{% macro post_card(post, ns_hls, nsfw_blur=False, show_sub=True) %}
   <div class="post" data-post-id="{{ post.id }}">
     <div class="post-header">
       <div class="post-meta-top">
@@ -122,22 +132,27 @@
       <div class="crosspost-embed">
         <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
         <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
-        {{ media_wrap(post.crosspost_from, False, ns_hls) }}
+        {{ media_wrap(post.crosspost_from, False, ns_hls, nsfw_blur) }}
       </div>
     {% elif post.linked_post %}
       <div class="crosspost-embed">
         <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
         <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
-        {{ media_wrap(post.linked_post, False, ns_hls) }}
+        {{ media_wrap(post.linked_post, False, ns_hls, nsfw_blur) }}
       </div>
     {% else %}
-      {{ media_wrap(post, False, ns_hls) }}
+      {{ media_wrap(post, False, ns_hls, nsfw_blur) }}
     {% endif %}
     {{ poll_block(post.poll) }}
-    {% if post.is_self and post.selftext_html %}
-      <div class="post-excerpt"><div class="md">{{ post.selftext_html | safe }}</div></div>
-    {% elif post.is_self and post.selftext %}
-      <div class="post-excerpt"><div class="md"><p>{{ post.selftext }}</p></div></div>
+    {% set excerpt %}
+      {% if post.is_self and post.selftext_html %}
+        <div class="post-excerpt"><div class="md">{{ post.selftext_html | safe }}</div></div>
+      {% elif post.is_self and post.selftext %}
+        <div class="post-excerpt"><div class="md"><p>{{ post.selftext }}</p></div></div>
+      {% endif %}
+    {% endset %}
+    {% if excerpt.strip() %}
+      {% if post.over_18 and nsfw_blur and not post.is_spoiler %}{{ nsfw_details(excerpt) }}{% else %}{{ excerpt | safe }}{% endif %}
     {% endif %}
     <div class="post-footer">
       <div class="footer-left">
@@ -160,7 +175,7 @@
   </div>
 {% endmacro %}
 
-{% macro pv_detail(post, ns_hls) %}
+{% macro pv_detail(post, ns_hls, nsfw_blur=False) %}
   <a class="pv-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a>
   {% set b %}{{ badges(post) }}{% endset %}
   {% if b.strip() %}<div class="post-meta-top" style="margin-bottom:10px">{{ b | safe }}</div>{% endif %}
@@ -178,23 +193,28 @@
     <div class="crosspost-embed crosspost-embed-full">
       <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
       <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
-      {{ media_wrap(post.crosspost_from, True, ns_hls) }}
+      {{ media_wrap(post.crosspost_from, True, ns_hls, nsfw_blur) }}
       {% if post.crosspost_from.selftext %}<div class="xp-excerpt xp-excerpt-full md"><p>{{ post.crosspost_from.selftext }}</p></div>{% endif %}
     </div>
   {% elif post.linked_post %}
     <div class="crosspost-embed crosspost-embed-full">
       <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
       <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
-      {{ media_wrap(post.linked_post, True, ns_hls) }}
+      {{ media_wrap(post.linked_post, True, ns_hls, nsfw_blur) }}
     </div>
   {% else %}
-    {{ media_wrap(post, True, ns_hls) }}
+    {{ media_wrap(post, True, ns_hls, nsfw_blur) }}
   {% endif %}
   {{ poll_block(post.poll) }}
-  {% if post.is_self and post.selftext_html %}
-    <div class="pv-body md">{{ post.selftext_html | safe }}</div>
-  {% elif post.is_self and post.selftext %}
-    <div class="pv-body md"><p>{{ post.selftext }}</p></div>
+  {% set body %}
+    {% if post.is_self and post.selftext_html %}
+      <div class="pv-body md">{{ post.selftext_html | safe }}</div>
+    {% elif post.is_self and post.selftext %}
+      <div class="pv-body md"><p>{{ post.selftext }}</p></div>
+    {% endif %}
+  {% endset %}
+  {% if body.strip() %}
+    {% if post.over_18 and nsfw_blur and not post.is_spoiler %}{{ nsfw_details(body) }}{% else %}{{ body | safe }}{% endif %}
   {% endif %}
 {% endmacro %}
 
@@ -242,12 +262,20 @@
   </div>
 {% endmacro %}
 
-{% macro time_links(links, active) %}
-  {% if links %}
-    <div class="comment-sort-bar ns-time-bar">
-      {% for opt, url in links.items() %}<a class="sort-btn{% if opt == active %} active{% endif %}" href="{{ url }}">{{ opt }}</a>{% endfor %}
+{% macro time_filter_form(base, active) %}
+  {# Native <select> + submit button standing in for the JS site's time-filter
+     dropdown (static/utils.js buildTimeFilterHtml) — can't auto-submit on
+     change without JS, so it gets its own small "Go" button. #}
+  <form class="ns-time-form" method="get" action="{{ base }}">
+    <div class="time-filter-wrap">
+      <select class="time-filter" name="t" aria-label="Time filter" title="Time filter">
+        {% for opt, label in (('all', 'All time'), ('year', 'Past year'), ('month', 'Past month'), ('week', 'Past week'), ('day', 'Today'), ('hour', 'Past hour')) %}
+          <option value="{{ opt }}"{% if opt == active %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="time-filter-go" title="Apply time filter" aria-label="Apply time filter">Go</button>
     </div>
-  {% endif %}
+  </form>
 {% endmacro %}
 
 {% set ns_current_sub = initial_about._sub if initial_about else (initial_data._sub if initial_data else (ns_wiki._sub if ns_wiki else (ns_duplicates._sub if ns_duplicates else (ns_search._sub if ns_search and ns_search._sub else None)))) %}
@@ -269,6 +297,12 @@
           </button>
         </div>
       </form>
+      <a class="ns-settings-btn" href="/settings?next={{ (ns_settings.next if ns_settings else current_path()) | trim | urlencode }}" title="Settings" aria-label="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
     </div>
   </header>
 
@@ -302,16 +336,19 @@
   {% endif %}
 
   {% if initial_data %}
-    {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, '<a class="sort-btn sort-btn-wiki" href="/r/' ~ initial_data._sub ~ '/wiki">wiki</a>') }}
-    {{ time_links(initial_data._time_links, initial_data._time) }}
+    {% set sort_extra %}
+      {% if initial_data._sort in ('top', 'controversial') %}{{ time_filter_form('/r/' ~ initial_data._sub ~ '/' ~ initial_data._sort, initial_data._time) }}{% endif %}
+      <a class="sort-btn sort-btn-wiki" href="/r/{{ initial_data._sub }}/wiki">wiki</a>
+    {% endset %}
+    {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, sort_extra) }}
     <div class="feed-list">
-      {% for post in initial_data.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+      {% for post in initial_data.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
     </div>
     {{ next_link(initial_data._next_url) }}
 
   {% elif initial_post %}
     <div class="pv-wrap ns-pv-wrap">
-      {{ pv_detail(initial_post.post, ns_hls) }}
+      {{ pv_detail(initial_post.post, ns_hls, ns_nsfw_blur) }}
       <div class="pv-divider"><div class="pv-divider-line"></div><span class="pv-divider-label">{{ initial_post.post.num_comments | fmtnum }} comments</span><div class="pv-divider-line"></div></div>
       {% if initial_post._comment_sort_links %}
         <div class="comment-sort-bar">
@@ -344,7 +381,7 @@
     <div class="feed-list">
       {% for item in initial_profile['items'] %}
         {% if item.type == 'post' %}
-          {{ post_card(item.data, ns_hls) }}
+          {{ post_card(item.data, ns_hls, ns_nsfw_blur) }}
         {% else %}
           <div class="user-comment-card">
             <div class="ucc-context">
@@ -377,7 +414,7 @@
       </div>
       {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/user/' ~ ns_multi._username ~ '/m/' ~ ns_multi._multiname, ns_multi._sort) }}
       <div class="feed-list">
-        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
       </div>
       {{ next_link(ns_multi._next_url) }}
     {% endif %}
@@ -394,7 +431,7 @@
       <span class="dupes-count">{{ ns_duplicates.posts | length }} other post{{ 's' if ns_duplicates.posts | length != 1 }} linking to this URL</span>
     </div>
     <div class="feed-list">
-      {% for post in ns_duplicates.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No duplicates found') }}{% endfor %}
+      {% for post in ns_duplicates.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No duplicates found') }}{% endfor %}
     </div>
     {{ next_link(ns_duplicates._next_url) }}
 
@@ -475,11 +512,37 @@
           {% endfor %}
         </div>
         <div class="feed-list">
-          {% for post in ns_search.posts %}{{ post_card(post, ns_hls) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+          {% for post in ns_search.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
         </div>
         {{ next_link(ns_search._next_url) }}
       {% endif %}
     {% endif %}
+
+  {% elif ns_settings %}
+    <div class="ns-settings-wrap">
+      <h1 class="ns-settings-title">Settings</h1>
+      <form class="ns-settings-form" method="post" action="/settings">
+        <input type="hidden" name="next" value="{{ ns_settings.next }}">
+        <label class="ns-settings-row">
+          <input type="checkbox" name="ns_nsfw_blur" value="1"{% if ns_settings.nsfw_blur %} checked{% endif %}>
+          <span class="ns-settings-row-text">
+            <strong>Blur NSFW content</strong>
+            <small>Hide NSFW-tagged post media and text behind a click-to-reveal disclosure.</small>
+          </span>
+        </label>
+        <label class="ns-settings-row">
+          <input type="checkbox" name="ns_hls" value="1"{% if ns_settings.hls %} checked{% endif %}>
+          <span class="ns-settings-row-text">
+            <strong>Enable HLS video playback</strong>
+            <small>Reddit videos play with synced audio via HLS (.m3u8) &mdash; Safari only, since other browsers can't play HLS without JavaScript.</small>
+          </span>
+        </label>
+        <div class="ns-settings-actions">
+          <button type="submit">Save</button>
+          <a class="ns-settings-cancel" href="{{ ns_settings.next }}">Cancel</a>
+        </div>
+      </form>
+    </div>
 
   {% elif request.path.startswith('/saved') or request.path.startswith('/subscribed') %}
     <div class="feed-list">{{ empty_state('This page needs your logged-in Reddit session (sent via JavaScript) — enable JavaScript to view it.') }}</div>

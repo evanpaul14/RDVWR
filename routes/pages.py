@@ -85,7 +85,7 @@ def spa(**kwargs):
     resp = render_template("index.html", initial_profile=initial_profile, initial_data=initial_data,
                            initial_about=initial_about, ns_search=ns_search, ns_wiki=ns_wiki,
                            ns_duplicates=ns_duplicates, ns_multi=ns_multi, disable_downloads=DISABLE_DOWNLOADS,
-                           ns_hls=_ns_hls_enabled())
+                           ns_hls=_ns_hls_enabled(), ns_nsfw_blur=_ns_nsfw_blur_enabled())
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
@@ -94,6 +94,12 @@ def _ns_hls_enabled():
     plain mp4 fallback. Off by default since only Safari plays HLS natively without JS;
     toggled per-visitor via the /ns-hls link shown under videos in the noscript view."""
     return request.cookies.get('ns_hls') == '1'
+
+
+def _ns_nsfw_blur_enabled():
+    """Whether the no-JS fallback should hide NSFW-tagged media/text behind a
+    click-to-reveal disclosure. Off by default; toggled on the /settings page."""
+    return request.cookies.get('ns_nsfw_blur') == '1'
 
 
 @bp.route("/ns-hls")
@@ -109,9 +115,6 @@ def toggle_ns_hls():
     else:
         resp.delete_cookie('ns_hls')
     return resp
-
-
-_NS_TIME_OPTIONS = ('hour', 'day', 'week', 'month', 'year', 'all')
 
 
 def _ns_url(path, **params):
@@ -167,8 +170,6 @@ def _try_inject_subreddit(sub, sort, time, after=''):
             base = f"/r/{sub.lower()}/{sort}"
             result = {"posts": extract_posts(listing), "after": next_after,
                       "_sub": sub.lower(), "_sort": sort, "_time": time}
-            if sort in ('top', 'controversial'):
-                result["_time_links"] = {opt: _ns_url(base, t=opt if opt != 'all' else '') for opt in _NS_TIME_OPTIONS}
             if next_after:
                 result["_next_url"] = _ns_url(base, t=time if time != 'all' else '', after=next_after)
             return result
@@ -439,7 +440,7 @@ def r_json_or_spa(reddit_path):
             except Exception as e:
                 log.warning("inject post sub=%s post=%s: %s", sub, post_id, e)
     resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post,
-                           disable_downloads=DISABLE_DOWNLOADS, ns_hls=_ns_hls_enabled())
+                           disable_downloads=DISABLE_DOWNLOADS, ns_hls=_ns_hls_enabled(), ns_nsfw_blur=_ns_nsfw_blur_enabled())
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
