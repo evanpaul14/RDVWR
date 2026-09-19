@@ -40,6 +40,10 @@ def _set_csp_nonce():
 @app.before_request
 def _gate_api():
     if request.path.startswith('/api/') and not is_same_site_request():
+        logging.getLogger(__name__).warning(
+            "api gate 403 path=%s sec-fetch-site=%r origin=%r referer=%r host=%r ua=%r",
+            request.path, request.headers.get('Sec-Fetch-Site'), request.headers.get('Origin'),
+            request.headers.get('Referer'), request.host, request.headers.get('User-Agent'))
         return jsonify({"error": "Forbidden"}), 403
     return None
 
