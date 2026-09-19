@@ -933,8 +933,6 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Read history</div>
     <label class="settings-row"><span class="settings-label">Mark posts as read on scroll</span>${chk('s-mark-read', settings.markRead)}</label>
-    <label class="settings-row"><span class="settings-label">Hide read posts (home feed)</span>${chk('s-hide-read-home', settings.hideReadHome)}</label>
-    <label class="settings-row"><span class="settings-label">Hide read posts (subreddits)</span>${chk('s-hide-read-sub', settings.hideReadSub)}</label>
     <div class="settings-row settings-row-action"><span class="settings-label">Clear read history</span><button class="settings-action-btn" id="s-clear-visited">Clear</button></div>
   </div>
   <div class="settings-section">
@@ -991,8 +989,6 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-search-hide').addEventListener('change', e => { settings.nsfwSearchHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-mark-read').addEventListener('change', e => { settings.markRead = e.target.checked; saveSettings(); });
-  settingsBody.querySelector('#s-hide-read-home').addEventListener('change', e => { settings.hideReadHome = e.target.checked; saveSettings(); applyVisitedHiding(); });
-  settingsBody.querySelector('#s-hide-read-sub').addEventListener('change', e => { settings.hideReadSub = e.target.checked; saveSettings(); applyVisitedHiding(); });
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();
     clearVisitedHiding();
