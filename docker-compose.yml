@@ -9,10 +9,32 @@ services:
       - PROXY_MEDIA=${PROXY_MEDIA:-0}
       - DISABLE_NSFW=${DISABLE_NSFW:-0}
       - DISABLE_DOWNLOADS=${DISABLE_DOWNLOADS:-0}
+      - RDVWR_DISABLE_PERSONALIZED_HOME=${RDVWR_DISABLE_PERSONALIZED_HOME:-0}
       # Only meaningful together: WEB_CONCURRENCY>1 needs REDIS_URL set (a shared
       # response cache), otherwise each worker's cache is independent.
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
       - REDIS_URL=${REDIS_URL:-}
+      # Outbound proxy for Reddit/media requests (e.g. socks5h://127.0.0.1:9050).
+      - ALL_PROXY=${ALL_PROXY:-}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      # Settings-panel defaults — see README "Environment variables" for the
+      # full list of allowed values. A visitor's own setting always overrides these.
+      - RDVWR_DEFAULT_THEME=${RDVWR_DEFAULT_THEME:-dark}
+      - RDVWR_DEFAULT_LAYOUT=${RDVWR_DEFAULT_LAYOUT:-card}
+      - RDVWR_DEFAULT_SUB_SORT=${RDVWR_DEFAULT_SUB_SORT:-hot}
+      - RDVWR_DEFAULT_SUB_TIME=${RDVWR_DEFAULT_SUB_TIME:-day}
+      - RDVWR_DEFAULT_COMMENT_SORT=${RDVWR_DEFAULT_COMMENT_SORT:-confidence}
+      - RDVWR_DEFAULT_HOME_FEED=${RDVWR_DEFAULT_HOME_FEED:-personalized}
+      - RDVWR_DEFAULT_PAGINATION=${RDVWR_DEFAULT_PAGINATION:-0}
+      - RDVWR_DEFAULT_SHOW_AVATARS=${RDVWR_DEFAULT_SHOW_AVATARS:-0}
+      - RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA=${RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA:-0}
+      - RDVWR_DEFAULT_NSFW_BLUR=${RDVWR_DEFAULT_NSFW_BLUR:-0}
+      - RDVWR_DEFAULT_NSFW_HIDE=${RDVWR_DEFAULT_NSFW_HIDE:-0}
+      - RDVWR_DEFAULT_NSFW_SEARCH_HIDE=${RDVWR_DEFAULT_NSFW_SEARCH_HIDE:-0}
+      - RDVWR_DEFAULT_MARK_READ=${RDVWR_DEFAULT_MARK_READ:-1}
+      - RDVWR_DEFAULT_HIDE_READ_HOME=${RDVWR_DEFAULT_HIDE_READ_HOME:-0}
+      - RDVWR_DEFAULT_HIDE_READ_SUB=${RDVWR_DEFAULT_HIDE_READ_SUB:-0}
     restart: unless-stopped
 
   # Uncomment to run multiple rdvwr workers/instances behind a shared cache.
