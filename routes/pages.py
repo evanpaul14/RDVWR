@@ -10,6 +10,9 @@ from helpers import FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, p
 from routes.users import _fetch_user_about, _fetch_user_overview
 from routes.comments import _fetch_comments_data, COMMENT_SORTS
 
+SEARCH_SORTS = {'relevance', 'hot', 'top', 'new'}
+SEARCH_TYPES = {'posts', 'communities', 'users'}
+
 bp = Blueprint("pages", __name__)
 
 
@@ -42,7 +45,7 @@ _JSON_PASSTHROUGH_RE = re.compile(
 @bp.route("/home/<sort>", strict_slashes=False)
 @bp.route("/user/<username>", strict_slashes=False)
 @bp.route("/user/<username>/m/<multiname>", strict_slashes=False)
-@bp.route("/user/<username>/m/<multiname>/<path:rest>", strict_slashes=False)
+@bp.route("/user/<username>/m/<multiname>/<sort>", strict_slashes=False)
 @bp.route("/u/<username>", strict_slashes=False)
 @bp.route("/search", strict_slashes=False)
 @bp.route("/saved", strict_slashes=False)
@@ -54,11 +57,18 @@ _JSON_PASSTHROUGH_RE = re.compile(
 @bp.route("/live/<path:path>", strict_slashes=False)
 def spa(**kwargs):
     initial_profile = initial_data = initial_about = None
-    ns_search = ns_wiki = ns_duplicates = None
+    ns_search = ns_wiki = ns_duplicates = ns_multi = None
     username = kwargs.get('username')
     path = request.path
 
-    if username and 'multiname' not in kwargs:
+    if username and 'multiname' in kwargs:
+        sort = kwargs.get('sort') or 'hot'
+        if sort not in FEED_SORTS:
+            sort = 'hot'
+        t = request.args.get('t', 'all')
+        after = request.args.get('after', '')
+        ns_multi = _try_inject_multi(username, kwargs['multiname'], sort, t, after)
+    elif username:
         initial_profile = _try_inject_profile(username, request.args.get('after', ''))
     elif path == '/' or path.startswith('/home'):
         sort = kwargs.get('sort') or 'hot'
@@ -76,7 +86,7 @@ def spa(**kwargs):
 
     resp = render_template("index.html", initial_profile=initial_profile, initial_data=initial_data,
                            initial_about=initial_about, ns_search=ns_search, ns_wiki=ns_wiki,
-                           ns_duplicates=ns_duplicates, disable_downloads=DISABLE_DOWNLOADS,
+                           ns_duplicates=ns_duplicates, ns_multi=ns_multi, disable_downloads=DISABLE_DOWNLOADS,
                            ns_hls=_ns_hls_enabled())
     return resp, 200, {'Cache-Control': 'no-store'}
 
@@ -177,27 +187,102 @@ def _try_inject_subreddit(sub, sort, time, after=''):
             d = r.json()["data"]
             icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
             active = d.get("active_user_count") or d.get("accounts_active") or 0
+            sidebar_html = d.get("description_html") or ""
+            if sidebar_html:
+                sidebar_html = re.sub(r'<!--\s*SC_(?:OFF|ON)\s*-->', '', html_lib.unescape(sidebar_html)).strip()
+                sidebar_html = _sanitize_wiki_html(sidebar_html)
             return {"title": d.get("title", sub), "description": d.get("public_description", ""),
-                    "subscribers": d.get("subscribers", 0), "active": active,
-                    "icon": icon or "", "_sub": sub.lower()}
+                    "sidebar": sidebar_html, "subscribers": d.get("subscribers", 0),
+                    "active": active, "icon": icon or "", "_sub": sub.lower()}
         except Exception as e:
             log.warning("inject about sub=%s: %s", sub, e)
             return None
 
-    return parallel(_feed, _about)
+    def _rules():
+        try:
+            r = reddit_get(f"https://www.reddit.com/r/{sub}/about/rules.json",
+                           params={"raw_json": 1}, timeout=5)
+            if r.status_code != 200:
+                return []
+            return [ru.get("short_name", "") for ru in r.json().get("rules", []) if ru.get("short_name")]
+        except Exception as e:
+            log.warning("inject rules sub=%s: %s", sub, e)
+            return []
+
+    def _mods():
+        try:
+            r = reddit_get(f"https://www.reddit.com/r/{sub}/about/moderators.json",
+                           params={"raw_json": 1}, timeout=5)
+            if r.status_code != 200:
+                return []
+            children = r.json().get("data", {}).get("children", [])
+            return [m.get("name", "") for m in children if m.get("name")]
+        except Exception as e:
+            log.warning("inject mods sub=%s: %s", sub, e)
+            return []
+
+    feed, about, rules, mods = parallel(_feed, _about, _rules, _mods)
+    if about is not None:
+        about["_rules"] = rules
+        about["_mods"] = mods
+    return feed, about
+
+
+def _try_inject_multi(username, multiname, sort, time, after=''):
+    """Fetch a user multireddit's combined feed for SSR injection."""
+    try:
+        meta = reddit_get(f"https://www.reddit.com/api/multi/user/{username}/m/{multiname}.json",
+                          params={"raw_json": 1}, timeout=6)
+        if meta.status_code != 200:
+            return {"error": f"Reddit returned {meta.status_code}" if meta.status_code != 404 else "Multireddit not found"}
+        meta_data = meta.json().get("data", {})
+        subs = [s["name"] for s in meta_data.get("subreddits", [])]
+        display = meta_data.get("display_name") or meta_data.get("name") or multiname
+        if not subs:
+            return {"posts": [], "after": None, "title": display, "_username": username.lower(),
+                    "_multiname": multiname, "_sort": sort}
+        combined = "+".join(subs[:100])
+        params = {"limit": FEED_LIMIT, "raw_json": 1}
+        add_time_param(params, sort, time)
+        if after:
+            params["after"] = after
+        r = reddit_get(f"https://www.reddit.com/r/{combined}/{sort}.json", params=params, timeout=6)
+        if r.status_code != 200:
+            return {"error": f"Reddit returned {r.status_code}"}
+        listing = r.json()["data"]
+        next_after = listing.get("after")
+        base = f"/user/{username}/m/{multiname}/{sort}"
+        result = {"posts": extract_posts(listing), "after": next_after, "title": display,
+                  "_username": username.lower(), "_multiname": multiname, "_sort": sort}
+        if next_after:
+            result["_next_url"] = _ns_url(base, t=time if time != 'all' else '', after=next_after)
+        return result
+    except Exception as e:
+        log.warning("inject multi user=%s multi=%s: %s", username, multiname, e)
+        return {"error": "Failed to load multireddit"}
 
 
 def _try_inject_search():
-    """Fetch post search results for SSR injection (noscript search form / results page)."""
+    """Fetch post/community/user search results for SSR injection (noscript search
+    form / results page). `stype` selects which of Reddit's search kinds to query."""
     q = request.args.get('q', '').strip()
+    stype = request.args.get('stype', 'posts')
+    if stype not in SEARCH_TYPES:
+        stype = 'posts'
     if not q:
-        return {"q": ""}
+        return {"q": "", "_stype": stype}
+    after = request.args.get('after', '')
+
+    if stype == 'communities':
+        return _try_inject_search_communities(q, after)
+    if stype == 'users':
+        return _try_inject_search_users(q, after)
+
     sort = request.args.get('sort', 'relevance')
-    if sort not in {'relevance', 'hot', 'top', 'new'}:
+    if sort not in SEARCH_SORTS:
         sort = 'relevance'
     t     = request.args.get('t', 'all')
     sub   = request.args.get('sub', '').strip()
-    after = request.args.get('after', '')
     try:
         url = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
         params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1}
@@ -207,18 +292,72 @@ def _try_inject_search():
             params["after"] = after
         r = reddit_get(url, params=params, timeout=6)
         if r.status_code != 200:
-            return {"q": q, "error": f"Reddit returned {r.status_code}"}
+            return {"q": q, "_stype": stype, "error": f"Reddit returned {r.status_code}"}
         listing = r.json()["data"]
         next_after = listing.get("after")
-        result = {"q": q, "posts": extract_posts(listing), "after": next_after,
+        result = {"q": q, "_stype": stype, "posts": extract_posts(listing), "after": next_after,
                   "_sort": sort, "_t": t, "_sub": sub}
         if next_after:
-            result["_next_url"] = _ns_url("/search", q=q, sort=sort if sort != 'relevance' else '',
+            result["_next_url"] = _ns_url("/search", q=q, stype=stype, sort=sort if sort != 'relevance' else '',
                                            t=t if t != 'all' else '', sub=sub, after=next_after)
         return result
     except Exception as e:
         log.warning("inject search q=%r: %s", q, e)
-        return {"q": q, "error": "Search failed"}
+        return {"q": q, "_stype": stype, "error": "Search failed"}
+
+
+def _try_inject_search_communities(q, after=''):
+    try:
+        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "sr"}
+        if after:
+            params["after"] = after
+        r = reddit_get("https://www.reddit.com/search.json", params=params, timeout=6)
+        if r.status_code != 200:
+            return {"q": q, "_stype": "communities", "error": f"Reddit returned {r.status_code}"}
+        listing = r.json()["data"]
+        communities = []
+        for c in listing["children"]:
+            if c.get("kind") != "t5":
+                continue
+            d = c["data"]
+            icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
+            communities.append({"name": d.get("display_name", ""), "title": d.get("title", ""),
+                                 "description": d.get("public_description", ""),
+                                 "subscribers": d.get("subscribers", 0), "icon": icon or ""})
+        next_after = listing.get("after")
+        result = {"q": q, "_stype": "communities", "communities": communities, "after": next_after}
+        if next_after:
+            result["_next_url"] = _ns_url("/search", q=q, stype="communities", after=next_after)
+        return result
+    except Exception as e:
+        log.warning("inject search communities q=%r: %s", q, e)
+        return {"q": q, "_stype": "communities", "error": "Search failed"}
+
+
+def _try_inject_search_users(q, after=''):
+    try:
+        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "user"}
+        if after:
+            params["after"] = after
+        r = reddit_get("https://www.reddit.com/search.json", params=params, timeout=6)
+        if r.status_code != 200:
+            return {"q": q, "_stype": "users", "error": f"Reddit returned {r.status_code}"}
+        listing = r.json()["data"]
+        users = []
+        for c in listing["children"]:
+            if c.get("kind") != "t2":
+                continue
+            d = c["data"]
+            users.append({"name": d.get("name", ""), "karma_post": d.get("link_karma", 0),
+                          "karma_comment": d.get("comment_karma", 0), "created_utc": d.get("created_utc", 0)})
+        next_after = listing.get("after")
+        result = {"q": q, "_stype": "users", "users": users, "after": next_after}
+        if next_after:
+            result["_next_url"] = _ns_url("/search", q=q, stype="users", after=next_after)
+        return result
+    except Exception as e:
+        log.warning("inject search users q=%r: %s", q, e)
+        return {"q": q, "_stype": "users", "error": "Search failed"}
 
 
 def _try_inject_duplicates(sub, post_id):

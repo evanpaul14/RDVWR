@@ -23,8 +23,11 @@
 
 {% macro media_block(post, ns_hls) %}
   {% if post.gallery %}
-    <div class="ns-media"><a href="{{ post.gallery[0].url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ post.gallery[0].thumb or post.gallery[0].url }}" alt=""></a>
-    {% if post.gallery | length > 1 %}<p class="ns-note">Gallery &mdash; {{ post.gallery | length }} images, <a href="{{ post.permalink }}" target="_blank" rel="noopener">view all on Reddit</a></p>{% endif %}</div>
+    <div class="ns-media ns-gallery">
+      {% for img in post.gallery %}
+        <a href="{{ img.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ img.thumb or img.url }}" alt="{{ img.caption or '' }}">{% if img.caption %}<span class="ns-gallery-caption">{{ img.caption }}</span>{% endif %}</a>
+      {% endfor %}
+    </div>
   {% elif post.is_video %}
     <div class="ns-media">{{ video_block(post, ns_hls) }}</div>
   {% elif post.gif_url and post.gif_is_video %}
@@ -45,6 +48,8 @@
     <div class="ns-media"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
   {% elif post.preview_img %}
     <div class="ns-media"><a href="{{ post.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ post.preview_img }}" alt=""></a></div>
+  {% elif not post.is_self and post.url %}
+    <p class="ns-link-post"><a href="{{ post.url }}" target="_blank" rel="noopener">{{ post.domain }} &rarr;</a></p>
   {% endif %}
 {% endmacro %}
 
@@ -108,19 +113,49 @@
 <div class="ns-page">
   <div class="ns-topbar">
     <a class="ns-brand" href="/">RDVWR</a>
+    <nav class="ns-quicknav">
+      <a href="/r/popular">popular</a>
+      <a href="/r/all">all</a>
+    </nav>
     <span class="ns-note">JavaScript is disabled &mdash; showing a read-only, limited view.</span>
   </div>
 
   <form class="ns-searchbar" action="/search" method="get">
     <input type="text" name="q" placeholder="search reddit" value="{{ ns_search.q if ns_search else '' }}" aria-label="Search">
+    <input type="text" name="sub" placeholder="limit to subreddit" value="{{ ns_search._sub if ns_search else '' }}" class="ns-search-sub" aria-label="Restrict to subreddit">
+    <select name="stype" aria-label="Result type">
+      {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
+        <option value="{{ opt }}"{% if ns_search and ns_search._stype == opt %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="sort" aria-label="Sort">
+      {% for opt in ('relevance', 'hot', 'top', 'new') %}
+        <option value="{{ opt }}"{% if ns_search and ns_search._sort == opt %} selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
     <button type="submit">Search</button>
   </form>
 
   {% if initial_about %}
     <div class="ns-sub-header">
+      {% if initial_about.icon %}<img class="ns-sub-icon" src="{{ initial_about.icon }}" alt="" loading="lazy">{% endif %}
       <h1>r/{{ initial_about._sub }}</h1>
       <p>{{ initial_about.description }}</p>
-      <p class="ns-note">{{ initial_about.subscribers }} subscribers</p>
+      <p class="ns-note">{{ initial_about.subscribers }} subscribers{% if initial_about.active %} &middot; {{ initial_about.active }} online{% endif %}</p>
+      {% if initial_about.sidebar %}
+        <details class="ns-details"><summary>About community</summary><div class="ns-wiki">{{ initial_about.sidebar | safe }}</div></details>
+      {% endif %}
+      {% if initial_about._rules %}
+        <details class="ns-details"><summary>Rules ({{ initial_about._rules | length }})</summary>
+          <ol class="ns-rules">{% for r in initial_about._rules %}<li>{{ r }}</li>{% endfor %}</ol>
+        </details>
+      {% endif %}
+      {% if initial_about._mods %}
+        <details class="ns-details"><summary>Moderators ({{ initial_about._mods | length }})</summary>
+          <p class="ns-mods">{% for m in initial_about._mods %}<a href="/user/{{ m }}">u/{{ m }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+        </details>
+      {% endif %}
+      <p class="ns-note"><a href="/r/{{ initial_about._sub }}/wiki">Wiki</a></p>
     </div>
   {% endif %}
 
@@ -176,6 +211,22 @@
     </div>
     {{ next_link(initial_profile._next_url) }}
 
+  {% elif ns_multi %}
+    {% if ns_multi.error %}
+      <p class="ns-note">{{ ns_multi.error }}</p>
+    {% else %}
+      <div class="ns-sub-header"><h1>{{ ns_multi.title }}</h1><p class="ns-note">multireddit by u/{{ ns_multi._username }}</p></div>
+      <div class="ns-sort-links">
+        {% for s in ('hot', 'new', 'top', 'rising', 'controversial') %}
+          <a href="/user/{{ ns_multi._username }}/m/{{ ns_multi._multiname }}/{{ s }}"{% if s == ns_multi._sort %} class="active"{% endif %}>{{ s }}</a>
+        {% endfor %}
+      </div>
+      <div class="ns-feed">
+        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
+      </div>
+      {{ next_link(ns_multi._next_url) }}
+    {% endif %}
+
   {% elif ns_duplicates %}
     {% if ns_duplicates.post %}{{ post_card(ns_duplicates.post, ns_hls) }}{% endif %}
     <h2 class="ns-comments-heading">Other discussions of this link</h2>
@@ -200,14 +251,50 @@
     {% else %}
       <h1>Results for &ldquo;{{ ns_search.q }}&rdquo;</h1>
       <div class="ns-sort-links">
-        {% for s in ('relevance', 'hot', 'top', 'new') %}
-          <a href="/search?q={{ ns_search.q | urlencode }}&amp;sort={{ s }}"{% if s == ns_search._sort %} class="active"{% endif %}>{{ s }}</a>
+        {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
+          <a href="/search?q={{ ns_search.q | urlencode }}&amp;stype={{ opt }}"{% if opt == ns_search._stype %} class="active"{% endif %}>{{ label }}</a>
         {% endfor %}
       </div>
-      <div class="ns-feed">
-        {% for post in ns_search.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
-      </div>
-      {{ next_link(ns_search._next_url) }}
+
+      {% if ns_search._stype == 'communities' %}
+        <div class="ns-feed">
+          {% for c in ns_search.communities %}
+            <article class="ns-post ns-community-result">
+              {% if c.icon %}<img class="ns-sub-icon" src="{{ c.icon }}" alt="" loading="lazy">{% endif %}
+              <h3 class="ns-post-title"><a href="/r/{{ c.name }}">r/{{ c.name }}</a></h3>
+              <p class="ns-note">{{ c.subscribers }} subscribers</p>
+              {% if c.description %}<p>{{ c.description }}</p>{% endif %}
+            </article>
+          {% else %}
+            <p class="ns-note">No communities found.</p>
+          {% endfor %}
+        </div>
+        {{ next_link(ns_search._next_url) }}
+
+      {% elif ns_search._stype == 'users' %}
+        <div class="ns-feed">
+          {% for u in ns_search.users %}
+            <article class="ns-post ns-user-result">
+              <h3 class="ns-post-title"><a href="/user/{{ u.name }}">u/{{ u.name }}</a></h3>
+              <p class="ns-note">{{ u.karma_post }} post karma &middot; {{ u.karma_comment }} comment karma</p>
+            </article>
+          {% else %}
+            <p class="ns-note">No users found.</p>
+          {% endfor %}
+        </div>
+        {{ next_link(ns_search._next_url) }}
+
+      {% else %}
+        <div class="ns-sort-links ns-time-links">
+          {% for s in ('relevance', 'hot', 'top', 'new') %}
+            <a href="/search?q={{ ns_search.q | urlencode }}&amp;sort={{ s }}"{% if s == ns_search._sort %} class="active"{% endif %}>{{ s }}</a>
+          {% endfor %}
+        </div>
+        <div class="ns-feed">
+          {% for post in ns_search.posts %}{{ post_card(post, ns_hls) }}{% else %}<p class="ns-note">No posts found.</p>{% endfor %}
+        </div>
+        {{ next_link(ns_search._next_url) }}
+      {% endif %}
     {% endif %}
 
   {% elif request.path.startswith('/saved') or request.path.startswith('/subscribed') %}
