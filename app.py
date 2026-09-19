@@ -1,9 +1,9 @@
 import os
 import secrets
 import logging
-from flask import Flask, g
+from flask import Flask, g, jsonify, request
 from flask_compress import Compress
-from helpers import CACHE_TTL_STATIC, DEFAULT_SETTINGS, DISABLE_PERSONALIZED_HOME
+from helpers import CACHE_TTL_STATIC, DEFAULT_SETTINGS, DISABLE_PERSONALIZED_HOME, is_same_site_request
 from routes import register_all
 
 
@@ -28,6 +28,16 @@ def _inject_asset_version():
 @app.before_request
 def _set_csp_nonce():
     g.csp_nonce = secrets.token_urlsafe(16)
+
+
+# Keep /api/* as the site's own backend, not a public JSON API anyone can hit directly
+# (curl, another app, a bot). See helpers.is_same_site_request for what this looks at
+# and why. Rate limiting is handled separately at the edge (Vercel Firewall).
+@app.before_request
+def _gate_api():
+    if request.path.startswith('/api/') and not is_same_site_request():
+        return jsonify({"error": "Forbidden"}), 403
+    return None
 
 
 # Content-Security-Policy: script-src has no 'unsafe-inline' — the handful of

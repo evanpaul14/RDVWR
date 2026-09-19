@@ -71,7 +71,68 @@ def no_oauth(monkeypatch):
 def client():
     app.config["TESTING"] = True
     with app.test_client() as c:
+        # Requests below exercise route behavior, not the same-site gate in
+        # app.py's _gate_api — mark them as same-origin so that gate passes.
+        c.environ_base = {"HTTP_SEC_FETCH_SITE": "same-origin"}
         yield c
+
+
+class TestApiSameSiteGate:
+    """The `client` fixture sets Sec-Fetch-Site: same-origin by default so the other
+    ~200 tests can exercise route behavior without tripping this gate. These tests
+    exercise helpers.is_same_site_request directly (no live route/network involved)
+    plus a couple of end-to-end checks of app.py's _gate_api wiring."""
+
+    def test_no_headers_rejected(self):
+        with app.test_request_context("/api/home"):
+            assert helpers.is_same_site_request() is False
+
+    def test_sec_fetch_site_same_origin_allowed(self):
+        with app.test_request_context("/api/home", headers={"Sec-Fetch-Site": "same-origin"}):
+            assert helpers.is_same_site_request() is True
+
+    def test_sec_fetch_site_same_site_allowed(self):
+        with app.test_request_context("/api/home", headers={"Sec-Fetch-Site": "same-site"}):
+            assert helpers.is_same_site_request() is True
+
+    def test_sec_fetch_site_cross_site_rejected(self):
+        with app.test_request_context("/api/home", headers={"Sec-Fetch-Site": "cross-site"}):
+            assert helpers.is_same_site_request() is False
+
+    def test_origin_match_allowed(self):
+        with app.test_request_context("/api/home", headers={"Origin": "http://localhost"}):
+            assert helpers.is_same_site_request() is True
+
+    def test_origin_mismatch_rejected(self):
+        with app.test_request_context("/api/home", headers={"Origin": "https://evil.example.com"}):
+            assert helpers.is_same_site_request() is False
+
+    def test_referer_match_allowed_when_no_origin(self):
+        with app.test_request_context("/api/home", headers={"Referer": "http://localhost/r/python"}):
+            assert helpers.is_same_site_request() is True
+
+    def test_referer_mismatch_rejected(self):
+        with app.test_request_context("/api/home", headers={"Referer": "https://evil.example.com/"}):
+            assert helpers.is_same_site_request() is False
+
+    def test_sec_fetch_site_takes_priority_over_mismatched_origin(self):
+        # A browser sending both is not the normal case (Sec-Fetch-Site itself would
+        # be cross-site if Origin were an attacker's), but Sec-Fetch-Site is checked
+        # first and is the more trustworthy signal when both are present.
+        with app.test_request_context("/api/home", headers={
+            "Sec-Fetch-Site": "same-origin", "Origin": "https://evil.example.com",
+        }):
+            assert helpers.is_same_site_request() is True
+
+    def test_end_to_end_rejects_bare_curl_style_request(self):
+        with app.test_client() as c:
+            resp = c.get("/api/home")
+        assert resp.status_code == 403
+
+    def test_end_to_end_non_api_path_unaffected(self):
+        with app.test_client() as c:
+            resp = c.get("/")
+        assert resp.status_code == 200
 
 
 # ── SPA catch-all ─────────────────────────────────────────────────────────────

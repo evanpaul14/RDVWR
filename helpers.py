@@ -6,6 +6,7 @@ import time
 import logging
 import threading
 from functools import wraps
+from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor
 from flask import jsonify, request, Response, make_response
 from media_detection import process_post
@@ -229,8 +230,32 @@ class TTLCache:
             self._data.clear()
 
 
-# Rate limiting is left to the reverse proxy in front of this app (nginx/Caddy/etc.)
-# rather than handled in-process — see README "Rate limiting" for an nginx example.
+# --- Same-site gate for /api/* ----------------------------------------------------
+# The frontend serves `<meta name="referrer" content="no-referrer">` (templates/index.html),
+# so browser-issued requests never carry a Referer, and plain <img>/<video src>/top-level-
+# navigation requests (media proxy, downloads) never carry Origin either — only JS fetch()
+# calls do. Sec-Fetch-Site is sent by all modern browsers on every request type regardless
+# of Referrer-Policy, so it's the primary signal; Origin/Referer are the fallback for the
+# rare browser that omits it. A request with none of the three is either a very old browser
+# or a non-browser client (curl, a script) — treated as disallowed either way.
+#
+# Rate limiting is handled at the edge (Vercel Firewall rate-limiting rules on the
+# deployed project), not here — see README "Rate limiting".
+SAME_SITE_VALUES = {'same-origin', 'same-site'}
+
+
+def is_same_site_request():
+    sec_fetch_site = request.headers.get('Sec-Fetch-Site')
+    if sec_fetch_site is not None:
+        return sec_fetch_site in SAME_SITE_VALUES
+    host = request.host
+    origin = request.headers.get('Origin')
+    if origin is not None:
+        return urlsplit(origin).netloc == host
+    referer = request.headers.get('Referer')
+    if referer is not None:
+        return urlsplit(referer).netloc == host
+    return False
 
 
 def cached_json(data, seconds):
