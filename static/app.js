@@ -308,6 +308,7 @@ document.getElementById('post-view').addEventListener('click', e => {
 
 // pvContent: comment sort, load more, retry, user nav
 pvContent.addEventListener('click', e => {
+  if (handleFlairClick(e)) return;
   const threadNavBtn = e.target.closest('[data-thread-nav]');
   if (threadNavBtn) { e.preventDefault(); stepViewFullThread(); return; }
   const retryBtn = e.target.closest('.state-retry-btn[data-retry]');
@@ -605,23 +606,25 @@ document.addEventListener('keydown', e => {
 });
 
 // Flair / community / user card clicks
-feed.addEventListener('click', e => {
+function handleFlairClick(e) {
   const flairEl = e.target.closest('.flair.flair-clickable[data-flair]');
-  if (flairEl) {
-    e.stopPropagation();
-    const sub   = flairEl.dataset.sub;
-    const flair = flairEl.dataset.flair;
-    if (sub && flair) {
-      const query = 'flair:"'+flair+'"';
-      const titleHtml = flairEl.outerHTML
-        .replace(' flair-clickable', '')
-        .replace(/ data-flair="[^"]*"/, '')
-        .replace(/ data-sub="[^"]*"/, '');
-      state.searchFlairNav = { query, html: titleHtml };
-      navigateOrOpen(`/search?q=${encodeURIComponent(query)}&sub=${encodeURIComponent(sub)}&sort=new`, e);
-    }
-    return;
+  if (!flairEl) return false;
+  e.stopPropagation();
+  const sub   = flairEl.dataset.sub;
+  const flair = flairEl.dataset.flair;
+  if (sub && flair) {
+    const query = 'flair:"'+flair+'"';
+    const titleHtml = flairEl.outerHTML
+      .replace(' flair-clickable', '')
+      .replace(/ data-flair="[^"]*"/, '')
+      .replace(/ data-sub="[^"]*"/, '');
+    state.searchFlairNav = { query, html: titleHtml };
+    navigateOrOpen(`/search?q=${encodeURIComponent(query)}&sub=${encodeURIComponent(sub)}&sort=new`, e);
   }
+  return true;
+}
+feed.addEventListener('click', e => {
+  if (handleFlairClick(e)) return;
   const card = e.target.closest('.community-card[data-nav]');
   if (card) { navigateOrOpen(card.dataset.nav, e); return; }
   const commentCard = e.target.closest('.user-comment-card[data-nav]');
