@@ -248,13 +248,20 @@ def is_same_site_request():
     sec_fetch_site = request.headers.get('Sec-Fetch-Site')
     if sec_fetch_site is not None:
         return sec_fetch_site in SAME_SITE_VALUES
-    host = request.host
+    # Hostname-only comparison for the Origin/Referer fallback: a reverse proxy in
+    # front of Flask (e.g. nginx's `proxy_set_header Host $host;`) commonly strips
+    # the port from the Host header it forwards, while a browser's Origin/Referer
+    # always includes it — comparing full netlocs would then 403 every same-site
+    # request on a non-default port. The port isn't part of what this check is
+    # protecting against (a different origin's JS calling the API), so dropping it
+    # from the comparison doesn't weaken it.
+    host = urlsplit(f'//{request.host}').hostname
     origin = request.headers.get('Origin')
     if origin is not None:
-        return urlsplit(origin).netloc == host
+        return urlsplit(origin).hostname == host
     referer = request.headers.get('Referer')
     if referer is not None:
-        return urlsplit(referer).netloc == host
+        return urlsplit(referer).hostname == host
     return False
 
 
