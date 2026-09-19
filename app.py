@@ -63,7 +63,9 @@ def _gate_api():
 @app.after_request
 def _set_csrf_cookie(resp):
     if 'rdvwr_csrf' not in request.cookies:
-        resp.set_cookie('rdvwr_csrf', secrets.token_urlsafe(24), max_age=31536000, samesite='Lax')
+        # Session cookie (no max_age): it only needs to survive one browser session's
+        # worth of fetch() calls, not persist as a long-lived per-browser identifier.
+        resp.set_cookie('rdvwr_csrf', secrets.token_urlsafe(24), samesite='Lax')
     return resp
 
 
