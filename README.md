@@ -153,4 +153,4 @@ setting always overrides these — they're only the starting point (stored in th
 
 # Credit
 
-- [Redlib](https://github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic
+- [Redlib](https://github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic and feature inspiration
