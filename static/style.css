@@ -1930,9 +1930,15 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; white-space:nowrap; }
 .ns-note code { background:var(--bg3); padding:1px 5px; border-radius:3px; }
 .header-inner .ns-note { margin-left:auto; }
-.ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; }
+.ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; flex-shrink:0; }
 .ns-quicknav a { color:var(--tx2); text-decoration:none; }
 .ns-quicknav a:hover { color:var(--ac); }
+/* Search form: like .search-container but never hidden at the mobile breakpoint
+   (the real app hides .search-container there and shows a JS-toggled overlay
+   instead, which doesn't exist here — the plain form has to stay reachable). */
+.ns-search-form { flex:1 1 200px; min-width:160px; position:relative; }
+.ns-search-form .search-wrap { width:100%; }
+.ns-root .header-inner { flex-wrap:wrap; height:auto; min-height:56px; padding-top:10px; padding-bottom:10px; row-gap:8px; }
 /* Feed wrapper (JS uses id="feed" on an element inside #app-shell, which the
    noscript markup must not collide with — same box model, different selector). */
 .feed-list { max-width:720px; margin:0 auto; padding:20px 20px 80px; display:flex; flex-direction:column; gap:14px; }
