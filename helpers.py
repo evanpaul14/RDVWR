@@ -21,6 +21,9 @@ COMMENTS_LIMIT       = 200
 STREAM_CHUNK_SIZE    = 65536
 
 DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
+# Personalized (cookie-backed) home feed is on by default; set to disable it entirely —
+# the frontend hides the Reddit-cookies settings UI and /api/home ignores any cookie sent.
+DISABLE_PERSONALIZED_HOME = os.environ.get('RDVWR_DISABLE_PERSONALIZED_HOME', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 log = logging.getLogger(__name__)

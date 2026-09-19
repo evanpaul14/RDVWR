@@ -3,7 +3,7 @@ import secrets
 import logging
 from flask import Flask, g
 from flask_compress import Compress
-from helpers import CACHE_TTL_STATIC, DEFAULT_SETTINGS
+from helpers import CACHE_TTL_STATIC, DEFAULT_SETTINGS, DISABLE_PERSONALIZED_HOME
 from routes import register_all
 
 
@@ -22,7 +22,7 @@ def _inject_asset_version():
         except OSError:
             return '0'
     return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
-                default_settings=DEFAULT_SETTINGS)
+                default_settings=DEFAULT_SETTINGS, disable_personalized_home=DISABLE_PERSONALIZED_HOME)
 
 
 @app.before_request

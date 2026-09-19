@@ -911,8 +911,9 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-sub-sort', subSortOpts, settings.subSort)}</label>
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
+    ${window.__DISABLE_PERSONALIZED_HOME__ ? '' : `
     <label class="settings-row" id="s-home-feed-row"${settings.redditCookies ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed']], settings.homeFeed || 'personalized')}</label>
-    <label class="settings-row settings-row--stack"><span class="settings-label">Reddit cookies <span class="settings-hint">(for personalised home feed — open reddit.com, F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, then paste below)</span></span><textarea class="settings-input settings-textarea" id="s-reddit-cookies" spellcheck="false" autocomplete="off" placeholder="loid=…; token_v2=…; session_tracker=…">${escHtml(settings.redditCookies || '')}</textarea></label>
+    <label class="settings-row settings-row--stack"><span class="settings-label">Reddit cookies <span class="settings-hint">(for personalised home feed — open reddit.com, F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, then paste below)</span></span><textarea class="settings-input settings-textarea" id="s-reddit-cookies" spellcheck="false" autocomplete="off" placeholder="loid=…; token_v2=…; session_tracker=…">${escHtml(settings.redditCookies || '')}</textarea></label>`}
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Comments</div>
@@ -954,13 +955,13 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-reddit-cookies').addEventListener('change', e => {
+  settingsBody.querySelector('#s-reddit-cookies')?.addEventListener('change', e => {
     settings.redditCookies = e.target.value.trim();
     saveSettings();
     updateFeedsBtn();
     settingsBody.querySelector('#s-home-feed-row').style.display = settings.redditCookies ? '' : 'none';
   });
-  settingsBody.querySelector('#s-home-feed').addEventListener('change', e => {
+  settingsBody.querySelector('#s-home-feed')?.addEventListener('change', e => {
     settings.homeFeed = e.target.value;
     saveSettings();
     updateFeedsBtn();
@@ -1043,11 +1044,15 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 /** Local subscriptions take over Home when there's no personalized feed, or when the
  *  user picked them as the home feed in settings. */
 function subscribedIsHome() {
-  return getSubs().length > 0 && (!settings.redditCookies || settings.homeFeed === 'subscribed');
+  return getSubs().length > 0 && (!personalizedHomeActive() || settings.homeFeed === 'subscribed');
+}
+
+function personalizedHomeActive() {
+  return !window.__DISABLE_PERSONALIZED_HOME__ && !!settings.redditCookies;
 }
 
 function updateFeedsBtn() {
-  const menu = !!settings.redditCookies;
+  const menu = personalizedHomeActive();
   document.getElementById('feeds-menu').classList.toggle('has-menu', menu);
   feedsBtn.textContent = menu ? 'feeds ▾' : 'saved';
   feedsBtn.setAttribute('aria-label', menu ? 'Feeds' : 'Saved posts');
