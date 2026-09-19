@@ -34,12 +34,23 @@ def _set_csp_nonce():
     g.csp_nonce = secrets.token_urlsafe(16)
 
 
+# Endpoints reached by <img>/<video>/window.location.href loads, not our own fetch() calls,
+# so they can't carry the X-Rdvwr-Fetch double-submit header — under Firefox
+# privacy.resistFingerprinting (which also strips Sec-Fetch-Site/Origin/Referer, see
+# is_same_site_request) they'd otherwise 403 unconditionally. Safe to exempt: each one
+# only proxies/serves public Reddit/Imgur/RedGifs media through its own host allowlist,
+# with no session data or state-changing effect, so there's nothing here for a cross-site
+# page to gain by hitting them directly.
+_GATE_EXEMPT_PREFIXES = ('/api/img', '/api/m/', '/api/redgifs/media/', '/api/download')
+
+
 # Keep /api/* as the site's own backend, not a public JSON API anyone can hit directly
 # (curl, another app, a bot). See helpers.is_same_site_request for what this looks at
 # and why. Rate limiting is handled separately at the edge (Vercel Firewall).
 @app.before_request
 def _gate_api():
-    if request.path.startswith('/api/') and not is_same_site_request():
+    if (request.path.startswith('/api/') and not request.path.startswith(_GATE_EXEMPT_PREFIXES)
+            and not is_same_site_request()):
         logging.getLogger(__name__).warning(
             "api gate 403 path=%s sec-fetch-site=%r origin=%r referer=%r host=%r ua=%r",
             request.path, request.headers.get('Sec-Fetch-Site'), request.headers.get('Origin'),
