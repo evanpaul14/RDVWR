@@ -33,6 +33,29 @@ def _parse_shreddit_crosspost(el):
                 orig_sub = orig_sub or pm.group(1)
                 orig_id = pm.group(2)
 
+    # Link-post crossposts render a plain card instead of the
+    # crosspost-credit-bar/crosspost-title elements above (no wrapping <a> on
+    # the title, and the sub/comments links live in a differently-classed
+    # block) — fall back to structure-agnostic lookups within the container.
+    if not orig_id:
+        comments_a = container.find('a', href=re.compile(r'^/r/[^/]+/comments/[A-Za-z0-9]+'))
+        if comments_a:
+            pm = re.match(r'^/r/([^/]+)/comments/([A-Za-z0-9]+)', comments_a['href'])
+            if pm:
+                orig_sub = orig_sub or pm.group(1)
+                orig_id = pm.group(2)
+    if not orig_sub:
+        sub_a = container.find('a', href=re.compile(r'^/r/[^/]+/?$'))
+        if sub_a:
+            m = re.match(r'^/r/([^/]+)/?$', sub_a['href'])
+            if m:
+                orig_sub = m.group(1)
+    if not orig_title:
+        # Both crosspost-title layouts mark the title element with dir="auto".
+        text_div = container.find(attrs={'dir': 'auto'})
+        if text_div:
+            orig_title = text_div.get_text(strip=True)
+
     preview_img = None
     gallery = []
     is_video = False
