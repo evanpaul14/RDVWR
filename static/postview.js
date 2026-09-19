@@ -337,7 +337,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       p.is_spoiler  ? '<span class="badge badge-spoiler">spoiler</span>' : '',
       p.locked      ? '<span class="badge badge-locked">locked</span>' : '',
       p.is_oc       ? '<span class="badge badge-oc">oc</span>' : '',
-      renderFlair(p),
+      renderFlair(p, true),
     ].filter(Boolean).join('');
     const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>` : '';
     const bodyInner = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
