@@ -64,19 +64,31 @@
   {% endif %}
 {% endmacro %}
 
+{% macro flair(post) %}
+  {%- if post.flair -%}
+    <span class="flair"{% if post.flair_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ post.flair }}</span>
+  {%- endif -%}
+{% endmacro %}
+
+{% macro author_flair(c) %}
+  {%- if c.author_flair_text -%}
+    <span class="author-flair"{% if c.author_flair_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ c.author_flair_text }}</span>
+  {%- endif -%}
+{% endmacro %}
+
 {% macro badges(post) %}
-  {%- if post.is_stickied %} <span class="ns-badge ns-badge-sticky">pinned</span>{% endif -%}
-  {%- if post.over_18 %} <span class="ns-badge ns-badge-nsfw">NSFW</span>{% endif -%}
-  {%- if post.is_spoiler %} <span class="ns-badge ns-badge-spoiler">spoiler</span>{% endif -%}
-  {%- if post.locked %} <span class="ns-badge">locked</span>{% endif -%}
-  {%- if post.is_oc %} <span class="ns-badge">OC</span>{% endif -%}
-  {%- if post.flair %} <span class="ns-badge" style="{% if post.flair_bg %}background:{{ post.flair_bg }};{% endif %}{% if post.flair_tc == 'light' %}color:#fff;{% endif %}">{{ post.flair }}</span>{% endif -%}
-  {%- if post.awards %} <span class="ns-badge">{{ post.awards | length }} award{{ 's' if post.awards | length != 1 }}</span>{% endif -%}
+  {%- if post.is_stickied %} <span class="badge badge-sticky">pinned</span>{% endif -%}
+  {%- if post.over_18 %} <span class="nsfw-tag">nsfw</span>{% endif -%}
+  {%- if post.is_spoiler %} <span class="badge badge-spoiler">spoiler</span>{% endif -%}
+  {%- if post.locked %} <span class="badge badge-locked">locked</span>{% endif -%}
+  {%- if post.is_oc %} <span class="badge badge-oc">oc</span>{% endif -%}
+  {%- if post.flair %} {{ flair(post) }}{% endif -%}
+  {%- if post.awards %} <span class="badge">{{ post.awards | length }} award{{ 's' if post.awards | length != 1 }}</span>{% endif -%}
 {% endmacro %}
 
 {% macro post_card(post, ns_hls) %}
   <article class="ns-post">
-    <div class="ns-post-meta">r/{{ post.subreddit }} &middot; u/{{ post.author }} &middot; {{ post.score }} pts &middot; {{ post.num_comments }} comments{% if post.edited_utc %} &middot; edited{% endif %}</div>
+    <div class="ns-post-meta"><a class="post-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a> &middot; <a class="post-author" href="/user/{{ post.author }}">u/{{ post.author }}</a> &middot; {{ post.score }} pts &middot; {{ post.created_utc | timeago }}{% if post.edited_utc %} &middot; edited{% endif %}</div>
     <h3 class="ns-post-title"><a href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a>{{ badges(post) }}</h3>
     {% if post.crosspost_from %}
       <p class="ns-note">crossposted from <a href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">r/{{ post.crosspost_from.subreddit }}</a></p>
@@ -85,30 +97,47 @@
     {% endif %}
     {{ media_block(post, ns_hls) }}
     {{ poll_block(post.poll) }}
-    {% if post.is_self and post.selftext %}<div class="ns-selftext">{{ post.selftext }}</div>{% endif %}
+    {% if post.is_self and post.selftext_html %}
+      <div class="ns-wiki">{{ post.selftext_html | safe }}</div>
+    {% elif post.is_self and post.selftext %}
+      <div class="ns-selftext">{{ post.selftext }}</div>
+    {% endif %}
     <p class="ns-post-link"><a href="{{ post_link(post.subreddit, post.id) }}">Comments ({{ post.num_comments }})</a> &nbsp;|&nbsp; <a href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">Duplicates</a> &nbsp;|&nbsp; <a href="{{ post.permalink }}" target="_blank" rel="noopener">View on reddit.com &rarr;</a></p>
   </article>
 {% endmacro %}
 
 {% macro comment_block(c, base_path, depth=0) %}
   {% if c.kind == 'more' %}
-    <li class="ns-comment ns-more" style="margin-left:{{ depth * 14 }}px">
-      <a href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a>
-    </li>
+    <div class="comment-replies"><p class="ns-more"><a href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a></p></div>
   {% else %}
-    <li class="ns-comment" style="margin-left:{{ depth * 14 }}px">
-      <div class="ns-comment-meta">u/{{ c.author }} &middot; {{ c.score }} pts{% if c.stickied %} &middot; stickied{% endif %}{% if c.edited_utc %} &middot; edited{% endif %}</div>
-      <div class="ns-comment-body">{{ c.body }}</div>
+    {% set deleted = not c.body or c.body in ('[deleted]', '[removed]') %}
+    {% set is_mod = c.distinguished == 'moderator' %}
+    {% set is_admin = c.distinguished == 'admin' %}
+    {% set start_collapsed = c.author == 'AutoModerator' %}
+    <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not start_collapsed %} open{% endif %}>
+      <summary class="comment-header">
+        <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
+        {% if is_mod %}<span class="comment-mod">MOD</span>{% endif %}
+        {% if is_admin %}<span class="comment-admin">ADMIN</span>{% endif %}
+        {% if c.is_submitter %}<span class="comment-op">OP</span>{% endif %}
+        {% if c.stickied %}<span class="badge badge-sticky">stickied</span>{% endif %}
+        {{ author_flair(c) }}
+        <span class="comment-score">&#9650; {{ c.score }}</span>
+        <span class="comment-time">{{ c.created_utc | timeago }}{% if c.edited_utc %} &middot; edited{% endif %}</span>
+      </summary>
+      <div class="comment-body md{% if deleted %} comment-body-plain{% elif not c.body_html %} comment-body-plain{% endif %}">{% if deleted %}<em>[{{ c.body or 'deleted' }}]</em>{% elif c.body_html %}{{ c.body_html | safe }}{% else %}{{ c.body }}{% endif %}</div>
       {% if c.replies and depth < 6 %}
-        <ul class="ns-comment-list">
+        <div class="comment-replies">
           {% for r in c.replies %}{{ comment_block(r, base_path, depth + 1) }}{% endfor %}
-        </ul>
+        </div>
       {% endif %}
-    </li>
+    </details>
   {% endif %}
 {% endmacro %}
 
 {% macro next_link(url) %}{% if url %}<p class="ns-note ns-next"><a href="{{ url }}">Next page &rarr;</a></p>{% endif %}{% endmacro %}
+
+{% set ns_current_sub = initial_about._sub if initial_about else (initial_data._sub if initial_data else (ns_wiki._sub if ns_wiki else (ns_duplicates._sub if ns_duplicates else (ns_search._sub if ns_search and ns_search._sub else None)))) %}
 
 <div class="ns-page">
   <div class="ns-topbar">
@@ -117,12 +146,12 @@
       <a href="/r/popular">popular</a>
       <a href="/r/all">all</a>
     </nav>
-    <span class="ns-note">JavaScript is disabled &mdash; showing a read-only, limited view.</span>
+    <span class="ns-note">JavaScript is disabled.</span>
   </div>
 
   <form class="ns-searchbar" action="/search" method="get">
     <input type="text" name="q" placeholder="search reddit" value="{{ ns_search.q if ns_search else '' }}" aria-label="Search">
-    <input type="text" name="sub" placeholder="limit to subreddit" value="{{ ns_search._sub if ns_search else '' }}" class="ns-search-sub" aria-label="Restrict to subreddit">
+    <input type="text" name="flair" placeholder="flair" value="{{ ns_search._flair if ns_search else '' }}" class="ns-search-flair" aria-label="Filter by flair">
     <select name="stype" aria-label="Result type">
       {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
         <option value="{{ opt }}"{% if ns_search and ns_search._stype == opt %} selected{% endif %}>{{ label }}</option>
@@ -133,6 +162,14 @@
         <option value="{{ opt }}"{% if ns_search and ns_search._sort == opt %} selected{% endif %}>{{ opt }}</option>
       {% endfor %}
     </select>
+    <select name="t" aria-label="Time range, applies to Top sort">
+      {% for opt in ('hour', 'day', 'week', 'month', 'year', 'all') %}
+        <option value="{{ opt }}"{% if ns_search and ns_search._t == opt %} selected{% endif %}>top of {{ opt }}</option>
+      {% endfor %}
+    </select>
+    {% if ns_current_sub %}
+      <label class="ns-scope-check"><input type="checkbox" name="sub" value="{{ ns_current_sub }}"{% if ns_search and ns_search._sub == ns_current_sub %} checked{% endif %}> r/{{ ns_current_sub }} only</label>
+    {% endif %}
     <button type="submit">Search</button>
   </form>
 
@@ -187,9 +224,9 @@
         {% endfor %}
       </div>
     {% endif %}
-    <ul class="ns-comment-list">
+    <div class="ns-comment-list">
       {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink) }}{% endfor %}
-    </ul>
+    </div>
 
   {% elif initial_profile %}
     <div class="ns-sub-header">
@@ -202,9 +239,9 @@
           {{ post_card(item.data, ns_hls) }}
         {% else %}
           <article class="ns-post">
-            <div class="ns-post-meta">comment on r/{{ item.data.subreddit }} &middot; {{ item.data.score }} pts</div>
+            <div class="ns-post-meta">comment on <a class="post-sub-link" href="/r/{{ item.data.subreddit }}">r/{{ item.data.subreddit }}</a> &middot; {{ item.data.score }} pts &middot; {{ item.data.created_utc | timeago }}</div>
             <h3 class="ns-post-title"><a href="{{ item.data.link_permalink }}" target="_blank" rel="noopener">{{ item.data.link_title }}</a></h3>
-            <div class="ns-selftext">{{ item.data.body }}</div>
+            {% if item.data.body_html %}<div class="ns-wiki">{{ item.data.body_html | safe }}</div>{% else %}<div class="ns-selftext">{{ item.data.body }}</div>{% endif %}
           </article>
         {% endif %}
       {% endfor %}

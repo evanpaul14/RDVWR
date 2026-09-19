@@ -1,10 +1,8 @@
 """SPA page routes (with server-side data injection) and the raw .json Reddit passthrough."""
 import re
-import html as html_lib
-from html.parser import HTMLParser
 from urllib.parse import urlencode
 from flask import Blueprint, jsonify, request, render_template, Response, redirect, make_response
-from media_detection import extract_posts, clean_url, process_post
+from media_detection import extract_posts, clean_url, process_post, clean_reddit_html
 from reddit_client import reddit_get
 from helpers import FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, parallel, log
 from routes.users import _fetch_user_about, _fetch_user_overview
@@ -187,10 +185,7 @@ def _try_inject_subreddit(sub, sort, time, after=''):
             d = r.json()["data"]
             icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
             active = d.get("active_user_count") or d.get("accounts_active") or 0
-            sidebar_html = d.get("description_html") or ""
-            if sidebar_html:
-                sidebar_html = re.sub(r'<!--\s*SC_(?:OFF|ON)\s*-->', '', html_lib.unescape(sidebar_html)).strip()
-                sidebar_html = _sanitize_wiki_html(sidebar_html)
+            sidebar_html = clean_reddit_html(d.get("description_html"))
             return {"title": d.get("title", sub), "description": d.get("public_description", ""),
                     "sidebar": sidebar_html, "subscribers": d.get("subscribers", 0),
                     "active": active, "icon": icon or "", "_sub": sub.lower()}
@@ -266,11 +261,12 @@ def _try_inject_search():
     """Fetch post/community/user search results for SSR injection (noscript search
     form / results page). `stype` selects which of Reddit's search kinds to query."""
     q = request.args.get('q', '').strip()
+    flair = request.args.get('flair', '').strip()
     stype = request.args.get('stype', 'posts')
     if stype not in SEARCH_TYPES:
         stype = 'posts'
-    if not q:
-        return {"q": "", "_stype": stype}
+    if not q and not flair:
+        return {"q": "", "_flair": "", "_stype": stype}
     after = request.args.get('after', '')
 
     if stype == 'communities':
@@ -283,27 +279,28 @@ def _try_inject_search():
         sort = 'relevance'
     t     = request.args.get('t', 'all')
     sub   = request.args.get('sub', '').strip()
+    query_text = f'{q} flair:"{flair}"'.strip() if flair else q
     try:
         url = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
-        params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1}
+        params = {"q": query_text, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1}
         if sub:
             params["restrict_sr"] = 1
         if after:
             params["after"] = after
         r = reddit_get(url, params=params, timeout=6)
         if r.status_code != 200:
-            return {"q": q, "_stype": stype, "error": f"Reddit returned {r.status_code}"}
+            return {"q": q, "_flair": flair, "_stype": stype, "error": f"Reddit returned {r.status_code}"}
         listing = r.json()["data"]
         next_after = listing.get("after")
-        result = {"q": q, "_stype": stype, "posts": extract_posts(listing), "after": next_after,
+        result = {"q": q, "_flair": flair, "_stype": stype, "posts": extract_posts(listing), "after": next_after,
                   "_sort": sort, "_t": t, "_sub": sub}
         if next_after:
-            result["_next_url"] = _ns_url("/search", q=q, stype=stype, sort=sort if sort != 'relevance' else '',
+            result["_next_url"] = _ns_url("/search", q=q, flair=flair, stype=stype, sort=sort if sort != 'relevance' else '',
                                            t=t if t != 'all' else '', sub=sub, after=next_after)
         return result
     except Exception as e:
         log.warning("inject search q=%r: %s", q, e)
-        return {"q": q, "_stype": stype, "error": "Search failed"}
+        return {"q": q, "_flair": flair, "_stype": stype, "error": "Search failed"}
 
 
 def _try_inject_search_communities(q, after=''):
@@ -386,56 +383,6 @@ def _try_inject_duplicates(sub, post_id):
 
 
 _WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
-_WIKI_ALLOWED_TAGS = {
-    'p', 'br', 'a', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'hr', 'del', 'sup', 'sub',
-}
-
-
-class _WikiHtmlSanitizer(HTMLParser):
-    """Minimal allowlist HTML sanitizer for Reddit's wiki content_html: strips every tag
-    and attribute except a small safe set (no script/style/event-handler/class/id attrs
-    can survive), so the noscript wiki view can render it without pulling in a dependency
-    like DOMPurify, which needs JS to run anyway."""
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.out = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag not in _WIKI_ALLOWED_TAGS:
-            return
-        if tag == 'a':
-            href = dict(attrs).get('href') or ''
-            if href.startswith('http://') or href.startswith('https://') or href.startswith('/'):
-                self.out.append(f'<a href="{html_lib.escape(href, quote=True)}" target="_blank" rel="noopener noreferrer">')
-            else:
-                self.out.append('<a>')
-        else:
-            self.out.append(f'<{tag}>')
-
-    def handle_endtag(self, tag):
-        if tag in _WIKI_ALLOWED_TAGS:
-            self.out.append(f'</{tag}>')
-
-    def handle_startendtag(self, tag, attrs):
-        if tag in ('br', 'hr'):
-            self.out.append(f'<{tag}>')
-
-    def handle_data(self, data):
-        self.out.append(html_lib.escape(data))
-
-    def get_html(self):
-        return ''.join(self.out)
-
-
-def _sanitize_wiki_html(raw_html):
-    parser = _WikiHtmlSanitizer()
-    try:
-        parser.feed(raw_html)
-        parser.close()
-    except Exception:
-        return ''
-    return parser.get_html()
 
 
 def _try_inject_wiki(sub, page):
@@ -451,9 +398,7 @@ def _try_inject_wiki(sub, page):
         if r.status_code != 200:
             return {"error": f"Reddit returned {r.status_code}"}
         d = r.json()["data"]
-        raw_html = html_lib.unescape(d.get("content_html", ""))
-        raw_html = re.sub(r'<!--\s*SC_(?:OFF|ON)\s*-->', '', raw_html).strip()
-        return {"html": _sanitize_wiki_html(raw_html), "_sub": sub.lower(), "_page": page}
+        return {"html": clean_reddit_html(d.get("content_html")), "_sub": sub.lower(), "_page": page}
     except Exception as e:
         log.warning("inject wiki sub=%s page=%s: %s", sub, page, e)
         return {"error": "Failed to load wiki page"}

@@ -1,5 +1,5 @@
 """Arctic Shift archive fetches — fallback for suspended/deleted/private user profiles."""
-from media_detection import process_post, filter_nsfw
+from media_detection import process_post, filter_nsfw, clean_reddit_html
 from reddit_client import SESSION
 from helpers import FEED_LIMIT, hydrate_linked_posts, log
 
@@ -19,6 +19,7 @@ def _normalize_comment(d):
         "id":             d.get("id", ""),
         "author":         d.get("author", "[deleted]"),
         "body":           d.get("body", ""),
+        "body_html":      clean_reddit_html(d.get("body_html")),
         "score":          d.get("score", 0),
         "created_utc":    d.get("created_utc", 0),
         "subreddit":      d.get("subreddit", ""),
