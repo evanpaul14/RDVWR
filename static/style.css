@@ -1929,7 +1929,6 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
    a feed wrapper outside #app-shell) lives here. */
 .ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; white-space:nowrap; }
 .ns-note code { background:var(--bg3); padding:1px 5px; border-radius:3px; }
-.header-inner .ns-note { margin-left:auto; }
 .ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; flex-shrink:0; }
 .ns-quicknav a { color:var(--tx2); text-decoration:none; }
 .ns-quicknav a:hover { color:var(--ac); }
