@@ -1,6 +1,6 @@
 """Integration tests for the Flask routes (app.py + routes/).
 
-All external HTTP calls (SESSION.get / requests.head) are mocked so no network
+All external HTTP calls (SESSION.get / SESSION.head) are mocked so no network
 traffic is made during the test run.
 """
 
@@ -778,7 +778,7 @@ class TestMediaProxy:
 # ── /api/resolve ──────────────────────────────────────────────────────────────
 
 class TestResolve:
-    @patch("requests.head")
+    @patch("reddit_client.SESSION.head")
     def test_valid_reddit_url(self, mock_head, client):
         mock_resp = MagicMock()
         mock_resp.url = "https://www.reddit.com/r/python/comments/abc123/title/"
@@ -787,7 +787,7 @@ class TestResolve:
         assert resp.status_code == 200
         assert "url" in resp.get_json()
 
-    @patch("requests.head")
+    @patch("reddit_client.SESSION.head")
     def test_stops_at_off_reddit_redirect(self, mock_head, client):
         mock_head.side_effect = [
             MockResponse(status_code=302, headers={"Location": "/r/python/comments/abc/"}),

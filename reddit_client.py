@@ -12,8 +12,26 @@ log = logging.getLogger(__name__)
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"}
 
+
+def _build_proxies():
+    """Forward proxy for all outbound Reddit/media requests, e.g. ALL_PROXY=socks5h://127.0.0.1:9050.
+    Supports http(s):// and socks4(a)/socks5(h):// schemes, same as curl/requests."""
+    all_proxy = os.environ.get('ALL_PROXY') or os.environ.get('all_proxy', '')
+    http_proxy = (os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy') or all_proxy).strip()
+    https_proxy = (os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy') or all_proxy).strip()
+    proxies = {}
+    if http_proxy:
+        proxies['http'] = http_proxy
+    if https_proxy:
+        proxies['https'] = https_proxy
+    return proxies
+
+
+PROXIES = _build_proxies()
+
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+SESSION.proxies.update(PROXIES)
 # requests keeps only 10 idle connections per host by default; with 16 gunicorn threads
 # and a feed's worth of proxied media hitting the same CDN host, the rest would be
 # discarded and every request would pay a fresh TLS handshake.
@@ -285,7 +303,7 @@ class _OAuthDevice:
         # Reused across requests (thread-local curl handle under the hood) so
         # repeated calls for this device get TCP/TLS connection keep-alive
         # instead of a fresh handshake every time.
-        self.session     = cffi_requests.Session()
+        self.session     = cffi_requests.Session(proxies=PROXIES)
 
     def needs_refresh(self):
         now = time.time()
@@ -435,6 +453,7 @@ def _get_quarantine_session() -> "requests.Session":
             return _quarantine_session
         s = requests.Session()
         s.headers.update(HEADERS)
+        s.proxies.update(PROXIES)
         try:
             s.get(
                 "https://old.reddit.com/quarantine?dest=https%3A%2F%2Fold.reddit.com%2Fr%2FTheRedPill",

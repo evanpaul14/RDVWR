@@ -118,6 +118,8 @@ python3 -m pytest tests/
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
+| `ALL_PROXY` | _(unset)_ | Forward proxy for all outbound Reddit/media requests, e.g. `socks5h://127.0.0.1:9050` or `http://user:pass@host:port`. Sets both `HTTP_PROXY` and `HTTPS_PROXY` at once (same convention as [Redlib](https://github.com/redlib-org/redlib)). |
+| `HTTP_PROXY` / `HTTPS_PROXY` | _(unset)_ | Same as `ALL_PROXY` but scoped to one scheme. `http://`, `https://`, `socks4://`, `socks4a://`, `socks5://`, and `socks5h://` proxy URLs are all supported. |
 
 ### Default settings
 

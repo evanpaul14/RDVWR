@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request, make_response
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 from media_detection import process_post, extract_posts
-from reddit_client import reddit_get
+from reddit_client import reddit_get, PROXIES
 from shreddit import _parse_shreddit_post
 from helpers import CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, add_time_param, cached_json, error_response, hydrate_linked_posts, log
 
@@ -51,6 +51,7 @@ def get_home():
                     "x-original-referer": "https://www.reddit.com/?feed=home",
                 },
                 impersonate="firefox133",
+                proxies=PROXIES,
                 timeout=15,
                 # A redirect would carry the manually-set Cookie header to wherever
                 # Location points, even cross-host — the endpoint is fixed and not
