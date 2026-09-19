@@ -68,9 +68,6 @@ Measured with Playwright (Firefox), fresh browser context per run, median of 3 r
 | Feed (r/pics) | Data transferred | 188 KB | 1721 KB |
 | Feed (r/pics) | Requests | 10 | 57 |
 
-> [!NOTE]
-> rdvwr was served from `localhost:8002`; reddit.com over the open internet, so this isn't apples-to-apples on network latency — but it reflects the real difference a user feels, driven mostly by rdvwr shipping far less JS/CSS/image weight per page.
-
 ---
 
 # Deployment
