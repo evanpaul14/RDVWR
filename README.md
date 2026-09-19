@@ -150,27 +150,6 @@ setting always overrides these — they're only the starting point (stored in th
 > [!WARNING]
 > All media bandwidth then flows through the server.
 
-## Rate limiting
-
-The app itself does no client-facing rate limiting — put a reverse proxy in front of it for that (same approach as [Redlib](https://github.com/redlib-org/redlib)). Example nginx config, tighter on the ffmpeg-based video download:
-
-```nginx
-limit_req_zone $binary_remote_addr zone=rdvwr_general:10m rate=60r/m;
-limit_req_zone $binary_remote_addr zone=rdvwr_download:10m rate=6r/m;
-
-server {
-    location /api/download/ {
-        limit_req zone=rdvwr_download burst=3 nodelay;
-        proxy_pass http://127.0.0.1:8002;
-    }
-    location / {
-        limit_req zone=rdvwr_general burst=20 nodelay;
-        proxy_pass http://127.0.0.1:8002;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
 ---
 
 # Credit
