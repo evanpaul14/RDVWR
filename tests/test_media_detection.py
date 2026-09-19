@@ -197,9 +197,9 @@ class TestProcessPost:
                                    "s": {"u": "https://preview.redd.it/1.jpg?width=4000", "x": 4000, "y": 3000}}},
         )
         g = process_post(p)["gallery"][0]
-        assert g["url"].endswith("width=4000")
-        assert "width=640" in g["thumb"] and "amp;" not in g["thumb"]
-        assert "width=216" in g["mini"]
+        assert g["url"].startswith("/api/img?url=") and g["url"].endswith("width%3D4000")
+        assert "width%3D640" in g["thumb"] and "amp%3B" not in g["thumb"]
+        assert "width%3D216" in g["mini"]
 
     def test_gallery_animated_item_keeps_original(self):
         p = _post(

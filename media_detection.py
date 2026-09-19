@@ -48,6 +48,20 @@ def proxy_if_reddit_preview(url):
     return url
 
 
+def proxy_hls(url):
+    """Always route v.redd.it HLS playlists through /api/m/, regardless of PROXY_MEDIA:
+    hls.js loads segments/playlists via XHR, which the CSP's connect-src 'self' blocks
+    for a direct cross-origin v.redd.it URL (unlike a plain <video src>, which only
+    needs media-src). PROXY_MEDIA's own rewrite pass only fires for other hosts here."""
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if parsed.hostname == 'v.redd.it':
+        qs = f"?{parsed.query}" if parsed.query else ""
+        return f"/api/m/{parsed.hostname}{parsed.path}{qs}"
+    return url
+
+
 def build_reddit_video_urls(base, cmaf=True):
     """Given a v.redd.it base URL (e.g. 'https://v.redd.it/abc123'), build the
     HLS playlist / fallback video / audio-track URLs Reddit serves under it.
@@ -135,9 +149,9 @@ def process_post(p):
                     card = next((r for r in res if r.get("x", 0) >= 640), None) or (res[-1] if res else None)
                     mini = next((r for r in res if r.get("x", 0) >= 216), None)
                     gallery.append({
-                        "url":     url,
-                        "thumb":   clean_url(card["u"]) if card and card.get("u") else url,
-                        "mini":    clean_url(mini["u"]) if mini and mini.get("u") else url,
+                        "url":     proxy_if_reddit_preview(url),
+                        "thumb":   proxy_if_reddit_preview(clean_url(card["u"]) if card and card.get("u") else url),
+                        "mini":    proxy_if_reddit_preview(clean_url(mini["u"]) if mini and mini.get("u") else url),
                         "width":   s.get("x", 0),
                         "height":  s.get("y", 0),
                         "caption": item.get("caption", ""),
@@ -158,14 +172,14 @@ def process_post(p):
     if not redgifs_id and is_video and p.get("media") and (p["media"] or {}).get("reddit_video"):
         rv        = p["media"]["reddit_video"]
         video_url = clean_url(rv.get("fallback_url"))
-        hls_url   = clean_url(rv.get("hls_url"))
+        hls_url   = proxy_hls(clean_url(rv.get("hls_url")))
 
     # reddit_video_preview — skip for redgifs (same reason)
     if not redgifs_id and not is_video:
         rvp = (p.get("preview") or {}).get("reddit_video_preview")
         if rvp and rvp.get("fallback_url"):
             video_url = clean_url(rvp["fallback_url"])
-            hls_url   = clean_url(rvp.get("hls_url"))
+            hls_url   = proxy_hls(clean_url(rvp.get("hls_url")))
             is_video  = True
 
     # Reddit also mirrors redgifs videos (video-only, no audio) — keep it as a fallback
@@ -176,7 +190,7 @@ def process_post(p):
         rvp = (p.get("preview") or {}).get("reddit_video_preview")
         if rvp and rvp.get("fallback_url"):
             redgifs_fallback_url = clean_url(rvp["fallback_url"])
-            redgifs_fallback_hls = clean_url(rvp.get("hls_url"))
+            redgifs_fallback_hls = proxy_hls(clean_url(rvp.get("hls_url")))
 
     # Audio track for v.redd.it videos (fallback_url is video-only; audio lives in a
     # sibling file whose name depends on the video's encoding — see build_reddit_video_urls).
