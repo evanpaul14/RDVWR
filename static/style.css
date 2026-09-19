@@ -1920,3 +1920,32 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 
 /* ── Settings panel swipe-to-close: disable transition while dragging ────── */
 .settings-panel.settings-dragging { transition:none !important; }
+
+/* ── No-JS fallback (server-rendered, shown only inside <noscript>) ── */
+.ns-page { max-width:700px; margin:0 auto; padding:16px; }
+.ns-topbar { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--b); }
+.ns-brand { font-weight:700; letter-spacing:.02em; color:var(--tx); text-decoration:none; }
+.ns-note { color:var(--tx3); font-size:12.5px; }
+.ns-note code { font-family:var(--mono); background:var(--bg3); padding:1px 5px; border-radius:3px; }
+.ns-sub-header h1 { font-size:18px; margin:0 0 4px; }
+.ns-sub-header p { margin:2px 0; color:var(--tx2); font-size:13px; }
+.ns-sort-links { display:flex; gap:14px; margin:14px 0; font-size:13px; }
+.ns-sort-links a { color:var(--tx2); text-decoration:none; }
+.ns-sort-links a.active { color:var(--ac); font-weight:600; }
+.ns-feed { display:flex; flex-direction:column; gap:14px; }
+.ns-post { background:var(--bg2); border:1px solid var(--b2); border-radius:8px; padding:14px; }
+.ns-post-meta { color:var(--tx3); font-size:12px; margin-bottom:4px; }
+.ns-post-title { font-size:15px; margin:0 0 8px; line-height:1.35; }
+.ns-post-title a { color:var(--tx); text-decoration:none; }
+.ns-post-link { margin:8px 0 0; font-size:12.5px; }
+.ns-media { margin:8px 0; }
+.ns-media img { max-width:100%; height:auto; border-radius:4px; display:block; }
+.ns-media iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:4px; }
+.ns-video { width:100%; max-height:520px; border-radius:4px; background:#000; }
+.ns-selftext { white-space:pre-wrap; font-size:13.5px; color:var(--tx2); line-height:1.5; margin-top:6px; }
+.ns-comments-heading { font-size:15px; margin:20px 0 10px; }
+.ns-comment-list { list-style:none; margin:0; padding:0; }
+.ns-comment { border-left:2px solid var(--b2); padding:6px 0 6px 10px; margin-top:6px; }
+.ns-comment-meta { color:var(--tx3); font-size:11.5px; }
+.ns-comment-body { white-space:pre-wrap; font-size:13px; color:var(--tx2); line-height:1.45; }
+.ns-more a { color:var(--ac); font-size:12.5px; text-decoration:none; }

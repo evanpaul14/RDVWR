@@ -1,6 +1,6 @@
 """SPA page routes (with server-side data injection) and the raw .json Reddit passthrough."""
 import re
-from flask import Blueprint, jsonify, request, render_template, Response
+from flask import Blueprint, jsonify, request, render_template, Response, redirect, make_response
 from media_detection import extract_posts, clean_url
 from reddit_client import reddit_get
 from helpers import FEED_LIMIT, DISABLE_DOWNLOADS, add_time_param, parallel, log
@@ -54,8 +54,31 @@ def spa(**kwargs):
     username = kwargs.get('username')
     if username and 'multiname' not in kwargs:
         initial_profile = _try_inject_profile(username)
-    resp = render_template("index.html", initial_profile=initial_profile, disable_downloads=DISABLE_DOWNLOADS)
+    resp = render_template("index.html", initial_profile=initial_profile, disable_downloads=DISABLE_DOWNLOADS,
+                           ns_hls=_ns_hls_enabled())
     return resp, 200, {'Cache-Control': 'no-store'}
+
+
+def _ns_hls_enabled():
+    """Whether the no-JS fallback should embed HLS (.m3u8) video sources instead of the
+    plain mp4 fallback. Off by default since only Safari plays HLS natively without JS;
+    toggled per-visitor via the /ns-hls link shown under videos in the noscript view."""
+    return request.cookies.get('ns_hls') == '1'
+
+
+@bp.route("/ns-hls")
+def toggle_ns_hls():
+    """Plain-link (no-JS-compatible) toggle for the noscript HLS-video preference cookie."""
+    enable = request.args.get('enable') == '1'
+    next_path = request.args.get('next') or '/'
+    if not next_path.startswith('/') or next_path.startswith('//'):
+        next_path = '/'
+    resp = make_response(redirect(next_path))
+    if enable:
+        resp.set_cookie('ns_hls', '1', max_age=31536000, samesite='Lax')
+    else:
+        resp.delete_cookie('ns_hls')
+    return resp
 
 
 def _try_inject_profile(username):
@@ -147,7 +170,8 @@ def r_json_or_spa(reddit_path):
                     initial_post = data
             except Exception as e:
                 log.warning("inject post sub=%s post=%s: %s", sub, post_id, e)
-    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post, disable_downloads=DISABLE_DOWNLOADS)
+    resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post,
+                           disable_downloads=DISABLE_DOWNLOADS, ns_hls=_ns_hls_enabled())
     return resp, 200, {'Cache-Control': 'no-store'}
 
 

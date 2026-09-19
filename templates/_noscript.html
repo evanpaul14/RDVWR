@@ -1,0 +1,127 @@
+{# Server-rendered fallback shown only when JavaScript is disabled (wrapped in <noscript> by index.html).
+   Reuses the SSR data (initial_data/initial_about/initial_post/initial_profile) that pages.py already
+   fetches for hydration — no extra Reddit requests here. #}
+
+{% macro post_link(sub, id) -%}
+/r/{{ sub }}/comments/{{ id }}
+{%- endmacro %}
+
+{% macro video_block(post, ns_hls) %}
+  {% if ns_hls and post.hls_url %}
+    <video class="ns-video" controls preload="none" poster="{{ post.preview_img or '' }}">
+      <source src="{{ post.hls_url }}" type="application/vnd.apple.mpegurl">
+    </video>
+    <p class="ns-note">HLS playback (Safari only) &mdash; <a href="{{ ns_hls_toggle_url(0) }}">disable</a></p>
+  {% elif post.video_url %}
+    <video class="ns-video" controls preload="none" poster="{{ post.preview_img or '' }}">
+      <source src="{{ post.video_url }}" type="video/mp4">
+    </video>
+    <p class="ns-note">No JavaScript: video plays without audio (audio is a separate track normally synced by the player).
+      Safari can play the original stream with audio &mdash; <a href="{{ ns_hls_toggle_url(1) }}">enable HLS playback</a>.</p>
+  {% endif %}
+{% endmacro %}
+
+{% macro media_block(post, ns_hls) %}
+  {% if post.gallery %}
+    <div class="ns-media"><a href="{{ post.gallery[0].url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ post.gallery[0].thumb or post.gallery[0].url }}" alt=""></a>
+    {% if post.gallery | length > 1 %}<p class="ns-note">Gallery &mdash; {{ post.gallery | length }} images, <a href="{{ post.permalink }}" target="_blank" rel="noopener">view all on Reddit</a></p>{% endif %}</div>
+  {% elif post.is_video %}
+    <div class="ns-media">{{ video_block(post, ns_hls) }}</div>
+  {% elif post.gif_url and post.gif_is_video %}
+    <div class="ns-media"><video class="ns-video" controls preload="none"><source src="{{ post.gif_url }}" type="video/mp4"></video></div>
+  {% elif post.gif_url %}
+    <div class="ns-media"><img loading="lazy" src="{{ post.gif_url }}" alt=""></div>
+  {% elif post.redgifs_id %}
+    <div class="ns-media"><iframe src="https://www.redgifs.com/ifr/{{ post.redgifs_id }}" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+  {% elif post.youtube_id %}
+    <div class="ns-media"><iframe src="https://www.youtube.com/embed/{{ post.youtube_id }}" loading="lazy" allowfullscreen></iframe></div>
+  {% elif post.embed_url %}
+    <div class="ns-media"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
+  {% elif post.preview_img %}
+    <div class="ns-media"><a href="{{ post.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ post.preview_img }}" alt=""></a></div>
+  {% endif %}
+{% endmacro %}
+
+{% macro post_card(post, ns_hls) %}
+  <article class="ns-post">
+    <div class="ns-post-meta">r/{{ post.subreddit }} &middot; u/{{ post.author }} &middot; {{ post.score }} pts &middot; {{ post.num_comments }} comments</div>
+    <h3 class="ns-post-title"><a href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a></h3>
+    {{ media_block(post, ns_hls) }}
+    {% if post.is_self and post.selftext %}<div class="ns-selftext">{{ post.selftext }}</div>{% endif %}
+    <p class="ns-post-link"><a href="{{ post_link(post.subreddit, post.id) }}">Comments ({{ post.num_comments }})</a> &nbsp;|&nbsp; <a href="{{ post.permalink }}" target="_blank" rel="noopener">View on reddit.com &rarr;</a></p>
+  </article>
+{% endmacro %}
+
+{% macro comment_block(c, depth=0) %}
+  {% if c.kind == 'more' %}
+    <li class="ns-comment ns-more" style="margin-left:{{ depth * 14 }}px">
+      <a href="{{ request.path }}">load {{ c.count }} more &hellip;</a>
+    </li>
+  {% else %}
+    <li class="ns-comment" style="margin-left:{{ depth * 14 }}px">
+      <div class="ns-comment-meta">u/{{ c.author }} &middot; {{ c.score }} pts</div>
+      <div class="ns-comment-body">{{ c.body }}</div>
+      {% if c.replies and depth < 6 %}
+        <ul class="ns-comment-list">
+          {% for r in c.replies %}{{ comment_block(r, depth + 1) }}{% endfor %}
+        </ul>
+      {% endif %}
+    </li>
+  {% endif %}
+{% endmacro %}
+
+<div class="ns-page">
+  <div class="ns-topbar">
+    <a class="ns-brand" href="/">RDVWR</a>
+    <span class="ns-note">JavaScript is disabled &mdash; showing a read-only, limited view. Browse by editing the URL, e.g. <code>/r/pics</code> or <code>/user/spez</code>.</span>
+  </div>
+
+  {% if initial_about %}
+    <div class="ns-sub-header">
+      <h1>r/{{ initial_about._sub }}</h1>
+      <p>{{ initial_about.description }}</p>
+      <p class="ns-note">{{ initial_about.subscribers }} subscribers</p>
+    </div>
+  {% endif %}
+
+  {% if initial_data %}
+    <div class="ns-sort-links">
+      {% for s in ('hot', 'new', 'top', 'rising', 'controversial') %}
+        <a href="/r/{{ initial_data._sub }}/{{ s }}"{% if s == initial_data._sort %} class="active"{% endif %}>{{ s }}</a>
+      {% endfor %}
+    </div>
+    <div class="ns-feed">
+      {% for post in initial_data.posts %}{{ post_card(post, ns_hls) }}{% endfor %}
+    </div>
+    {% if initial_data.after %}<p class="ns-note">Showing the first {{ initial_data.posts | length }} posts. Enable JavaScript to load more.</p>{% endif %}
+
+  {% elif initial_post %}
+    {{ post_card(initial_post.post, ns_hls) }}
+    <h2 class="ns-comments-heading">Comments</h2>
+    <ul class="ns-comment-list">
+      {% for c in initial_post.comments %}{{ comment_block(c) }}{% endfor %}
+    </ul>
+
+  {% elif initial_profile %}
+    <div class="ns-sub-header">
+      <h1>u/{{ initial_profile._username }}</h1>
+      {% if initial_profile._about %}<p class="ns-note">{{ initial_profile._about.karma_total }} karma</p>{% endif %}
+    </div>
+    <div class="ns-feed">
+      {% for item in initial_profile['items'] %}
+        {% if item.type == 'post' %}
+          {{ post_card(item.data, ns_hls) }}
+        {% else %}
+          <article class="ns-post">
+            <div class="ns-post-meta">comment on r/{{ item.data.subreddit }} &middot; {{ item.data.score }} pts</div>
+            <h3 class="ns-post-title"><a href="{{ item.data.link_permalink }}" target="_blank" rel="noopener">{{ item.data.link_title }}</a></h3>
+            <div class="ns-selftext">{{ item.data.body }}</div>
+          </article>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+  {% else %}
+    <p class="ns-note">Enter a subreddit or user in the URL to browse, e.g. <code>/r/popular</code> or <code>/user/spez</code>.</p>
+  {% endif %}
+</div>

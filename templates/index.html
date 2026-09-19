@@ -20,7 +20,8 @@
 <link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}">
 </head>
 <body>
-
+<noscript><style>#app-shell{display:none}</style></noscript>
+<div id="app-shell">
 <!-- ── Header ── -->
 <header class="header">
   <div class="header-inner">
@@ -192,6 +193,8 @@
   </div>
   <div class="settings-body" id="settings-body"></div>
 </div>
+</div><!-- /#app-shell -->
+<noscript>{% include "_noscript.html" %}</noscript>
 {% if initial_data %}<script nonce="{{ csp_nonce }}">window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
 {% if initial_about %}<script nonce="{{ csp_nonce }}">window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
 {% if initial_post %}<script nonce="{{ csp_nonce }}">window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}
