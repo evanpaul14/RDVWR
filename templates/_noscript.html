@@ -532,12 +532,12 @@
     </div>
 
   {% elif ns_search %}
-    {% if not ns_search.q %}
+    {% if not ns_search.q and not ns_search._flair %}
       <div class="feed-list">{{ empty_state('Enter a search term above') }}</div>
     {% elif ns_search.error %}
       <div class="feed-list">{{ empty_state(ns_search.error) }}</div>
     {% else %}
-      <div class="ctx-info visible"><div class="ctx-meta"><div class="ctx-title">Results for &ldquo;{{ ns_search.q }}&rdquo;</div></div></div>
+      <div class="ctx-info visible"><div class="ctx-meta"><div class="ctx-title">{% if ns_search.q %}Results for &ldquo;{{ ns_search.q }}&rdquo;{% else %}Results for flair &ldquo;{{ ns_search._flair }}&rdquo;{% endif %}</div></div></div>
       <div class="search-type-bar ns-search-type-bar">
         {% for opt, label in (('posts','Posts'), ('communities','Communities'), ('users','Users')) %}
           <a class="search-type-btn{% if opt == ns_search._stype %} active{% endif %}" href="/search?q={{ ns_search.q | urlencode }}&amp;stype={{ opt }}">{{ label }}</a>
