@@ -291,6 +291,9 @@ export async function changeCommentSort(sort) {
     const data = await res.json();
     state._pvData = data;
     area.innerHTML = buildCommentsHtml(data, state._pvCommentId);
+    initMedia(area);
+    initGifVideos(area);
+    initGifImages(area);
     initCommentAvatars(area, data.avatar_prefetch);
   } catch {
     area.innerHTML = errState('Network error', 'comments');
@@ -437,6 +440,7 @@ export async function loadMoreComments(btn) {
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
     initMedia(wrap.parentElement);
+    initGifVideos(wrap.parentElement);
     initGifImages(wrap.parentElement);
     initCommentAvatars(wrap.parentElement, data.avatar_prefetch);
     wrap.remove();
