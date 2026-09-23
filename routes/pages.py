@@ -4,7 +4,9 @@ from urllib.parse import urlencode
 from flask import Blueprint, jsonify, request, render_template, Response, redirect, make_response
 from media_detection import extract_posts, clean_url, process_post, clean_reddit_html
 from reddit_client import reddit_get
-from helpers import FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, parallel, log
+from helpers import (FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, parallel, log,
+                      ns_cookie_enum, ns_show_avatars_enabled, ns_sub_sort_default, ns_sub_time_default,
+                      ns_context)
 from routes.users import _fetch_user_about, _fetch_user_overview
 from routes.comments import _fetch_comments_data, COMMENT_SORTS
 
@@ -60,19 +62,19 @@ def spa(**kwargs):
     path = request.path
 
     if username and 'multiname' in kwargs:
-        sort = kwargs.get('sort') or 'hot'
+        sort = kwargs.get('sort') or ns_sub_sort_default()
         if sort not in FEED_SORTS:
             sort = 'hot'
-        t = request.args.get('t', 'all')
+        t = request.args.get('t') or ns_sub_time_default()
         after = request.args.get('after', '')
         ns_multi = _try_inject_multi(username, kwargs['multiname'], sort, t, after)
     elif username:
         initial_profile = _try_inject_profile(username, request.args.get('after', ''))
     elif path == '/' or path.startswith('/home'):
-        sort = kwargs.get('sort') or 'hot'
+        sort = kwargs.get('sort') or ns_sub_sort_default()
         if sort not in FEED_SORTS:
             sort = 'hot'
-        t = request.args.get('t', 'all')
+        t = request.args.get('t') or ns_sub_time_default()
         after = request.args.get('after', '')
         initial_data, initial_about = _try_inject_subreddit('popular', sort, t, after)
     elif path == '/search':
@@ -85,21 +87,14 @@ def spa(**kwargs):
     resp = render_template("index.html", initial_profile=initial_profile, initial_data=initial_data,
                            initial_about=initial_about, ns_search=ns_search, ns_wiki=ns_wiki,
                            ns_duplicates=ns_duplicates, ns_multi=ns_multi, disable_downloads=DISABLE_DOWNLOADS,
-                           ns_hls=_ns_hls_enabled(), ns_nsfw_blur=_ns_nsfw_blur_enabled())
+                           **ns_context())
     return resp, 200, {'Cache-Control': 'no-store'}
 
 
-def _ns_hls_enabled():
-    """Whether the no-JS fallback should embed HLS (.m3u8) video sources instead of the
-    plain mp4 fallback. Off by default since only Safari plays HLS natively without JS;
-    toggled per-visitor via the /ns-hls link shown under videos in the noscript view."""
-    return request.cookies.get('ns_hls') == '1'
-
-
-def _ns_nsfw_blur_enabled():
-    """Whether the no-JS fallback should hide NSFW-tagged media/text behind a
-    click-to-reveal disclosure. Off by default; toggled on the /settings page."""
-    return request.cookies.get('ns_nsfw_blur') == '1'
+def _ns_comment_sort_default():
+    """Comment-sort default is resolved here (not in helpers.py) since it needs
+    COMMENT_SORTS from routes.comments, which itself imports helpers."""
+    return ns_cookie_enum('ns_comment_sort', 'commentSort', COMMENT_SORTS)
 
 
 @bp.route("/ns-hls")
@@ -415,19 +410,20 @@ def r_json_or_spa(reddit_path):
     m = _SUB_FEED_RE.match(reddit_path)
     if m:
         sub   = m.group(1)
-        sort  = m.group(2) or ('hot' if sub.lower() == 'popular' else 'top')
-        time  = request.args.get('t', 'all')
+        sort  = m.group(2) or ('hot' if sub.lower() == 'popular' else ns_sub_sort_default())
+        time  = request.args.get('t') or ns_sub_time_default()
         after = request.args.get('after', '')
         initial_data, initial_about = _try_inject_subreddit(sub, sort, time, after)
     else:
         mp = _POST_PERMALINK_RE.match(reddit_path)
         if mp:
             sub, post_id, comment_id = mp.group(1), mp.group(2), mp.group(3)
-            comment_sort = request.args.get('sort', 'confidence')
+            comment_sort = request.args.get('sort') or _ns_comment_sort_default()
             if comment_sort not in COMMENT_SORTS:
-                comment_sort = 'confidence'
+                comment_sort = _ns_comment_sort_default()
             try:
-                data, err = _fetch_comments_data(sub, post_id, comment_id, sort=comment_sort, timeout=6)
+                data, err = _fetch_comments_data(sub, post_id, comment_id, sort=comment_sort, timeout=6,
+                                                  with_avatars=ns_show_avatars_enabled())
                 if not err:
                     data["_sub"] = sub.lower()
                     data["_post_id"] = post_id
@@ -440,7 +436,7 @@ def r_json_or_spa(reddit_path):
             except Exception as e:
                 log.warning("inject post sub=%s post=%s: %s", sub, post_id, e)
     resp = render_template("index.html", initial_data=initial_data, initial_about=initial_about, initial_post=initial_post,
-                           disable_downloads=DISABLE_DOWNLOADS, ns_hls=_ns_hls_enabled(), ns_nsfw_blur=_ns_nsfw_blur_enabled())
+                           disable_downloads=DISABLE_DOWNLOADS, **ns_context())
     return resp, 200, {'Cache-Control': 'no-store'}
 
 

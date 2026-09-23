@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0c0c0c">
 <link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}">
 </head>
-<body>
+<body class="theme-{{ ns_theme | default('dark') }}{% if ns_layout == 'minimal' %} minimal-mode{% endif %}{% if ns_nsfw_blur %} nsfw-blur{% endif %}{% if ns_nsfw_hide %} nsfw-hide{% endif %}">
 <noscript><style>#app-shell{display:none}</style></noscript>
 <div id="app-shell">
 <!-- ── Header ── -->

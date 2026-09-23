@@ -2031,6 +2031,11 @@ details.comment:not([open]) > .comment-replies { display:none; }
 }
 .ns-settings-cancel { font-family:var(--mono); font-size:12px; color:var(--tx3); text-decoration:none; }
 .ns-settings-cancel:hover { color:var(--tx2); }
+.ns-settings-row--select { align-items:center; cursor:default; }
+.ns-settings-row--select .ns-settings-row-text { flex:1; }
+.ns-settings-row--select .settings-select { flex-shrink:0; }
+.ns-settings-form .settings-section-title { margin:18px 4px 4px; }
+.ns-settings-form .settings-section-title:first-child { margin-top:0; }
 
 /* ── No-JS fallback: mobile ──────────────────────────────────────────────── */
 @media (max-width:680px) {
