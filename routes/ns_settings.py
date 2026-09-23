@@ -49,7 +49,6 @@ def ns_settings():
         _set_bool_cookie(resp, 'ns_nsfw_hide', request.form.get('ns_nsfw_hide') == '1')
         _set_bool_cookie(resp, 'ns_nsfw_search_hide', request.form.get('ns_nsfw_search_hide') == '1')
         _set_bool_cookie(resp, 'ns_hls', request.form.get('ns_hls') == '1')
-        _set_bool_cookie(resp, 'ns_show_avatars', request.form.get('ns_show_avatars') == '1')
         _set_bool_cookie(resp, 'ns_link_external_media', request.form.get('ns_link_external_media') == '1')
         _set_enum_cookie(resp, 'ns_theme', request.form.get('ns_theme', ''), _THEME_OPTS)
         _set_enum_cookie(resp, 'ns_layout', request.form.get('ns_layout', ''), _LAYOUT_OPTS)
@@ -64,7 +63,6 @@ def ns_settings():
         'nsfw_hide':          ns_cookie_bool('ns_nsfw_hide', 'nsfwHide'),
         'nsfw_search_hide':   ns_cookie_bool('ns_nsfw_search_hide', 'nsfwSearchHide'),
         'hls':                request.cookies.get('ns_hls') == '1',
-        'show_avatars':       ns_cookie_bool('ns_show_avatars', 'showAvatars'),
         'link_external_media': ns_cookie_bool('ns_link_external_media', 'linkExternalMedia'),
         'theme':              ns_cookie_enum('ns_theme', 'theme', _THEME_OPTS),
         'layout':             ns_cookie_enum('ns_layout', 'layout', _LAYOUT_OPTS),
