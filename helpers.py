@@ -158,10 +158,6 @@ def ns_nsfw_search_hide_enabled():
     return ns_cookie_bool('ns_nsfw_search_hide', 'nsfwSearchHide')
 
 
-def ns_show_avatars_enabled():
-    return ns_cookie_bool('ns_show_avatars', 'showAvatars')
-
-
 def ns_link_external_media_enabled():
     return ns_cookie_bool('ns_link_external_media', 'linkExternalMedia')
 
@@ -191,7 +187,6 @@ def ns_context():
         'ns_nsfw_search_hide': ns_nsfw_search_hide_enabled(),
         'ns_theme': ns_theme(),
         'ns_layout': ns_layout(),
-        'ns_show_avatars': ns_show_avatars_enabled(),
         'ns_link_external_media': ns_link_external_media_enabled(),
     }
 

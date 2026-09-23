@@ -5,8 +5,7 @@ from flask import Blueprint, jsonify, request, render_template, Response, redire
 from media_detection import extract_posts, clean_url, process_post, clean_reddit_html
 from reddit_client import reddit_get
 from helpers import (FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, parallel, log,
-                      ns_cookie_enum, ns_show_avatars_enabled, ns_sub_sort_default, ns_sub_time_default,
-                      ns_context)
+                      ns_cookie_enum, ns_sub_sort_default, ns_sub_time_default, ns_context)
 from routes.users import _fetch_user_about, _fetch_user_overview
 from routes.comments import _fetch_comments_data, COMMENT_SORTS
 
@@ -422,8 +421,7 @@ def r_json_or_spa(reddit_path):
             if comment_sort not in COMMENT_SORTS:
                 comment_sort = _ns_comment_sort_default()
             try:
-                data, err = _fetch_comments_data(sub, post_id, comment_id, sort=comment_sort, timeout=6,
-                                                  with_avatars=ns_show_avatars_enabled())
+                data, err = _fetch_comments_data(sub, post_id, comment_id, sort=comment_sort, timeout=6)
                 if not err:
                     data["_sub"] = sub.lower()
                     data["_post_id"] = post_id

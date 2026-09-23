@@ -266,7 +266,7 @@
   {% endif %}
 {% endmacro %}
 
-{% macro comment_block(c, base_path, sub, post_id, post_author, depth=0, show_avatars=False) %}
+{% macro comment_block(c, base_path, sub, post_id, post_author, depth=0) %}
   {% if c.kind == 'more' %}
     <div class="more-comments-wrap" data-depth="{{ depth }}"><a class="load-more-btn" href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a></div>
   {% else %}
@@ -277,7 +277,6 @@
     {% set start_collapsed = c.author == 'AutoModerator' %}
     <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not start_collapsed %} open{% endif %}>
       <summary class="comment-header">
-        {% if show_avatars and c.author_icon %}<img class="comment-avatar" src="{{ c.author_icon }}" alt="" loading="lazy">{% endif %}
         <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
         {% if is_mod %}<span class="comment-mod">MOD</span>{% endif %}
         {% if is_admin %}<span class="comment-admin">ADMIN</span>{% endif %}
@@ -291,7 +290,7 @@
       <div class="comment-body md">{% if deleted %}<em>[{{ c.body or 'deleted' }}]</em>{% elif c.body_html %}{{ c.body_html | safe }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
       {% if c.replies and depth < 6 %}
         <div class="comment-replies">
-          {% for r in c.replies %}{{ comment_block(r, base_path, sub, post_id, post_author, depth + 1, show_avatars) }}{% endfor %}
+          {% for r in c.replies %}{{ comment_block(r, base_path, sub, post_id, post_author, depth + 1) }}{% endfor %}
         </div>
       {% elif c.replies %}
         <div class="comment-replies"><a class="continue-thread" href="/r/{{ sub }}/comments/{{ post_id }}/_/{{ c.id }}">Continue thread &rarr;</a></div>
@@ -407,7 +406,7 @@
       <div class="pv-comments-area">
         {% if initial_post.comments %}
           <div class="pv-comments">
-            {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink, initial_post.post.subreddit, initial_post.post.id, initial_post.post.author, 0, ns_show_avatars) }}{% endfor %}
+            {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink, initial_post.post.subreddit, initial_post.post.id, initial_post.post.author) }}{% endfor %}
           </div>
         {% else %}
           {{ empty_state('No comments yet') }}
@@ -603,7 +602,6 @@
 
         <div class="settings-section-title">Comments</div>
         {{ ns_select_row('ns_comment_sort', 'Default sort', '', [('confidence','Best'),('top','Top'),('new','New'),('controversial','Controversial'),('old','Old'),('qa','Q&A')], ns_settings.comment_sort) }}
-        {{ ns_check_row('ns_show_avatars', 'Show profile pictures', 'Only shown for the first commenters on a thread — there’s no scroll-triggered lazy loading without JS.', ns_settings.show_avatars) }}
 
         <div class="settings-section-title">Privacy</div>
         {{ ns_check_row('ns_link_external_media', "Don't embed third-party media", 'Show a plain outbound link instead of embedding YouTube/TikTok/Streamable/redgifs iframes or other external embeds.', ns_settings.link_external_media) }}
