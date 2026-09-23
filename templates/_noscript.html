@@ -121,14 +121,14 @@
 {% endmacro %}
 
 {% macro flair(post) %}
-  {%- if post.flair -%}
-    <span class="flair"{% if post.flair_bg | usable_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ post.flair }}</span>
+  {%- if post.flair or post.flair_richtext -%}
+    <span class="flair"{% if post.flair_bg | usable_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{% if post.flair_type == 'richtext' and post.flair_richtext %}{% for part in post.flair_richtext %}{% if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif %}{% endfor %}{% else %}{{ post.flair }}{% endif %}</span>
   {%- endif -%}
 {% endmacro %}
 
 {% macro author_flair(c) %}
-  {%- if c.author_flair_text -%}
-    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{{ c.author_flair_text }}</span>
+  {%- if c.author_flair_text or c.author_flair_richtext -%}
+    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{% if c.author_flair_type == 'richtext' and c.author_flair_richtext %}{% for part in c.author_flair_richtext %}{% if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="author-flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif %}{% endfor %}{% else %}{{ c.author_flair_text }}{% endif %}</span>
   {%- endif -%}
 {% endmacro %}
 
@@ -139,7 +139,7 @@
   {%- if post.locked %} <span class="badge badge-locked">locked</span>{% endif -%}
   {%- if post.is_oc %} <span class="badge badge-oc">oc</span>{% endif -%}
   {%- if post.poll %} <span class="badge badge-poll">poll</span>{% endif -%}
-  {%- if post.flair %} {{ flair(post) }}{% endif -%}
+  {%- if post.flair or post.flair_richtext %} {{ flair(post) }}{% endif -%}
   {%- if post.awards %} {{ award_list(post.awards) }}{% endif -%}
 {% endmacro %}
 
