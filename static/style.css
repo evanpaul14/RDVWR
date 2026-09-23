@@ -1232,7 +1232,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 }
 
 /* ── Flair filter (clickable flair in feed) ──────────────────────────────── */
-.flair.flair-clickable { cursor:pointer; transition:opacity .15s; }
+.flair.flair-clickable { cursor:pointer; transition:opacity .15s; color:inherit; text-decoration:none; }
 .flair.flair-clickable:hover { opacity:.75; }
 
 
