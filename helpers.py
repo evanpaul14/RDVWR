@@ -116,6 +116,86 @@ DEFAULT_SETTINGS = {
 }
 
 
+NS_COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
+
+
+def ns_cookie_bool(name, default_key):
+    """Read a noscript-fallback boolean preference cookie (see routes/ns_settings.py),
+    falling back to the matching DEFAULT_SETTINGS entry when the visitor hasn't set it."""
+    raw = request.cookies.get(name)
+    if raw is None:
+        return DEFAULT_SETTINGS[default_key]
+    return raw == '1'
+
+
+def ns_cookie_enum(name, default_key, allowed):
+    """Same as ns_cookie_bool but for an enum-valued cookie; falls back to DEFAULT_SETTINGS
+    on missing or invalid cookie values."""
+    raw = request.cookies.get(name)
+    if raw in allowed:
+        return raw
+    return DEFAULT_SETTINGS[default_key]
+
+
+# ── Noscript-fallback preference cookies (see routes/ns_settings.py's /settings page) ──
+
+def ns_hls_enabled():
+    """Whether the no-JS fallback should embed HLS (.m3u8) video sources instead of the
+    plain mp4 fallback. Off by default since only Safari plays HLS natively without JS;
+    toggled per-visitor via the /ns-hls link shown under videos in the noscript view."""
+    return request.cookies.get('ns_hls') == '1'
+
+
+def ns_nsfw_blur_enabled():
+    return ns_cookie_bool('ns_nsfw_blur', 'nsfwBlur')
+
+
+def ns_nsfw_hide_enabled():
+    return ns_cookie_bool('ns_nsfw_hide', 'nsfwHide')
+
+
+def ns_nsfw_search_hide_enabled():
+    return ns_cookie_bool('ns_nsfw_search_hide', 'nsfwSearchHide')
+
+
+def ns_show_avatars_enabled():
+    return ns_cookie_bool('ns_show_avatars', 'showAvatars')
+
+
+def ns_link_external_media_enabled():
+    return ns_cookie_bool('ns_link_external_media', 'linkExternalMedia')
+
+
+def ns_theme():
+    return ns_cookie_enum('ns_theme', 'theme', {'dark', 'light', 'system'})
+
+
+def ns_layout():
+    return ns_cookie_enum('ns_layout', 'layout', {'card', 'compact', 'minimal'})
+
+
+def ns_sub_sort_default():
+    return ns_cookie_enum('ns_sub_sort', 'subSort', FEED_SORTS - {'best'})
+
+
+def ns_sub_time_default():
+    return ns_cookie_enum('ns_sub_time', 'subTime', TIME_FILTERS)
+
+
+def ns_context():
+    """Cookie-derived noscript-fallback preferences, injected into every SPA/noscript render."""
+    return {
+        'ns_hls': ns_hls_enabled(),
+        'ns_nsfw_blur': ns_nsfw_blur_enabled(),
+        'ns_nsfw_hide': ns_nsfw_hide_enabled(),
+        'ns_nsfw_search_hide': ns_nsfw_search_hide_enabled(),
+        'ns_theme': ns_theme(),
+        'ns_layout': ns_layout(),
+        'ns_show_avatars': ns_show_avatars_enabled(),
+        'ns_link_external_media': ns_link_external_media_enabled(),
+    }
+
+
 def parallel(*fns):
     """Run each zero-arg callable in its own thread and return results in order."""
     with ThreadPoolExecutor(max_workers=len(fns)) as ex:

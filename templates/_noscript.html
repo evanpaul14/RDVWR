@@ -35,7 +35,11 @@
   {% endif %}
 {% endmacro %}
 
-{% macro media_block(post, full, ns_hls) %}
+{% macro link_out_box(href, label) %}
+  <div class="pv-article-box"><a class="pv-article-link" href="{{ href }}" target="_blank" rel="noopener"><span>{{ label }}</span></a></div>
+{% endmacro %}
+
+{% macro media_block(post, full, ns_hls, link_external_media=False) %}
   {% set cls = 'pv-media' if full else 'post-media' %}
   {% set vcls = 'pv-media' if full else 'post-video' %}
   {% if post.gallery and post.gallery | length > (0 if full else 1) %}
@@ -51,29 +55,49 @@
   {% elif post.gif_url %}
     <div class="{{ cls }}"><img loading="lazy" src="{{ post.gif_url }}" alt=""></div>
   {% elif post.redgifs_id %}
-    <div class="{{ vcls }}"><iframe src="https://www.redgifs.com/ifr/{{ post.redgifs_id }}" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+    {% if link_external_media %}
+      {{ link_out_box('https://www.redgifs.com/watch/' ~ post.redgifs_id, 'video on redgifs.com →') }}
+    {% else %}
+      <div class="{{ vcls }}"><iframe src="https://www.redgifs.com/ifr/{{ post.redgifs_id }}" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+    {% endif %}
   {% elif post.youtube_id %}
-    <div class="{{ vcls }}"><iframe src="https://www.youtube-nocookie.com/embed/{{ post.youtube_id }}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+    {% if link_external_media %}
+      {{ link_out_box('https://www.youtube.com/watch?v=' ~ post.youtube_id, 'YouTube video — watch on youtube.com →') }}
+    {% else %}
+      <div class="{{ vcls }}"><iframe src="https://www.youtube-nocookie.com/embed/{{ post.youtube_id }}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+    {% endif %}
   {% elif post.tiktok_id %}
-    <div class="{{ vcls }} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/{{ post.tiktok_id }}" loading="lazy" allowfullscreen sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>
+    {% if link_external_media %}
+      {{ link_out_box('https://www.tiktok.com/embed/v2/' ~ post.tiktok_id, 'TikTok video — watch on tiktok.com →') }}
+    {% else %}
+      <div class="{{ vcls }} tiktok-wrap"><iframe src="https://www.tiktok.com/player/v1/{{ post.tiktok_id }}" loading="lazy" allowfullscreen sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>
+    {% endif %}
   {% elif post.streamable_id %}
-    <div class="{{ vcls }}"><iframe src="https://streamable.com/e/{{ post.streamable_id }}" loading="lazy" allowfullscreen></iframe></div>
+    {% if link_external_media %}
+      {{ link_out_box('https://streamable.com/' ~ post.streamable_id, 'video on streamable.com →') }}
+    {% else %}
+      <div class="{{ vcls }}"><iframe src="https://streamable.com/e/{{ post.streamable_id }}" loading="lazy" allowfullscreen></iframe></div>
+    {% endif %}
   {% elif post.imgur_album_id %}
-    <div class="pv-article-box"><a class="pv-article-link" href="https://imgur.com/a/{{ post.imgur_album_id }}" target="_blank" rel="noopener"><span>Imgur album &mdash; view on imgur.com &rarr;</span></a></div>
+    {{ link_out_box('https://imgur.com/a/' ~ post.imgur_album_id, 'Imgur album — view on imgur.com →') }}
   {% elif post.is_devvit %}
     {% if post.preview_img %}<div class="{{ cls }}"><img loading="lazy" src="{{ post.preview_img }}" alt=""></div>{% endif %}
     <p class="ns-note">Interactive app (Devvit) &mdash; <a href="{{ post.permalink }}" target="_blank" rel="noopener">open on reddit.com &rarr;</a></p>
   {% elif post.embed_url %}
-    <div class="{{ vcls }}"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
+    {% if link_external_media %}
+      {{ link_out_box(post.embed_url, 'embedded media — open source →') }}
+    {% else %}
+      <div class="{{ vcls }}"><iframe src="{{ post.embed_url }}" loading="lazy" allowfullscreen></iframe></div>
+    {% endif %}
   {% elif post.preview_img or post.thumb_url %}
     <div class="{{ cls }}"><img loading="lazy" src="{{ post.preview_img or post.thumb_url }}" alt=""></div>
   {% elif not post.is_self and post.url %}
-    <div class="pv-article-box"><a class="pv-article-link" href="{{ post.url }}" target="_blank" rel="noopener"><span>{{ post.domain }} &rarr;</span></a></div>
+    {{ link_out_box(post.url, post.domain ~ ' →') }}
   {% endif %}
 {% endmacro %}
 
-{% macro media_wrap(post, full, ns_hls, nsfw_blur=False) %}
-  {% set inner %}{{ media_block(post, full, ns_hls) }}{% endset %}
+{% macro media_wrap(post, full, ns_hls, nsfw_blur=False, link_external_media=False) %}
+  {% set inner %}{{ media_block(post, full, ns_hls, link_external_media) }}{% endset %}
   {% if inner.strip() %}
     {% if post.is_spoiler %}
       <details class="ns-spoiler"><summary>Spoiler &mdash; click to reveal</summary>{{ inner | safe }}</details>
@@ -119,7 +143,47 @@
   {%- if post.awards %} {{ award_list(post.awards) }}{% endif -%}
 {% endmacro %}
 
-{% macro post_card(post, ns_hls, nsfw_blur=False, show_sub=True) %}
+{% macro post_footer(post) %}
+  <div class="post-footer">
+    <div class="footer-left">
+      <div class="score-block">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
+        <span class="score-num">{{ post.score | fmtnum }}</span>
+      </div>
+      <a class="post-author" href="/user/{{ post.author }}">u/{{ post.author }}</a>
+      <span class="meta-item">{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
+    </div>
+    <div class="footer-right">
+      <a class="comments-link" href="{{ post_link(post.subreddit, post.id) }}">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{ post.num_comments | fmtnum }} comments
+      </a>
+      <a class="ext-link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>
+      <a class="ext-link" href="{{ post.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro post_card(post, ns_hls, nsfw_blur=False, show_sub=True, link_external_media=False, layout='card') %}
+  {% if layout == 'compact' and not post.crosspost_from and not post.linked_post %}
+    {% set g0 = post.gallery[0] if post.gallery else None %}
+    {% set thumb_src = (g0.thumb or g0.url) if g0 else (post.thumb_url or post.preview_img) %}
+    <div class="post post-compact" data-post-id="{{ post.id }}">
+      <div class="post-compact-left">
+        <div class="post-header">
+          <div class="post-meta-top">
+            {% if show_sub %}<a class="post-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a>{% endif %}
+            {{ badges(post) }}
+          </div>
+          <a class="post-title{{ ' is-italic' if post.is_self }}" href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a>
+        </div>
+        {{ post_footer(post) }}
+      </div>
+      {% if thumb_src %}
+        <a class="post-compact-thumb" href="{{ post_link(post.subreddit, post.id) }}"><img loading="lazy" src="{{ thumb_src }}" alt=""{% if post.over_18 and nsfw_blur %} style="filter:blur(16px)"{% endif %}></a>
+      {% endif %}
+    </div>
+  {% else %}
   <div class="post" data-post-id="{{ post.id }}">
     <div class="post-header">
       <div class="post-meta-top">
@@ -132,16 +196,16 @@
       <div class="crosspost-embed">
         <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
         <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
-        {{ media_wrap(post.crosspost_from, False, ns_hls, nsfw_blur) }}
+        {{ media_wrap(post.crosspost_from, False, ns_hls, nsfw_blur, link_external_media) }}
       </div>
     {% elif post.linked_post %}
       <div class="crosspost-embed">
         <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
         <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
-        {{ media_wrap(post.linked_post, False, ns_hls, nsfw_blur) }}
+        {{ media_wrap(post.linked_post, False, ns_hls, nsfw_blur, link_external_media) }}
       </div>
     {% else %}
-      {{ media_wrap(post, False, ns_hls, nsfw_blur) }}
+      {{ media_wrap(post, False, ns_hls, nsfw_blur, link_external_media) }}
     {% endif %}
     {{ poll_block(post.poll) }}
     {% set excerpt %}
@@ -154,28 +218,12 @@
     {% if excerpt.strip() %}
       {% if post.over_18 and nsfw_blur and not post.is_spoiler %}{{ nsfw_details(excerpt) }}{% else %}{{ excerpt | safe }}{% endif %}
     {% endif %}
-    <div class="post-footer">
-      <div class="footer-left">
-        <div class="score-block">
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
-          <span class="score-num">{{ post.score | fmtnum }}</span>
-        </div>
-        <a class="post-author" href="/user/{{ post.author }}">u/{{ post.author }}</a>
-        <span class="meta-item">{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span>
-      </div>
-      <div class="footer-right">
-        <a class="comments-link" href="{{ post_link(post.subreddit, post.id) }}">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          {{ post.num_comments | fmtnum }} comments
-        </a>
-        <a class="ext-link" href="/r/{{ post.subreddit }}/duplicates/{{ post.id }}">duplicates</a>
-        <a class="ext-link" href="{{ post.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
-      </div>
-    </div>
+    {{ post_footer(post) }}
   </div>
+  {% endif %}
 {% endmacro %}
 
-{% macro pv_detail(post, ns_hls, nsfw_blur=False) %}
+{% macro pv_detail(post, ns_hls, nsfw_blur=False, link_external_media=False) %}
   <a class="pv-sub-link" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a>
   {% set b %}{{ badges(post) }}{% endset %}
   {% if b.strip() %}<div class="post-meta-top" style="margin-bottom:10px">{{ b | safe }}</div>{% endif %}
@@ -193,17 +241,17 @@
     <div class="crosspost-embed crosspost-embed-full">
       <div class="crosspost-embed-header">&#8618; crossposted from <a href="/r/{{ post.crosspost_from.subreddit }}">r/{{ post.crosspost_from.subreddit }}</a></div>
       <a class="crosspost-embed-title" href="{{ post_link(post.crosspost_from.subreddit, post.crosspost_from.id) }}">{{ post.crosspost_from.title }}</a>
-      {{ media_wrap(post.crosspost_from, True, ns_hls, nsfw_blur) }}
+      {{ media_wrap(post.crosspost_from, True, ns_hls, nsfw_blur, link_external_media) }}
       {% if post.crosspost_from.selftext %}<div class="xp-excerpt xp-excerpt-full md"><p>{{ post.crosspost_from.selftext }}</p></div>{% endif %}
     </div>
   {% elif post.linked_post %}
     <div class="crosspost-embed crosspost-embed-full">
       <div class="crosspost-embed-header">&#8618; links to a post in <a href="/r/{{ post.linked_post.subreddit }}">r/{{ post.linked_post.subreddit }}</a></div>
       <a class="crosspost-embed-title" href="{{ post_link(post.linked_post.subreddit, post.linked_post.id) }}">{{ post.linked_post.title }}</a>
-      {{ media_wrap(post.linked_post, True, ns_hls, nsfw_blur) }}
+      {{ media_wrap(post.linked_post, True, ns_hls, nsfw_blur, link_external_media) }}
     </div>
   {% else %}
-    {{ media_wrap(post, True, ns_hls, nsfw_blur) }}
+    {{ media_wrap(post, True, ns_hls, nsfw_blur, link_external_media) }}
   {% endif %}
   {{ poll_block(post.poll) }}
   {% set body %}
@@ -218,7 +266,7 @@
   {% endif %}
 {% endmacro %}
 
-{% macro comment_block(c, base_path, sub, post_id, post_author, depth=0) %}
+{% macro comment_block(c, base_path, sub, post_id, post_author, depth=0, show_avatars=False) %}
   {% if c.kind == 'more' %}
     <div class="more-comments-wrap" data-depth="{{ depth }}"><a class="load-more-btn" href="{{ base_path }}" target="_blank" rel="noopener">load {{ c.count }} more on reddit.com &rarr;</a></div>
   {% else %}
@@ -229,6 +277,7 @@
     {% set start_collapsed = c.author == 'AutoModerator' %}
     <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not start_collapsed %} open{% endif %}>
       <summary class="comment-header">
+        {% if show_avatars and c.author_icon %}<img class="comment-avatar" src="{{ c.author_icon }}" alt="" loading="lazy">{% endif %}
         <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
         {% if is_mod %}<span class="comment-mod">MOD</span>{% endif %}
         {% if is_admin %}<span class="comment-admin">ADMIN</span>{% endif %}
@@ -242,7 +291,7 @@
       <div class="comment-body md">{% if deleted %}<em>[{{ c.body or 'deleted' }}]</em>{% elif c.body_html %}{{ c.body_html | safe }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
       {% if c.replies and depth < 6 %}
         <div class="comment-replies">
-          {% for r in c.replies %}{{ comment_block(r, base_path, sub, post_id, post_author, depth + 1) }}{% endfor %}
+          {% for r in c.replies %}{{ comment_block(r, base_path, sub, post_id, post_author, depth + 1, show_avatars) }}{% endfor %}
         </div>
       {% elif c.replies %}
         <div class="comment-replies"><a class="continue-thread" href="/r/{{ sub }}/comments/{{ post_id }}/_/{{ c.id }}">Continue thread &rarr;</a></div>
@@ -280,7 +329,7 @@
 
 {% set ns_current_sub = initial_about._sub if initial_about else (initial_data._sub if initial_data else (ns_wiki._sub if ns_wiki else (ns_duplicates._sub if ns_duplicates else (ns_search._sub if ns_search and ns_search._sub else None)))) %}
 
-<div class="ns-root">
+<div class="ns-root{% if ns_layout == 'minimal' %} minimal-mode{% endif %}">
   <header class="header">
     <div class="header-inner">
       <a class="logo" href="/">RDVWR</a>
@@ -342,13 +391,13 @@
     {% endset %}
     {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, sort_extra) }}
     <div class="feed-list">
-      {% for post in initial_data.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+      {% for post in initial_data.posts if not (post.over_18 and ns_nsfw_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
     </div>
     {{ next_link(initial_data._next_url) }}
 
   {% elif initial_post %}
     <div class="pv-wrap ns-pv-wrap">
-      {{ pv_detail(initial_post.post, ns_hls, ns_nsfw_blur) }}
+      {{ pv_detail(initial_post.post, ns_hls, ns_nsfw_blur, ns_link_external_media) }}
       <div class="pv-divider"><div class="pv-divider-line"></div><span class="pv-divider-label">{{ initial_post.post.num_comments | fmtnum }} comments</span><div class="pv-divider-line"></div></div>
       {% if initial_post._comment_sort_links %}
         <div class="comment-sort-bar">
@@ -358,7 +407,7 @@
       <div class="pv-comments-area">
         {% if initial_post.comments %}
           <div class="pv-comments">
-            {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink, initial_post.post.subreddit, initial_post.post.id, initial_post.post.author) }}{% endfor %}
+            {% for c in initial_post.comments %}{{ comment_block(c, initial_post.post.permalink, initial_post.post.subreddit, initial_post.post.id, initial_post.post.author, 0, ns_show_avatars) }}{% endfor %}
           </div>
         {% else %}
           {{ empty_state('No comments yet') }}
@@ -379,9 +428,9 @@
       <div class="ns-about-panel"><div class="sidebar-section"><div class="sidebar-desc md">{{ initial_profile._about.description }}</div></div></div>
     {% endif %}
     <div class="feed-list">
-      {% for item in initial_profile['items'] %}
+      {% for item in initial_profile['items'] if not (item.type == 'post' and item.data.over_18 and ns_nsfw_hide) %}
         {% if item.type == 'post' %}
-          {{ post_card(item.data, ns_hls, ns_nsfw_blur) }}
+          {{ post_card(item.data, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}
         {% else %}
           <div class="user-comment-card">
             <div class="ucc-context">
@@ -414,7 +463,7 @@
       </div>
       {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/user/' ~ ns_multi._username ~ '/m/' ~ ns_multi._multiname, ns_multi._sort) }}
       <div class="feed-list">
-        {% for post in ns_multi.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+        {% for post in ns_multi.posts if not (post.over_18 and ns_nsfw_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
       </div>
       {{ next_link(ns_multi._next_url) }}
     {% endif %}
@@ -431,7 +480,7 @@
       <span class="dupes-count">{{ ns_duplicates.posts | length }} other post{{ 's' if ns_duplicates.posts | length != 1 }} linking to this URL</span>
     </div>
     <div class="feed-list">
-      {% for post in ns_duplicates.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No duplicates found') }}{% endfor %}
+      {% for post in ns_duplicates.posts if not (post.over_18 and ns_nsfw_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No duplicates found') }}{% endfor %}
     </div>
     {{ next_link(ns_duplicates._next_url) }}
 
@@ -512,31 +561,61 @@
           {% endfor %}
         </div>
         <div class="feed-list">
-          {% for post in ns_search.posts %}{{ post_card(post, ns_hls, ns_nsfw_blur) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
+          {% for post in ns_search.posts if not (post.over_18 and ns_nsfw_search_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
         </div>
         {{ next_link(ns_search._next_url) }}
       {% endif %}
     {% endif %}
 
   {% elif ns_settings %}
+    {% macro ns_select_row(name, label, hint, opts, active) %}
+      <label class="ns-settings-row ns-settings-row--select">
+        <span class="ns-settings-row-text">
+          <strong>{{ label }}</strong>
+          {% if hint %}<small>{{ hint }}</small>{% endif %}
+        </span>
+        <select class="settings-select" name="{{ name }}">
+          {% for v, l in opts %}<option value="{{ v }}"{% if v == active %} selected{% endif %}>{{ l }}</option>{% endfor %}
+        </select>
+      </label>
+    {% endmacro %}
+    {% macro ns_check_row(name, label, hint, checked) %}
+      <label class="ns-settings-row">
+        <input type="checkbox" name="{{ name }}" value="1"{% if checked %} checked{% endif %}>
+        <span class="ns-settings-row-text">
+          <strong>{{ label }}</strong>
+          {% if hint %}<small>{{ hint }}</small>{% endif %}
+        </span>
+      </label>
+    {% endmacro %}
     <div class="ns-settings-wrap">
       <h1 class="ns-settings-title">Settings</h1>
       <form class="ns-settings-form" method="post" action="/settings">
         <input type="hidden" name="next" value="{{ ns_settings.next }}">
-        <label class="ns-settings-row">
-          <input type="checkbox" name="ns_nsfw_blur" value="1"{% if ns_settings.nsfw_blur %} checked{% endif %}>
-          <span class="ns-settings-row-text">
-            <strong>Blur NSFW content</strong>
-            <small>Hide NSFW-tagged post media and text behind a click-to-reveal disclosure.</small>
-          </span>
-        </label>
-        <label class="ns-settings-row">
-          <input type="checkbox" name="ns_hls" value="1"{% if ns_settings.hls %} checked{% endif %}>
-          <span class="ns-settings-row-text">
-            <strong>Enable HLS video playback</strong>
-            <small>Reddit videos play with synced audio via HLS (.m3u8) &mdash; Safari only, since other browsers can't play HLS without JavaScript.</small>
-          </span>
-        </label>
+
+        <div class="settings-section-title">Appearance</div>
+        {{ ns_select_row('ns_theme', 'Theme', '', [('dark','Dark'),('light','Light'),('system','System default')], ns_settings.theme) }}
+        {{ ns_select_row('ns_layout', 'Layout', '', [('card','Card'),('compact','Compact'),('minimal','Minimal')], ns_settings.layout) }}
+
+        <div class="settings-section-title">Feed</div>
+        {{ ns_select_row('ns_sub_sort', 'Default sort', 'Used when browsing a subreddit without picking a sort in the URL.', [('hot','Hot'),('new','New'),('top','Top'),('rising','Rising'),('controversial','Controversial')], ns_settings.sub_sort) }}
+        {{ ns_select_row('ns_sub_time', 'Default time', 'Used for Top/Controversial when no time filter is chosen.', [('all','All time'),('year','Past year'),('month','Past month'),('week','Past week'),('day','Past day'),('hour','Past hour')], ns_settings.sub_time) }}
+
+        <div class="settings-section-title">Comments</div>
+        {{ ns_select_row('ns_comment_sort', 'Default sort', '', [('confidence','Best'),('top','Top'),('new','New'),('controversial','Controversial'),('old','Old'),('qa','Q&A')], ns_settings.comment_sort) }}
+        {{ ns_check_row('ns_show_avatars', 'Show profile pictures', 'Only shown for the first commenters on a thread — there’s no scroll-triggered lazy loading without JS.', ns_settings.show_avatars) }}
+
+        <div class="settings-section-title">Privacy</div>
+        {{ ns_check_row('ns_link_external_media', "Don't embed third-party media", 'Show a plain outbound link instead of embedding YouTube/TikTok/Streamable/redgifs iframes or other external embeds.', ns_settings.link_external_media) }}
+
+        <div class="settings-section-title">NSFW</div>
+        {{ ns_check_row('ns_nsfw_blur', 'Blur NSFW content', 'Hide NSFW-tagged post media and text behind a click-to-reveal disclosure.', ns_settings.nsfw_blur) }}
+        {{ ns_check_row('ns_nsfw_hide', 'Hide NSFW posts', 'Leave NSFW-tagged posts out of subreddit, profile, and multireddit listings entirely.', ns_settings.nsfw_hide) }}
+        {{ ns_check_row('ns_nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW-tagged posts out of search results.', ns_settings.nsfw_search_hide) }}
+
+        <div class="settings-section-title">Video</div>
+        {{ ns_check_row('ns_hls', 'Enable HLS video playback', "Reddit videos play with synced audio via HLS (.m3u8) — Safari only, since other browsers can’t play HLS without JavaScript.", ns_settings.hls) }}
+
         <div class="ns-settings-actions">
           <button type="submit">Save</button>
           <a class="ns-settings-cancel" href="{{ ns_settings.next }}">Cancel</a>
