@@ -26,7 +26,10 @@
 
 {% macro video_block(post, full, ns_hls) %}
   {% set cls = 'pv-media' if full else 'post-video' %}
-  {% if ns_hls and post.hls_url %}
+  {% if ns_hls and post.hls_url and post.video_url %}
+    <div class="{{ cls }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ post.preview_img or '' }}"><source src="{{ post.hls_url }}" type="application/vnd.apple.mpegurl"><source src="{{ post.video_url }}" type="video/mp4"></video></div>
+    <p class="ns-note">HLS with audio on Safari, silent video elsewhere &mdash; <a href="{{ ns_hls_toggle_url(0) }}">disable</a></p>
+  {% elif ns_hls and post.hls_url %}
     <div class="{{ cls }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ post.preview_img or '' }}"><source src="{{ post.hls_url }}" type="application/vnd.apple.mpegurl"></video></div>
     <p class="ns-note">HLS playback (Safari only) &mdash; <a href="{{ ns_hls_toggle_url(0) }}">disable</a></p>
   {% elif post.video_url %}
