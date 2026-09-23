@@ -40,6 +40,19 @@ export function proxyMedia(url) {
   } catch {}
   return url;
 }
+// hls.js fetches playlists/segments via XHR, which the CSP's connect-src 'self' blocks
+// for a direct cross-origin v.redd.it URL (unlike a plain <video src>, which only needs
+// media-src) — so HLS URLs we build ourselves (comment-embedded reddit videos) must
+// always go through /api/m/, unlike proxyMedia() above which is opt-in via PROXY_MEDIA.
+// Mirrors proxy_hls() in media_detection.py, which the API's own hls_url fields go through.
+export function proxyHls(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'https:' && u.hostname === 'v.redd.it') return `/api/m/${u.hostname}${u.pathname}${u.search}`;
+  } catch {}
+  return url;
+}
 // Same-origin (proxied or local) URL — loading it never contacts a third party.
 export function isLocalUrl(url) {
   return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//');

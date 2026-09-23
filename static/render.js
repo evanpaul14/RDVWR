@@ -1,4 +1,4 @@
-import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, realMediaUrl, isLocalUrl } from './utils.js';
+import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -42,10 +42,12 @@ function _initMarked() {
     }
     if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;
     if (href?.startsWith('redditvid|')) {
-      const base = proxyMedia(`https://v.redd.it/${href.slice(10)}`);
+      const rawBase = `https://v.redd.it/${href.slice(10)}`;
+      const base = proxyMedia(rawBase);
       const link = _asLink(base, 'video');
       if (link) return link;
-      return `<div class="md-video-embed post-video" data-hls="${base}/HLSPlaylist.m3u8" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
+      const hls = proxyHls(`${rawBase}/HLSPlaylist.m3u8`);
+      return `<div class="md-video-embed post-video" data-hls="${hls}" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
     }
     try {
       const h = new URL(href).hostname;
