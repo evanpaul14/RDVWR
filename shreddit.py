@@ -169,16 +169,27 @@ def _parse_shreddit_post(el):
     is_gallery_url = content_href and '/gallery/' in content_href
     gallery = []
     if post_type == 'gallery' or is_gallery_url:
-        seen = set()
-        for img in el.find_all(['img', 'faceplate-img']):
+        # Each slide is a <li slot="page-N"> containing three <img>s: a blurred
+        # background decoration, a low-res visible preview, and a full-res copy
+        # hidden in .lightboxed-content for the zoom viewer — all three carry
+        # different exact src URLs, so collecting every <img> under the post
+        # doubles (or triples) each slide. Pick one image per slot instead,
+        # preferring the hidden full-res copy.
+        for li in el.find_all('li', slot=re.compile(r'^page-\d+$')):
+            lightboxed = li.find(class_='lightboxed-content')
+            img = lightboxed.find('img') if lightboxed else None
+            if not img:
+                fig = li.find('figure')
+                img = (fig.find('img') if fig else None) or li.find('img')
+            if not img:
+                continue
             src = (img.get('src', '') or img.get('data-lazy-src', '') or
                    img.get('data-src', '') or '')
-            if not src or src in seen:
+            if not src:
                 continue
             h = urlparse(src).hostname or ''
             if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
                 continue
-            seen.add(src)
             proxied = proxy_if_reddit_preview(src)
             fig = img.find_parent('figure')
             cap_el = fig.find('figcaption') if fig else None
