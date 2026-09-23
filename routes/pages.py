@@ -8,6 +8,7 @@ from helpers import (FEED_LIMIT, FEED_SORTS, DISABLE_DOWNLOADS, add_time_param, 
                       ns_cookie_enum, ns_sub_sort_default, ns_sub_time_default, ns_context)
 from routes.users import _fetch_user_about, _fetch_user_overview
 from routes.comments import _fetch_comments_data, COMMENT_SORTS
+from routes.subreddit import _subreddit_error_state, _quarantine_fallback_posts
 
 SEARCH_SORTS = {'relevance', 'hot', 'top', 'new'}
 SEARCH_TYPES = {'posts', 'communities', 'users'}
@@ -146,7 +147,7 @@ def _try_inject_profile(username, after=''):
     return overview
 
 
-def _try_inject_subreddit(sub, sort, time, after=''):
+def _try_inject_subreddit(sub, sort, time, after='', quarantine_opt_in=False):
     """Fetch subreddit feed + about in parallel for SSR injection.
     Returns (feed_dict, about_dict); either may be None on error."""
     def _feed():
@@ -156,16 +157,32 @@ def _try_inject_subreddit(sub, sort, time, after=''):
             add_time_param(params, sort, time)
             if after:
                 params["after"] = after
-            r = reddit_get(url, params=params, timeout=6)
+            base = f"/r/{sub.lower()}/{sort}"
+            r = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=6)
             if r.status_code != 200:
-                return None
+                state, message = _subreddit_error_state(r)
+                if state == 'quarantined' and quarantine_opt_in:
+                    posts, fallback_after = _quarantine_fallback_posts(sub, after or None)
+                    if posts:
+                        result = {"posts": posts, "after": fallback_after,
+                                  "_sub": sub.lower(), "_sort": sort, "_time": time}
+                        if fallback_after:
+                            result["_next_url"] = _ns_url(base, t=time if time != 'all' else '',
+                                                           after=fallback_after, quarantine_opt_in=1)
+                        return result
+                result = {"error": message, "_state": state, "_sub": sub.lower(),
+                          "_sort": sort, "_time": time}
+                if state == 'quarantined':
+                    result["_continue_url"] = _ns_url(base, t=time if time != 'all' else '',
+                                                        quarantine_opt_in=1)
+                return result
             listing = r.json()["data"]
             next_after = listing.get("after")
-            base = f"/r/{sub.lower()}/{sort}"
             result = {"posts": extract_posts(listing), "after": next_after,
                       "_sub": sub.lower(), "_sort": sort, "_time": time}
             if next_after:
-                result["_next_url"] = _ns_url(base, t=time if time != 'all' else '', after=next_after)
+                result["_next_url"] = _ns_url(base, t=time if time != 'all' else '', after=next_after,
+                                               quarantine_opt_in=1 if quarantine_opt_in else '')
             return result
         except Exception as e:
             log.warning("inject feed sub=%s: %s", sub, e)
@@ -412,7 +429,8 @@ def r_json_or_spa(reddit_path):
         sort  = m.group(2) or ('hot' if sub.lower() == 'popular' else ns_sub_sort_default())
         time  = request.args.get('t') or ns_sub_time_default()
         after = request.args.get('after', '')
-        initial_data, initial_about = _try_inject_subreddit(sub, sort, time, after)
+        quarantine_opt_in = request.args.get('quarantine_opt_in', '')
+        initial_data, initial_about = _try_inject_subreddit(sub, sort, time, after, bool(quarantine_opt_in))
     else:
         mp = _POST_PERMALINK_RE.match(reddit_path)
         if mp:

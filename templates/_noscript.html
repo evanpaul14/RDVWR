@@ -406,7 +406,18 @@
     {% endif %}
   {% endif %}
 
-  {% if initial_data %}
+  {% if initial_data and initial_data.error %}
+    <div class="feed-list">
+      <div class="state state-quarantine">
+        <div class="state-icon">&#9888;</div>
+        <div class="state-title">{% if initial_data._state == 'quarantined' %}This subreddit is quarantined{% else %}{{ initial_data.error }}{% endif %}</div>
+        {% if initial_data._state == 'quarantined' %}
+          <div class="state-sub">{{ initial_data.error }}</div>
+          <a class="state-continue-btn" href="{{ initial_data._continue_url }}">Continue</a>
+        {% endif %}
+      </div>
+    </div>
+  {% elif initial_data %}
     {% set sort_extra %}
       {% if initial_data._sort in ('top', 'controversial') %}{{ time_filter_form('/r/' ~ initial_data._sub ~ '/' ~ initial_data._sort, initial_data._time) }}{% endif %}
       <a class="sort-btn sort-btn-wiki" href="/r/{{ initial_data._sub }}/wiki">wiki</a>
