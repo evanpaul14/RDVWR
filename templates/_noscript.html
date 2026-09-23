@@ -165,7 +165,21 @@
 {% endmacro %}
 
 {% macro post_card(post, ns_hls, nsfw_blur=False, show_sub=True, link_external_media=False, layout='card') %}
-  {% if layout == 'compact' and not post.crosspost_from and not post.linked_post %}
+  {% if layout == 'minimal' and not post.crosspost_from and not post.linked_post %}
+    {% set g0 = post.gallery[0] if post.gallery else None %}
+    {% set thumb_src = (g0.thumb or g0.url) if g0 else (post.thumb_url or post.preview_img) %}
+    {% set domain = (post.domain if not post.is_self and post.domain and not post.domain.startswith('self.') and not post.domain.endswith('redd.it') else None) %}
+    <div class="post post-minimal" data-post-id="{{ post.id }}">
+      <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>{{ post.score | fmtnum }}</div>
+      <div class="min-body">
+        <div class="min-title-row">{{ badges(post) }}<a class="min-title{{ ' min-title-self' if post.is_self }}" href="{{ post_link(post.subreddit, post.id) }}">{{ post.title }}</a>{% if domain %} <span class="min-domain">({{ domain }})</span>{% endif %}</div>
+        <div class="min-meta">{% if show_sub %}<a class="min-sub" href="/r/{{ post.subreddit }}">r/{{ post.subreddit }}</a> &middot; {% endif %}<a class="min-author" href="/user/{{ post.author }}">u/{{ post.author }}</a> &middot; <span>{{ post.created_utc | timeago }}{% if post.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}</span> &middot; <a class="min-comments" href="{{ post_link(post.subreddit, post.id) }}">{{ post.num_comments | fmtnum }} comments</a></div>
+      </div>
+      {% if thumb_src %}
+        <a class="min-thumb" href="{{ post_link(post.subreddit, post.id) }}"><img loading="lazy" src="{{ thumb_src }}" alt=""{% if post.over_18 and nsfw_blur %} style="filter:blur(16px)"{% endif %}></a>
+      {% endif %}
+    </div>
+  {% elif layout == 'compact' and not post.crosspost_from and not post.linked_post %}
     {% set g0 = post.gallery[0] if post.gallery else None %}
     {% set thumb_src = (g0.thumb or g0.url) if g0 else (post.thumb_url or post.preview_img) %}
     <div class="post post-compact" data-post-id="{{ post.id }}">
