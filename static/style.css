@@ -1238,10 +1238,10 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 
 /* ── State retry button ──────────────────────────────────────────────────── */
 .state-retry-btn, .state-continue-btn {
-  margin-top:16px;
+  display:inline-block; margin-top:16px;
   background:transparent; border:1px solid var(--b2); color:var(--tx3);
   font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-  padding:10px 24px; cursor:pointer; border-radius:4px;
+  padding:10px 24px; cursor:pointer; border-radius:4px; text-decoration:none;
   transition:border-color .15s, color .15s;
 }
 .state-retry-btn:hover, .state-continue-btn:hover { border-color:var(--ac); color:var(--ac); }
