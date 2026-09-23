@@ -125,7 +125,13 @@
 
 {% macro flair(post) %}
   {%- if post.flair or post.flair_richtext -%}
-    <span class="flair"{% if post.flair_bg | usable_bg %} style="background:{{ post.flair_bg }};color:{{ '#fff' if post.flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>{% if post.flair_type == 'richtext' and post.flair_richtext %}{% for part in post.flair_richtext %}{% if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif %}{% endfor %}{% else %}{{ post.flair }}{% endif %}</span>
+    {% set inner %}{% if post.flair_type == 'richtext' and post.flair_richtext %}{% for part in post.flair_richtext %}{% if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif %}{% endfor %}{% else %}{{ post.flair }}{% endif %}{% endset %}
+    {% set style = ' style="background:%s;color:%s"' | format(post.flair_bg, '#fff' if post.flair_tc == 'light' else '#1a1a1a') if post.flair_bg | usable_bg else '' %}
+    {% if post.flair %}
+      <a class="flair flair-clickable" href="/search?flair={{ post.flair | urlencode }}&amp;sub={{ post.subreddit | urlencode }}&amp;stype=posts"{{ style | safe }}>{{ inner | safe }}</a>
+    {% else %}
+      <span class="flair"{{ style | safe }}>{{ inner | safe }}</span>
+    {% endif %}
   {%- endif -%}
 {% endmacro %}
 
