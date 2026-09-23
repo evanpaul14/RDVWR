@@ -411,7 +411,7 @@
       {% if initial_data._sort in ('top', 'controversial') %}{{ time_filter_form('/r/' ~ initial_data._sub ~ '/' ~ initial_data._sort, initial_data._time) }}{% endif %}
       <a class="sort-btn sort-btn-wiki" href="/r/{{ initial_data._sub }}/wiki">wiki</a>
     {% endset %}
-    {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, sort_extra) }}
+    {{ sort_bar(('best', 'hot', 'new', 'top', 'rising', 'controversial'), '/r/' ~ initial_data._sub, initial_data._sort, sort_extra) }}
     <div class="feed-list">
       {% for post in initial_data.posts if not (post.over_18 and ns_nsfw_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
     </div>
@@ -483,7 +483,7 @@
           <div class="ctx-stats">u/{{ ns_multi._username }} multireddit</div>
         </div>
       </div>
-      {{ sort_bar(('hot', 'new', 'top', 'rising', 'controversial'), '/user/' ~ ns_multi._username ~ '/m/' ~ ns_multi._multiname, ns_multi._sort) }}
+      {{ sort_bar(('best', 'hot', 'new', 'top', 'rising', 'controversial'), '/user/' ~ ns_multi._username ~ '/m/' ~ ns_multi._multiname, ns_multi._sort) }}
       <div class="feed-list">
         {% for post in ns_multi.posts if not (post.over_18 and ns_nsfw_hide) %}{{ post_card(post, ns_hls, ns_nsfw_blur, True, ns_link_external_media, ns_layout) }}{% else %}{{ empty_state('No posts found') }}{% endfor %}
       </div>

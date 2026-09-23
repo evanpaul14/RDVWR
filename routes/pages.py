@@ -15,7 +15,7 @@ SEARCH_TYPES = {'posts', 'communities', 'users'}
 bp = Blueprint("pages", __name__)
 
 
-_SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(hot|new|top|rising|controversial))?$')
+_SUB_FEED_RE = re.compile(r'^([A-Za-z0-9_]+)(?:/(best|hot|new|top|rising|controversial))?$')
 _POST_PERMALINK_RE = re.compile(r'^([A-Za-z0-9_]+)/comments/([A-Za-z0-9]+)(?:/[^/]*(?:/([A-Za-z0-9]+))?)?/?$')
 
 # Allowlist for the raw ".json" passthrough below: only the same public content
