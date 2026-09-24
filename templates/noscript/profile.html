@@ -24,7 +24,7 @@
 {% if page.error %}
   <div class="feed-list">
     {{ ui.empty_state(page.error.message) }}
-    {% if page.archive_url %}<div class="ns-next"><a class="load-more-btn" href="{{ page.archive_url }}">Check archived history &rarr;</a></div>{% endif %}
+    {% if page.archive_url %}<nav class="ns-pager"><a class="ns-page-btn" href="{{ page.archive_url }}">Check archived history &rarr;</a></nav>{% endif %}
   </div>
 {% else %}
   <div class="feed-list">

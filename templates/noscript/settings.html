@@ -42,9 +42,6 @@
     {{ check_row('nsfw_hide', 'Hide NSFW posts', 'Leave NSFW posts out of feeds and profiles entirely.') }}
     {{ check_row('nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW posts out of search results.') }}
 
-    <div class="settings-section-title">Video</div>
-    {{ check_row('hls', 'Play Reddit videos with sound (HLS)', "Reddit keeps video and audio separate; only Safari can play them together without JavaScript. Elsewhere videos play silently either way.") }}
-
     <div class="ns-settings-actions">
       <button type="submit">Save</button>
       <a class="ns-settings-cancel" href="{{ page.next }}">Cancel</a>

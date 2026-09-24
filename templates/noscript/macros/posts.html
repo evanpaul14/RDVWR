@@ -44,7 +44,11 @@
 {%- endmacro %}
 
 {% macro awards(list) -%}
-  {%- if list -%}
+  {#- static/utils.js renderAwards(): minimal layout collapses them to one medal + total. -#}
+  {%- if list and ns.layout == 'minimal' -%}
+    {%- set ns_total = namespace(n=0) -%}{%- for a in list %}{% set ns_total.n = ns_total.n + (a.count if a.count > 1 else 1) %}{% endfor -%}
+    <span class="awards" title="{{ list | map(attribute='name') | join(', ') }}">&#127941;{{ ns_total.n }}</span>
+  {%- elif list -%}
     <span class="awards">{% for a in list %}<span class="award-item" title="{{ a.name }}{% if a.count > 1 %} &times;{{ a.count }}{% endif %}"><img src="{{ a.icon }}" alt="{{ a.name }}" loading="lazy" width="16" height="16">{% if a.count > 1 %}<span class="award-count">{{ a.count }}</span>{% endif %}</span>{% endfor %}</span>
   {%- endif -%}
 {%- endmacro %}
@@ -71,17 +75,13 @@
 
 {% macro video(p, full) -%}
   {# Reddit video is separate video + audio streams, which only HLS (.m3u8) carries
-     together — and only Safari plays HLS without JS, so HLS is opt-in (ns.hls). #}
-  {%- set cls = 'pv-media' if full else 'post-video' -%}
-  {%- set preload = 'metadata' if full else 'none' -%}
-  {%- if ns.hls and p.hls_url -%}
-    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif %}</video></div>
-    <p class="ns-note">HLS: audio on Safari, silent video elsewhere &mdash; <a href="{{ ns_hls_toggle_url(False) }}">disable</a></p>
-  {%- elif p.video_url -%}
-    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.video_url }}" type="video/mp4"></video></div>
-    {%- if p.hls_url %}<p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS for audio (Safari only)</a></p>{% endif -%}
-  {%- elif p.hls_url -%}
-    <p class="ns-note">This video only plays via HLS &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS (Safari only)</a> or <a href="{{ p.permalink }}" target="_blank" rel="noopener">watch on reddit.com</a></p>
+     together. Browsers that play HLS natively (Safari) pick that <source> and get audio;
+     the rest skip it by type and fall back to the silent MP4. #}
+  {%- if p.hls_url or p.video_url -%}
+    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ p.preview_img or '' }}">
+      {%- if p.hls_url %}<source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% endif -%}
+      {%- if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif -%}
+    </video></div>
   {%- endif -%}
 {%- endmacro %}
 
@@ -191,7 +191,7 @@
   {%- set src = (g0.thumb or g0.url) if g0 else (src_post.thumb_url or src_post.preview_img) -%}
   {%- if src -%}
     <a class="{{ cls }}" href="{{ href }}"{% if href.startswith('http') %} target="_blank" rel="noopener"{% endif %}><img loading="lazy" src="{{ src }}" alt=""{% if p.is_spoiler or (p.over_18 and ns.nsfw_blur) %} class="ns-thumb-veiled"{% endif %}>
-      {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge">{{ src_post.gallery | length }}</span>{% endif -%}
+      {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>{{ src_post.gallery | length }}</span>{% endif -%}
     </a>
   {%- endif -%}
 {%- endmacro %}
@@ -294,7 +294,7 @@
     <span class="up">&#9650; {{ p.score | fmtnum }}</span>
     {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
     <a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>
-    {{ time_ago(p.created_utc, p.edited_utc) }}
+    <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>{% endif %}</span>
     <span>{{ p.num_comments | fmtnum }} comments</span>
     {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}
     {%- if dl and not minimal %}<a class="share-btn" href="{{ dl }}" download title="Download media"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> download</a>{% endif %}

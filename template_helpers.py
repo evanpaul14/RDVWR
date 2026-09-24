@@ -5,7 +5,7 @@ import os
 import re
 import time
 import datetime
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, parse_qsl
 from flask import g, request
 from markupsafe import Markup
 from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME
@@ -164,8 +164,31 @@ def current_url():
     return request.path + (f"?{qs}" if qs else '')
 
 
-def ns_hls_toggle_url(enable):
-    return '/ns-hls?' + urlencode({'enable': 1 if enable else 0, 'next': current_url()})
+# Reddit listings only page forwards (an `after` cursor), so the pager carries the
+# cursors of the pages already visited in a `prev` param: "next" pushes the current
+# page's cursor onto it, "previous" pops the last one back off.
+_CURSOR_RE = re.compile(r'^[\w\-.=]{1,200}$')
+_PREV_MAX = 40
+
+
+def pager_urls(next_url):
+    """(previous-page URL or None, next-page URL or None) for a paginated listing."""
+    after = request.args.get('after', '').strip()
+    if not _CURSOR_RE.match(after):
+        return None, next_url
+    trail = [c for c in request.args.get('prev', '').split(',') if _CURSOR_RE.match(c)][-_PREV_MAX:]
+
+    def with_args(url, **params):
+        path, _, qs = url.partition('?')
+        args = [(k, v) for k, v in parse_qsl(qs) if k not in params]
+        args += [(k, v) for k, v in params.items() if v]
+        return path + ('?' + urlencode(args) if args else '')
+
+    here = with_args(current_url(), after='', prev='')
+    prev_url = with_args(here, after=trail[-1] if trail else '', prev=','.join(trail[:-1]))
+    if next_url:
+        next_url = with_args(next_url, prev=','.join((trail + [after])[-_PREV_MAX:]))
+    return prev_url, next_url
 
 
 def register(app):
@@ -175,7 +198,7 @@ def register(app):
         app.add_template_global(fn)
     app.add_template_global(download_url)
     app.add_template_global(current_url)
-    app.add_template_global(ns_hls_toggle_url)
+    app.add_template_global(pager_urls)
 
     def asset_v(filename):
         try:
