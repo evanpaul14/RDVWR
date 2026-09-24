@@ -74,7 +74,6 @@ class TestPrefs:
         with app.test_request_context("/"):
             prefs = all_prefs()
         assert prefs["theme"] == helpers.DEFAULT_SETTINGS["theme"]
-        assert prefs["hls"] is False
 
     def test_invalid_enum_cookie_falls_back_to_default(self):
         from ns_prefs import get_pref
@@ -102,7 +101,6 @@ class TestSettingsPage:
         cookies = resp.headers.getlist("Set-Cookie")
         assert any(c.startswith("ns_theme=light") for c in cookies)
         assert any(c.startswith("ns_nsfw_blur=1") for c in cookies)
-        assert any(c.startswith("ns_hls=0") for c in cookies)
         # An invalid enum value clears the cookie instead of storing it.
         assert any(c.startswith("ns_layout=;") for c in cookies)
 
@@ -110,11 +108,6 @@ class TestSettingsPage:
     def test_post_rejects_offsite_next(self, client, bad):
         resp = client.post("/settings", data={"next": bad})
         assert resp.headers["Location"] == "/"
-
-    def test_hls_toggle_link(self, client):
-        resp = client.get("/ns-hls?enable=1&next=/r/pics")
-        assert resp.headers["Location"] == "/r/pics"
-        assert any(c.startswith("ns_hls=1") for c in resp.headers.getlist("Set-Cookie"))
 
     def test_prefs_apply_to_pages(self, client):
         client.set_cookie("ns_theme", "light")
@@ -269,6 +262,44 @@ class TestSubredditPage:
         assert 'href="/r/testsub/comments/p1" title="View all 3 images"' in ns
 
 
+    @patch.object(reddit_client.SESSION, "get")
+    def test_video_offers_hls_then_mp4(self, mock_get, client):
+        video = {"is_video": True, "media": {"reddit_video": {
+            "fallback_url": "https://v.redd.it/vid1/DASH_720.mp4",
+            "hls_url": "https://v.redd.it/vid1/HLSPlaylist.m3u8"}}}
+        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([{**_make_post("p1", "Clip", "testsub"), **video}])})
+        ns = _noscript(client.get("/r/testsub/hot"))
+        assert ns.index("HLSPlaylist.m3u8") < ns.index("DASH_720.mp4")
+
+
+class TestPager:
+    def _urls(self, path, next_url):
+        from template_helpers import pager_urls
+        with app.test_request_context(path):
+            return pager_urls(next_url)
+
+    def test_first_page_has_no_previous(self):
+        assert self._urls("/r/pics/hot", "/r/pics/hot?after=t3_a") == (None, "/r/pics/hot?after=t3_a")
+
+    def test_trail_pushes_and_pops(self):
+        prev, nxt = self._urls("/r/pics/hot?after=t3_a", "/r/pics/hot?after=t3_b")
+        assert prev == "/r/pics/hot" and nxt == "/r/pics/hot?after=t3_b&prev=t3_a"
+        prev, nxt = self._urls("/r/pics/hot?after=t3_b&prev=t3_a", "/r/pics/hot?after=t3_c")
+        assert prev == "/r/pics/hot?after=t3_a"
+        assert nxt == "/r/pics/hot?after=t3_c&prev=t3_a%2Ct3_b"
+
+    def test_keeps_other_params_and_drops_bad_cursors(self):
+        prev, _ = self._urls("/search?q=cat&after=t3_b&prev=t3_a,<x>", None)
+        assert prev == "/search?q=cat&after=t3_a"
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_feed_renders_prev_and_next_buttons(self, mock_get, client):
+        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([_make_post("p2", "Two", "testsub")], after="t3_next")})
+        ns = _noscript(client.get("/r/testsub/hot?after=t3_p1"))
+        assert 'class="ns-page-btn" href="/r/testsub/hot" rel="prev"' in ns
+        assert 'href="/r/testsub/hot?after=t3_next&amp;prev=t3_p1" rel="next"' in ns
+
+
 class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):
@@ -280,6 +311,21 @@ class TestPostPage:
         assert 'href="/r/testsub/comments/abc123/_/c1"' in ns
         assert "more=c8%2Cc9" in ns and "Load 2 more comments" in ns
         assert "window.__INITIAL_POST__" in resp.get_data(as_text=True)
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_meta_matches_js_post_view(self, mock_get, client):
+        payload = _comments_payload()
+        post = payload[0]["data"]["children"][0]["data"]
+        post.update(edited=1700000000, all_awardings=[
+            {"name": "Gold", "count": 2, "icon_url": "https://i.redd.it/x.png", "resized_icons": []}])
+        mock_get.side_effect = _reddit({r"/comments/abc123\.json": payload})
+        ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        meta = re.search(r'<div class="pv-meta">.*?</div>', ns, re.S).group(0)
+        # plain time span (inherits .pv-meta sizing, like postview.js), edited age shown
+        assert 'class="meta-item" title' not in meta and "*edited " in meta
+        client.set_cookie("ns_layout", "minimal")
+        ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        assert '<span class="awards" title="Gold">&#127941;2</span>' in ns
 
     @patch.object(reddit_client.SESSION, "get")
     def test_more_page_shows_loaded_comments(self, mock_get, client):

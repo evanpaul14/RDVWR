@@ -1,5 +1,5 @@
 """Settings for the no-JS (noscript) fallback UI: a plain form that stores each
-preference as a cookie (see ns_prefs.py), plus a one-click HLS video toggle link.
+preference as a cookie (see ns_prefs.py).
 
 A few settings.js settings aren't offered here because they fundamentally need JS: the
 personalized home feed / Reddit-cookie login (credentials only ever meant to live
@@ -34,11 +34,3 @@ def ns_settings():
            "page": {"prefs": all_prefs(), "next": _safe_next(request.args.get('next'))}}
     return render_template("index.html", disable_downloads=DISABLE_DOWNLOADS, **ctx), 200, \
         {'Cache-Control': 'no-store'}
-
-
-@bp.route("/ns-hls")
-def toggle_ns_hls():
-    """Plain-link toggle for HLS video playback, shown under each video in the noscript view."""
-    resp = redirect(_safe_next(request.args.get('next')))
-    set_pref_cookie(resp, 'hls', request.args.get('enable') == '1')
-    return resp
