@@ -9,7 +9,7 @@ from urllib.parse import urlencode, urlparse, parse_qsl
 from flask import g, request
 from markupsafe import Markup
 from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME
-from reddit_html import EXTERNAL_MEDIA_CLASS
+from reddit_html import EXTERNAL_MEDIA_CLASS, linkify_plain_text
 from ns_prefs import all_prefs, get_pref
 
 
@@ -80,6 +80,11 @@ def md(sanitized_html):
     if get_pref('link_external_media'):
         html = _EXT_MEDIA_IMG_RE.sub(r'\1gif &#8599;</a>', html)
     return Markup(html)
+
+
+def mdtext(text):
+    """Plain-text body (no *_html) with mentions and markdown links linked."""
+    return Markup(linkify_plain_text(text))
 
 
 # ── Post classification (ports of render.js / postview.js checks) ────────────
@@ -192,7 +197,7 @@ def pager_urls(next_url):
 
 
 def register(app):
-    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md):
+    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md, mdtext):
         app.add_template_filter(f)
     for fn in (is_bot, link_domain, is_article, article_url):
         app.add_template_global(fn)

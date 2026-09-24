@@ -21,7 +21,7 @@
   <div class="ns-about-panel">
     {% if about and (about.sidebar_html or about.description) %}
       <details class="ns-about"><summary>About community</summary>
-        <div class="sidebar-section"><div class="sidebar-desc md">{% if about.sidebar_html %}{{ about.sidebar_html | md }}{% else %}{{ about.description }}{% endif %}</div></div>
+        <div class="sidebar-section"><div class="sidebar-desc md">{% if about.sidebar_html %}{{ about.sidebar_html | md }}{% else %}{{ about.description | mdtext }}{% endif %}</div></div>
       </details>
     {% endif %}
     {% if page.rules %}
