@@ -272,6 +272,34 @@ class TestSubredditPage:
         assert ns.index("HLSPlaylist.m3u8") < ns.index("DASH_720.mp4")
 
 
+class TestPager:
+    def _urls(self, path, next_url):
+        from template_helpers import pager_urls
+        with app.test_request_context(path):
+            return pager_urls(next_url)
+
+    def test_first_page_has_no_previous(self):
+        assert self._urls("/r/pics/hot", "/r/pics/hot?after=t3_a") == (None, "/r/pics/hot?after=t3_a")
+
+    def test_trail_pushes_and_pops(self):
+        prev, nxt = self._urls("/r/pics/hot?after=t3_a", "/r/pics/hot?after=t3_b")
+        assert prev == "/r/pics/hot" and nxt == "/r/pics/hot?after=t3_b&prev=t3_a"
+        prev, nxt = self._urls("/r/pics/hot?after=t3_b&prev=t3_a", "/r/pics/hot?after=t3_c")
+        assert prev == "/r/pics/hot?after=t3_a"
+        assert nxt == "/r/pics/hot?after=t3_c&prev=t3_a%2Ct3_b"
+
+    def test_keeps_other_params_and_drops_bad_cursors(self):
+        prev, _ = self._urls("/search?q=cat&after=t3_b&prev=t3_a,<x>", None)
+        assert prev == "/search?q=cat&after=t3_a"
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_feed_renders_prev_and_next_buttons(self, mock_get, client):
+        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([_make_post("p2", "Two", "testsub")], after="t3_next")})
+        ns = _noscript(client.get("/r/testsub/hot?after=t3_p1"))
+        assert 'class="ns-page-btn" href="/r/testsub/hot" rel="prev"' in ns
+        assert 'href="/r/testsub/hot?after=t3_next&amp;prev=t3_p1" rel="next"' in ns
+
+
 class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):

@@ -11,8 +11,15 @@
   <div class="feed-list">{{ empty_state(err.message) }}</div>
 {%- endmacro %}
 
-{% macro next_link(url, label='Next page') -%}
-  {% if url %}<div class="ns-next"><a class="load-more-btn" href="{{ url }}">{{ label }} &rarr;</a></div>{% endif %}
+{% macro next_link(url, label='Next page', prev_label='Previous page') -%}
+  {#- Prev/next buttons; the JS app infinite-scrolls instead. -#}
+  {%- set prev_url, next_url = pager_urls(url) -%}
+  {%- if prev_url or next_url -%}
+    <nav class="ns-pager">
+      {%- if prev_url %}<a class="ns-page-btn" href="{{ prev_url }}" rel="prev">&larr; {{ prev_label }}</a>{% endif -%}
+      {%- if next_url %}<a class="ns-page-btn" href="{{ next_url }}" rel="next">{{ label }} &rarr;</a>{% endif -%}
+    </nav>
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro ctx_header(title, stats='', icon='') -%}
