@@ -1986,15 +1986,15 @@ a.scope-check-label { text-decoration:none; }
 .ns-gallery-preview a { display:flex; justify-content:center; }
 .ns-gallery-preview img { max-width:100%; max-height:70vh; object-fit:contain; display:block; }
 .ns-gallery-badge {
-  position:absolute; bottom:12px; right:12px;
+  position:absolute; bottom:10px; right:10px;
   display:flex; align-items:center; gap:6px;
-  background:rgba(0,0,0,.8); color:#fff; border:1px solid rgba(255,255,255,.25);
-  font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.03em;
-  padding:6px 11px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.4);
-  transition:background .15s, border-color .15s;
+  /* Fixed colors: it sits on top of the image, whatever the theme. */
+  background:rgba(12,12,12,.85); color:#e8e8e8; border:1px solid rgba(255,255,255,.18); border-radius:3px;
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase;
+  padding:6px 10px; transition:color .15s, border-color .15s;
 }
 .ns-gallery-badge svg { flex-shrink:0; display:block; }
-.ns-gallery-preview a:hover .ns-gallery-badge { background:var(--ac); border-color:var(--ac); color:#0c0c0c; }
+.ns-gallery-preview a:hover .ns-gallery-badge { color:var(--ac); border-color:var(--ac); }
 .ns-gallery-item figcaption { font-family:var(--mono); font-size:11px; color:var(--tx3); padding:6px 12px; text-align:center; }
 /* Native <details>/<summary> stand in for JS's collapse button: hide the default
    marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
