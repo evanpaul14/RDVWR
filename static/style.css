@@ -1922,13 +1922,12 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .settings-panel.settings-dragging { transition:none !important; }
 
 /* ── No-JS fallback (server-rendered, shown only inside <noscript>) ──────────
-   The markup here reuses the JS app's own classes (post, post-header, comment,
-   sort-bar, ctx-info, sidebar-section, pv-*, wiki-*, community-card, user-card…)
-   so the fallback looks like the real site. Only glue for things the JS never
-   renders standalone (a plain-link search form, an inline "about" disclosure,
-   a feed wrapper outside #app-shell) lives here. */
-.ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; white-space:nowrap; }
-.ns-note code { background:var(--bg3); padding:1px 5px; border-radius:3px; }
+   templates/noscript/ reuses the JS app's own classes (post, post-header, comment,
+   sort-bar, ctx-info, sidebar-section, pv-*, wiki-*, live-*, community-card…) so the
+   fallback looks like the real site. Only glue for things the JS never renders
+   standalone — plain links/forms standing in for JS-driven controls, native
+   <details> standing in for click handlers — lives here. */
+.ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; }
 .ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; flex-shrink:0; }
 .ns-quicknav a { color:var(--tx2); text-decoration:none; }
 .ns-quicknav a:hover { color:var(--ac); }
@@ -1941,21 +1940,23 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 /* Feed wrapper (JS uses id="feed" on an element inside #app-shell, which the
    noscript markup must not collide with — same box model, different selector). */
 .feed-list { max-width:720px; margin:0 auto; padding:20px 20px 80px; display:flex; flex-direction:column; gap:14px; }
+.minimal-mode .feed-list { gap:0; }
 .ns-pv-wrap.pv-wrap { padding-top:20px; }
 .ns-next { max-width:720px; margin:4px auto 24px; padding:0 20px; }
+.feed-list .ns-next { padding:0; margin:0; }
 /* Search input/button live in .search-wrap without the JS shell's #subreddit-input id. */
 .search-wrap input[type="text"] { flex:1; background:transparent; border:none; outline:none; font-family:var(--mono); font-size:13px; color:var(--tx); padding:10px 4px; min-width:0; }
 .search-wrap input[type="text"]::placeholder { color:var(--tx3); }
 .search-wrap button[type="submit"] { background:transparent; border:none; border-left:1px solid var(--b2); cursor:pointer; padding:0 14px; align-self:stretch; color:var(--tx2); transition:color .15s,background .15s; display:flex; align-items:center; }
 .search-wrap button[type="submit"]:hover { color:var(--ac); background:var(--bg3); }
 /* Anchors standing in for the JS shell's <button> sort/type/load-more controls. */
-a.sort-btn, a.search-type-btn, a.load-more-btn { text-decoration:none; display:inline-block; }
-/* Secondary search-refinement row (flair filter, subreddit-scope checkbox) shown
-   only on the results page, since a single plain input can't branch like the JS
-   header search (see the noscript limitations note). */
-.ns-searchbar { max-width:720px; margin:12px auto 0; padding:0 20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-.ns-searchbar input.ns-search-flair { background:var(--bg2); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:7px 10px; font-family:var(--mono); font-size:12px; width:140px; }
-.ns-searchbar button { background:var(--bg3); border:1px solid var(--b2); border-radius:5px; color:var(--tx); padding:7px 14px; font-family:var(--mono); font-size:11px; cursor:pointer; }
+a.sort-btn, a.search-type-btn, a.load-more-btn, a.state-continue-btn { text-decoration:none; display:inline-block; }
+a.community-card, a.user-card { text-decoration:none; color:inherit; }
+.ns-sort-divider { border-left:1px solid var(--b); margin:8px 4px; }
+/* Link standing in for the JS search's "only r/<sub>" checkbox. */
+a.scope-check-label { text-decoration:none; }
+.ns-checkbox { width:12px; height:12px; border:1px solid var(--b2); border-radius:2px; flex-shrink:0; }
+.ns-checkbox.checked { background:var(--ac); border-color:var(--ac); }
 /* Inline "about community" disclosures standing in for the JS slide-out sidebar panel. */
 .ns-about-panel { max-width:720px; margin:0 auto; padding:12px 20px 0; display:flex; flex-direction:column; gap:8px; }
 .ns-about { border:1px solid var(--b); border-radius:6px; padding:0 14px; }
@@ -1963,12 +1964,38 @@ a.sort-btn, a.search-type-btn, a.load-more-btn { text-decoration:none; display:i
 .ns-about summary { list-style:none; cursor:pointer; padding:10px 0; font-family:var(--mono); font-size:11px; color:var(--tx2); letter-spacing:.04em; }
 .ns-about summary::-webkit-details-marker { display:none; }
 .ns-about .sidebar-section { margin:0; }
-/* Native <details> reveal stands in for the JS click-to-reveal spoiler veil. */
-.ns-spoiler summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:var(--tx3); background:var(--bg3); border-radius:4px; list-style:none; }
-.ns-spoiler summary::-webkit-details-marker { display:none; }
-.ns-spoiler[open] summary { border-radius:4px 4px 0 0; margin-bottom:0; }
 .ns-poll { margin:0 16px 10px; }
 .ns-poll-opt { background:var(--bg3); border-radius:4px; padding:6px 10px; margin-bottom:4px; font-size:13px; }
+.ns-nsfw-label { color:#ff5050; }
+/* Native <details> standing in for the JS click-to-reveal spoiler/NSFW veils
+   (utils.js veilWrap); the NSFW label uses the JS veil label's #ff8080. */
+.ns-reveal summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:var(--tx3); background:var(--bg3); border-radius:4px; list-style:none; }
+.ns-reveal--nsfw summary { color:#ff8080; }
+.ns-reveal summary::-webkit-details-marker { display:none; }
+.ns-reveal[open] summary { border-radius:4px 4px 0 0; }
+.ns-thumb-veiled { filter:blur(16px); }
+/* Inline >!spoilers!<: revealed while hovered or focused (tapped) instead of on click. */
+.ns-root .spoiler:hover, .ns-root .spoiler:focus { background:var(--bg3); color:var(--tx); outline:none; }
+.ns-root .spoiler:hover a, .ns-root .spoiler:focus a { color:var(--ac); }
+/* Gallery: a scroll-snapping strip standing in for the JS gallery carousel (post view),
+   or its first image + count linking to the post (feeds). */
+.ns-gallery { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:0; }
+.ns-gallery-item { flex:0 0 100%; scroll-snap-align:start; margin:0; display:flex; flex-direction:column; align-items:center; }
+.ns-gallery-item a { display:flex; justify-content:center; width:100%; }
+.ns-gallery-item img { max-width:100%; max-height:70vh; object-fit:contain; }
+.ns-gallery-preview a { display:flex; justify-content:center; }
+.ns-gallery-preview img { max-width:100%; max-height:70vh; object-fit:contain; display:block; }
+.ns-gallery-badge {
+  position:absolute; bottom:10px; right:10px;
+  display:flex; align-items:center; gap:6px;
+  /* Fixed colors: it sits on top of the image, whatever the theme. */
+  background:rgba(12,12,12,.85); color:#e8e8e8; border:1px solid rgba(255,255,255,.18); border-radius:3px;
+  font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em; text-transform:uppercase;
+  padding:6px 10px; transition:color .15s, border-color .15s;
+}
+.ns-gallery-badge svg { flex-shrink:0; display:block; }
+.ns-gallery-preview a:hover .ns-gallery-badge { color:var(--ac); border-color:var(--ac); }
+.ns-gallery-item figcaption { font-family:var(--mono); font-size:11px; color:var(--tx3); padding:6px 12px; text-align:center; }
 /* Native <details>/<summary> stand in for JS's collapse button: hide the default
    marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
 details.comment > summary.comment-header { list-style:none; }
@@ -1981,6 +2008,8 @@ details.comment:not([open]) > summary.comment-header::before { content:'+'; }
 details.comment:not([open]) > summary.comment-header { margin-bottom:0; }
 details.comment:not([open]) > .comment-body,
 details.comment:not([open]) > .comment-replies { display:none; }
+.ucc-footer a { color:inherit; text-decoration:none; }
+.ucc-footer a:hover { color:var(--tx2); }
 
 /* Settings gear link in the noscript header — like .settings-btn but never hidden
    on mobile (there's no bottom nav / JS settings panel to fall back to here). */
@@ -2003,13 +2032,6 @@ details.comment:not([open]) > .comment-replies { display:none; }
   padding:4px 10px; cursor:pointer; transition:color .15s,border-color .15s;
 }
 .time-filter-go:hover { color:var(--ac); border-color:var(--ac); }
-
-/* Native <details>/<summary> stands in for the JS click-to-reveal NSFW veil
-   (body.nsfw-blur .nsfw-veil above) — same idea as .ns-spoiler but its own
-   accent color to match the JS veil label's #ff8080. */
-.ns-nsfw summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:#ff8080; background:var(--bg3); border-radius:4px; list-style:none; }
-.ns-nsfw summary::-webkit-details-marker { display:none; }
-.ns-nsfw[open] summary { border-radius:4px 4px 0 0; margin-bottom:0; }
 
 /* ── Settings page (noscript) ────────────────────────────────────────────── */
 .ns-settings-wrap { max-width:520px; margin:0 auto; padding:24px 20px 60px; }
@@ -2040,9 +2062,11 @@ details.comment:not([open]) > .comment-replies { display:none; }
 /* ── No-JS fallback: mobile ──────────────────────────────────────────────── */
 @media (max-width:680px) {
   .ns-quicknav { gap:8px; }
+  /* Search gets its own full-width row, keeping the settings gear up with the logo. */
+  .ns-search-form { order:1; flex-basis:100%; }
+  .ns-settings-btn { margin-left:auto; }
   .feed-list { padding:14px 12px 80px; }
   .ns-next { padding:0 12px; }
   .ns-about-panel { padding:12px 12px 0; }
-  .ns-searchbar { padding:0 12px; }
   .ns-settings-wrap { padding:18px 12px 60px; }
 }

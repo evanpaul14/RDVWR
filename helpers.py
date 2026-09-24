@@ -62,9 +62,12 @@ USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
 FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
-
-
+SUB_SORTS    = FEED_SORTS - {'best'}   # sorts offered as a per-visitor default
 TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
+COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
+SEARCH_SORTS  = {'relevance', 'hot', 'top', 'new'}
+THEMES        = {'dark', 'light', 'system'}
+LAYOUTS       = {'card', 'compact', 'minimal'}
 
 
 def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
@@ -97,12 +100,11 @@ def _enum_env(name, default, allowed):
 # localStorage and always wins over these (see settings.js _load()). `redditCookies` isn't
 # here since it's a per-visitor credential, not a deployment-wide default.
 DEFAULT_SETTINGS = {
-    'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', {'dark', 'light', 'system'}),
-    'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', {'card', 'compact', 'minimal'}),
-    'subSort':           _enum_env('RDVWR_DEFAULT_SUB_SORT', 'hot', FEED_SORTS - {'best'}),
+    'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', THEMES),
+    'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', LAYOUTS),
+    'subSort':           _enum_env('RDVWR_DEFAULT_SUB_SORT', 'hot', SUB_SORTS),
     'subTime':           _enum_env('RDVWR_DEFAULT_SUB_TIME', 'day', TIME_FILTERS),
-    'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence',
-                                    {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}),
+    'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence', COMMENT_SORTS),
     'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed'}),
     'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
     'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
@@ -116,79 +118,31 @@ DEFAULT_SETTINGS = {
 }
 
 
-NS_COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
+class UpstreamError(Exception):
+    """Raised by the shared fetch_* helpers in routes/ when Reddit (or another upstream)
+    answers with something other than the requested data. `state` optionally classifies
+    the failure (e.g. a subreddit's "quarantined"/"private"), for callers that branch on it.
+    The /api/* endpoints turn it into a JSON error via .response(); the server-rendered
+    noscript pages show .message instead."""
 
+    def __init__(self, message, status=502, state=None):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+        self.state = state
 
-def ns_cookie_bool(name, default_key):
-    """Read a noscript-fallback boolean preference cookie (see routes/ns_settings.py),
-    falling back to the matching DEFAULT_SETTINGS entry when the visitor hasn't set it."""
-    raw = request.cookies.get(name)
-    if raw is None:
-        return DEFAULT_SETTINGS[default_key]
-    return raw == '1'
+    def response(self):
+        body = {"error": self.message}
+        if self.state:
+            body["state"] = self.state
+        return jsonify(body), self.status
 
-
-def ns_cookie_enum(name, default_key, allowed):
-    """Same as ns_cookie_bool but for an enum-valued cookie; falls back to DEFAULT_SETTINGS
-    on missing or invalid cookie values."""
-    raw = request.cookies.get(name)
-    if raw in allowed:
-        return raw
-    return DEFAULT_SETTINGS[default_key]
-
-
-# ── Noscript-fallback preference cookies (see routes/ns_settings.py's /settings page) ──
-
-def ns_hls_enabled():
-    """Whether the no-JS fallback should embed HLS (.m3u8) video sources instead of the
-    plain mp4 fallback. Off by default since only Safari plays HLS natively without JS;
-    toggled per-visitor via the /ns-hls link shown under videos in the noscript view."""
-    return request.cookies.get('ns_hls') == '1'
-
-
-def ns_nsfw_blur_enabled():
-    return ns_cookie_bool('ns_nsfw_blur', 'nsfwBlur')
-
-
-def ns_nsfw_hide_enabled():
-    return ns_cookie_bool('ns_nsfw_hide', 'nsfwHide')
-
-
-def ns_nsfw_search_hide_enabled():
-    return ns_cookie_bool('ns_nsfw_search_hide', 'nsfwSearchHide')
-
-
-def ns_link_external_media_enabled():
-    return ns_cookie_bool('ns_link_external_media', 'linkExternalMedia')
-
-
-def ns_theme():
-    return ns_cookie_enum('ns_theme', 'theme', {'dark', 'light', 'system'})
-
-
-def ns_layout():
-    return ns_cookie_enum('ns_layout', 'layout', {'card', 'compact', 'minimal'})
-
-
-def ns_sub_sort_default():
-    return ns_cookie_enum('ns_sub_sort', 'subSort', FEED_SORTS - {'best'})
-
-
-def ns_sub_time_default():
-    return ns_cookie_enum('ns_sub_time', 'subTime', TIME_FILTERS)
-
-
-def ns_context():
-    """Cookie-derived noscript-fallback preferences, injected into every SPA/noscript render."""
-    return {
-        'ns_hls': ns_hls_enabled(),
-        'ns_nsfw_blur': ns_nsfw_blur_enabled(),
-        'ns_nsfw_hide': ns_nsfw_hide_enabled(),
-        'ns_nsfw_search_hide': ns_nsfw_search_hide_enabled(),
-        'ns_theme': ns_theme(),
-        'ns_layout': ns_layout(),
-        'ns_link_external_media': ns_link_external_media_enabled(),
-    }
+    @classmethod
+    def from_status(cls, status_code, not_found="Not found"):
+        """Generic error for a non-200 upstream response."""
+        if status_code == 404:
+            return cls(not_found, 404)
+        return cls(f"Reddit returned {status_code}", status_code)
 
 
 def parallel(*fns):

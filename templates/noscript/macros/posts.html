@@ -1,0 +1,316 @@
+{# Post rendering for the noscript views: feed cards in all three layouts (render.js
+   renderPost/renderCompactRow/renderMinimalRow) and the full post view (postview.js).
+   Markup reuses the JS app's classes so style.css styles both. Import `with context`:
+   the macros read the visitor's preferences from `ns` (see ns_prefs.py). #}
+
+{% import 'noscript/macros/ui.html' as ui %}
+
+{% macro post_path(p) %}/r/{{ p.subreddit }}/comments/{{ p.id }}{% endmacro %}
+
+{% macro reveal(kind, inner) -%}
+  {# Native <details> standing in for the JS click-to-reveal veils (utils.js veilWrap). #}
+  <details class="ns-reveal ns-reveal--{{ kind }}"><summary>{{ kind }} &mdash; click to reveal</summary>{{ inner }}</details>
+{%- endmacro %}
+
+{% macro flair(p) -%}
+  {%- if p.flair or p.flair_richtext -%}
+    {%- set style = ' style="background:%s;color:%s"' | format(p.flair_bg, '#fff' if p.flair_tc == 'light' else '#1a1a1a') if p.flair_bg | usable_bg else '' -%}
+    {%- set inner -%}
+      {%- if p.flair_type == 'richtext' and p.flair_richtext -%}
+        {%- for part in p.flair_richtext -%}
+          {%- if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif -%}
+        {%- endfor -%}
+      {%- else %}{{ p.flair }}{% endif -%}
+    {%- endset -%}
+    {%- if p.flair -%}
+      {# Same search the JS app runs when a flair chip is clicked (app.js handleFlairClick). #}
+      <a class="flair flair-clickable" href="/search?q={{ ('flair:"' ~ p.flair ~ '"') | urlencode }}&amp;sub={{ p.subreddit | urlencode }}&amp;sort=new"{{ style | safe }}>{{ inner }}</a>
+    {%- else -%}
+      <span class="flair"{{ style | safe }}>{{ inner }}</span>
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro author_flair(c) -%}
+  {%- if c.author_flair_text or c.author_flair_richtext -%}
+    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>
+      {%- if c.author_flair_type == 'richtext' and c.author_flair_richtext -%}
+        {%- for part in c.author_flair_richtext -%}
+          {%- if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="author-flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif -%}
+        {%- endfor -%}
+      {%- else %}{{ c.author_flair_text }}{% endif -%}
+    </span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro awards(list) -%}
+  {%- if list -%}
+    <span class="awards">{% for a in list %}<span class="award-item" title="{{ a.name }}{% if a.count > 1 %} &times;{{ a.count }}{% endif %}"><img src="{{ a.icon }}" alt="{{ a.name }}" loading="lazy" width="16" height="16">{% if a.count > 1 %}<span class="award-count">{{ a.count }}</span>{% endif %}</span>{% endfor %}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro badges(p, short=False) -%}
+  {%- if p.is_stickied %}<span class="badge badge-sticky">&#128204;{% if not short %} pinned{% endif %}</span>{% endif -%}
+  {%- if p.over_18 %}<span class="nsfw-tag">nsfw</span>{% endif -%}
+  {%- if p.is_spoiler %}<span class="badge badge-spoiler">spoiler</span>{% endif -%}
+  {%- if p.locked %}<span class="badge badge-locked">locked</span>{% endif -%}
+  {%- if p.is_oc %}<span class="badge badge-oc">oc</span>{% endif -%}
+  {%- if p.poll %}<span class="badge badge-poll">poll</span>{% endif -%}
+  {{ flair(p) }}
+{%- endmacro %}
+
+{% macro time_ago(utc, edited_utc=None) -%}
+  <span class="meta-item" title="{{ utc | fmtdatetime }}">{{ utc | timeago }}{% if edited_utc %} <span class="edited-mark" title="edited {{ edited_utc | fmtdate }}">*edited</span>{% endif %}</span>
+{%- endmacro %}
+
+{# ── Media ───────────────────────────────────────────────────────────────────── #}
+
+{% macro link_out(href, label) -%}
+  <div class="pv-article-box"><a class="pv-article-link" href="{{ href }}" target="_blank" rel="noopener"><span>{{ label }}</span></a></div>
+{%- endmacro %}
+
+{% macro video(p, full) -%}
+  {# Reddit video is separate video + audio streams, which only HLS (.m3u8) carries
+     together — and only Safari plays HLS without JS, so HLS is opt-in (ns.hls). #}
+  {%- set cls = 'pv-media' if full else 'post-video' -%}
+  {%- set preload = 'metadata' if full else 'none' -%}
+  {%- if ns.hls and p.hls_url -%}
+    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif %}</video></div>
+    <p class="ns-note">HLS: audio on Safari, silent video elsewhere &mdash; <a href="{{ ns_hls_toggle_url(False) }}">disable</a></p>
+  {%- elif p.video_url -%}
+    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.video_url }}" type="video/mp4"></video></div>
+    {%- if p.hls_url %}<p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS for audio (Safari only)</a></p>{% endif -%}
+  {%- elif p.hls_url -%}
+    <p class="ns-note">This video only plays via HLS &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS (Safari only)</a> or <a href="{{ p.permalink }}" target="_blank" rel="noopener">watch on reddit.com</a></p>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro embed(p, full, href, label, iframe_src, extra_cls='', attrs='') -%}
+  {%- if ns.link_external_media -%}
+    {{ link_out(href, label) }}
+  {%- else -%}
+    <div class="{{ 'pv-media' if full else 'post-video' }}{{ extra_cls }}"><iframe src="{{ iframe_src }}" loading="lazy" allowfullscreen {{ attrs | safe }}></iframe></div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro gallery(p, full) -%}
+  {%- if full -%}
+    {# Horizontally scroll-snapping strip standing in for the JS gallery carousel; each
+       image links to its full-size original (the JS lightbox). #}
+    <div class="pv-media ns-gallery">
+      {%- for img in p.gallery -%}
+        <figure class="ns-gallery-item">
+          <a href="{{ img.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ img.url }}" alt="{{ img.caption or '' }}"></a>
+          <figcaption>{{ loop.index }} / {{ loop.length }}{% if img.caption %} &middot; {{ img.caption }}{% endif %}</figcaption>
+        </figure>
+      {%- endfor -%}
+    </div>
+  {%- else -%}
+    {# In a feed, just the first image with an image count; the whole gallery is on
+       the post page, so a long gallery doesn't make the feed a long scroll. #}
+    {%- set first = p.gallery[0] -%}
+    <div class="post-media ns-gallery-preview">
+      <a href="{{ post_path(p) }}" title="View all {{ p.gallery | length }} images">
+        <img loading="lazy" src="{{ first.thumb or first.url }}" alt="{{ first.caption or '' }}">
+        <span class="ns-gallery-badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>{{ p.gallery | length }} images</span>
+      </a>
+    </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro media(p, full) -%}
+  {%- set cls = 'pv-media' if full else 'post-media' -%}
+  {%- if p.gallery and p.gallery | length > (0 if full else 1) -%}
+    {{ gallery(p, full) }}
+  {%- elif p.is_video -%}
+    {{ video(p, full) }}
+  {%- elif p.gif_url and p.gif_is_video -%}
+    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls loop muted playsinline preload="{{ 'metadata' if full else 'none' }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.gif_url }}" type="video/mp4"></video></div>
+  {%- elif p.gif_url -%}
+    <div class="{{ cls }}"><img loading="lazy" src="{{ p.gif_url }}" alt=""></div>
+  {%- elif p.redgifs_id -%}
+    {{ embed(p, full, 'https://www.redgifs.com/watch/' ~ p.redgifs_id, 'video on redgifs.com →', 'https://www.redgifs.com/ifr/' ~ p.redgifs_id, attrs='referrerpolicy="no-referrer"') }}
+  {%- elif p.youtube_id -%}
+    {{ embed(p, full, 'https://www.youtube.com/watch?v=' ~ p.youtube_id, 'YouTube video — watch on youtube.com →', 'https://www.youtube-nocookie.com/embed/' ~ p.youtube_id, attrs='referrerpolicy="strict-origin-when-cross-origin"') }}
+  {%- elif p.tiktok_id -%}
+    {{ embed(p, full, 'https://www.tiktok.com/embed/v2/' ~ p.tiktok_id, 'TikTok video — watch on tiktok.com →', 'https://www.tiktok.com/player/v1/' ~ p.tiktok_id, ' tiktok-wrap', 'sandbox="allow-scripts allow-same-origin allow-popups"') }}
+  {%- elif p.streamable_id -%}
+    {{ embed(p, full, 'https://streamable.com/' ~ p.streamable_id, 'video on streamable.com →', 'https://streamable.com/e/' ~ p.streamable_id) }}
+  {%- elif p.imgur_album_id -%}
+    {{ link_out('https://imgur.com/a/' ~ p.imgur_album_id, 'Imgur album — view on imgur.com →') }}
+  {%- elif p.is_devvit -%}
+    {%- if p.preview_img %}<div class="{{ cls }}"><img loading="lazy" src="{{ p.preview_img }}" alt=""></div>{% endif %}
+    <p class="ns-note">Interactive app &mdash; <a href="{{ p.permalink }}" target="_blank" rel="noopener">open on reddit.com &rarr;</a></p>
+  {%- elif p.embed_url -%}
+    {{ embed(p, full, p.embed_url, 'embedded media — open source →', p.embed_url) }}
+  {%- elif p.preview_img or p.thumb_url -%}
+    {%- set src = p.preview_img or p.thumb_url -%}
+    <div class="{{ cls }}"><a href="{{ src }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ src }}" alt=""></a></div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro veiled(p, inner, spoiler=True) -%}
+  {# Hides `inner` until revealed: always for spoiler posts (unless spoiler=False — the
+     JS post view doesn't veil a spoiler's body text), and for NSFW posts when the
+     visitor has "Blur NSFW content" on. Same rules as the JS veils. #}
+  {%- if not inner | trim -%}
+  {%- elif p.is_spoiler and spoiler -%}{{ reveal('spoiler', inner) }}
+  {%- elif p.over_18 and ns.nsfw_blur -%}{{ reveal('nsfw', inner) }}
+  {%- else -%}{{ inner }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro poll(p) -%}
+  {%- if p.poll -%}
+    <div class="ns-poll">
+      {%- for opt in p.poll.options -%}
+        <div class="ns-poll-opt">{{ opt.text }}{% if opt.vote_count is not none %} &mdash; {{ opt.vote_count | fmtnum }} votes{% endif %}</div>
+      {%- endfor -%}
+      <p class="ns-note">{{ p.poll.total_votes | fmtnum }} total votes{% if p.poll.closed %} &middot; closed{% endif %}</p>
+    </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro crosspost(p, full) -%}
+  {# A crosspost's original post, or the reddit post a link post points to. #}
+  {%- set xp = p.crosspost_from or p.linked_post -%}
+  <div class="crosspost-embed{% if full %} crosspost-embed-full{% endif %}">
+    <div class="crosspost-embed-header">&#8618; {{ 'crossposted from' if p.crosspost_from else 'links to a post in' }} <a href="/r/{{ xp.subreddit }}">r/{{ xp.subreddit }}</a></div>
+    <a class="crosspost-embed-title" href="{{ post_path(xp) }}">{{ xp.title }}</a>
+    {{ veiled(xp, media(xp, full)) }}
+    {%- if full and xp.selftext_html %}{{ veiled(xp, '<div class="xp-excerpt xp-excerpt-full md">' | safe ~ (xp.selftext_html | md) ~ '</div>' | safe, spoiler=False) }}{% endif -%}
+  </div>
+{%- endmacro %}
+
+{# ── Feed cards ──────────────────────────────────────────────────────────────── #}
+
+{% macro thumb(p, cls, href) -%}
+  {# Thumbnail for the compact/minimal rows, linking to `href`. #}
+  {%- set src_post = p.crosspost_from or p -%}
+  {%- set g0 = src_post.gallery[0] if src_post.gallery else None -%}
+  {%- set src = (g0.thumb or g0.url) if g0 else (src_post.thumb_url or src_post.preview_img) -%}
+  {%- if src -%}
+    <a class="{{ cls }}" href="{{ href }}"{% if href.startswith('http') %} target="_blank" rel="noopener"{% endif %}><img loading="lazy" src="{{ src }}" alt=""{% if p.is_spoiler or (p.over_18 and ns.nsfw_blur) %} class="ns-thumb-veiled"{% endif %}>
+      {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge">{{ src_post.gallery | length }}</span>{% endif -%}
+    </a>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro footer(p) -%}
+  {%- set domain = link_domain(p) -%}
+  <div class="post-footer">
+    <div class="footer-left">
+      <div class="score-block">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
+        <span class="score-num">{{ p.score | fmtnum }}</span>
+        <div class="ratio-bar"><div class="ratio-fill" style="width:{{ p.upvote_ratio }}%"></div></div>
+      </div>
+      <a class="post-author" href="/user/{{ p.author }}">u/{{ p.author }}</a>
+      {{ time_ago(p.created_utc, p.edited_utc) }}
+      {{ awards(p.awards) }}
+    </div>
+    <div class="footer-right">
+      {%- if domain %}<a class="ext-link" href="{{ p.url }}" target="_blank" rel="noopener">{{ domain }} &#8599;</a>{% endif %}
+      <a class="comments-link" href="{{ post_path(p) }}">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{ p.num_comments | fmtnum }} comments
+      </a>
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro header(p, show_sub) -%}
+  <div class="post-header">
+    <div class="post-meta-top">{% if show_sub %}<a class="post-sub-link" href="/r/{{ p.subreddit }}">r/{{ p.subreddit }}</a>{% endif %}{{ badges(p) }}</div>
+    <a class="post-title{{ ' is-italic' if p.is_self }}" href="{{ post_path(p) }}">{{ p.title }}</a>
+  </div>
+{%- endmacro %}
+
+{% macro minimal_row(p, show_sub) -%}
+  {%- set domain = link_domain(p) -%}
+  <div class="post post-minimal" data-post-id="{{ p.id }}">
+    <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none" aria-hidden="true"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>{{ p.score | fmtnum }}</div>
+    <div class="min-body">
+      <div class="min-title-row">{{ badges(p, short=True) }}<a class="min-title{{ ' min-title-self' if p.is_self }}" href="{{ post_path(p) }}">{{ p.title }}</a>{% if domain %} <a class="min-domain" href="{{ p.url }}" target="_blank" rel="noopener">({{ domain }})</a>{% endif %}</div>
+      <div class="min-meta">
+        {%- if show_sub %}<a class="min-sub" href="/r/{{ p.subreddit }}">r/{{ p.subreddit }}</a> &middot; {% endif -%}
+        <a class="min-author" href="/user/{{ p.author }}">u/{{ p.author }}</a> &middot; {{ time_ago(p.created_utc, p.edited_utc) }} &middot; <a class="min-comments" href="{{ post_path(p) }}">{{ p.num_comments | fmtnum }} comments</a>
+      </div>
+    </div>
+    {%- if not is_article(p) %}{{ thumb(p, 'min-thumb', post_path(p)) }}{% endif -%}
+  </div>
+{%- endmacro %}
+
+{% macro compact_row(p, show_sub) -%}
+  <div class="post post-compact" data-post-id="{{ p.id }}">
+    <div class="post-compact-left">
+      {{ header(p, show_sub) }}
+      {{ footer(p) }}
+    </div>
+    {{ thumb(p, 'post-compact-thumb', p.url if is_article(p) else post_path(p)) }}
+  </div>
+{%- endmacro %}
+
+{% macro card(p, show_sub=True) -%}
+  {%- if ns.layout == 'minimal' -%}
+    {{ minimal_row(p, show_sub) }}
+  {%- elif ns.layout == 'compact' or is_article(p) -%}
+    {{ compact_row(p, show_sub) }}
+  {%- else -%}
+    <div class="post" data-post-id="{{ p.id }}">
+      {{ header(p, show_sub) }}
+      {%- if p.crosspost_from or p.linked_post -%}
+        {{ crosspost(p, False) }}
+      {%- else -%}
+        {{ veiled(p, media(p, False)) }}
+        {{ poll(p) }}
+        {%- if p.is_self and p.selftext_html -%}
+          {{ veiled(p, '<div class="post-excerpt"><div class="md">' | safe ~ (p.selftext_html | md) ~ '</div></div>' | safe) }}
+        {%- endif -%}
+      {%- endif -%}
+      {{ footer(p) }}
+    </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro feed(posts, show_sub=True, hide_nsfw=None, empty='No posts found') -%}
+  {%- set hide = ns.nsfw_hide if hide_nsfw is none else hide_nsfw -%}
+  <div class="feed-list">
+    {%- for p in posts if not (p.over_18 and hide) %}{{ card(p, show_sub) }}{% else %}{{ ui.empty_state(empty) }}{% endfor -%}
+  </div>
+{%- endmacro %}
+
+{# ── Full post view ──────────────────────────────────────────────────────────── #}
+
+{% macro detail(p) -%}
+  {%- set minimal = ns.layout == 'minimal' -%}
+  {%- set dl = download_url(p) -%}
+  {%- set article = article_url(p) -%}
+  <a class="pv-sub-link" href="/r/{{ p.subreddit }}">r/{{ p.subreddit }}</a>
+  {%- set b = badges(p) -%}
+  {%- if b | trim %}<div class="post-meta-top" style="margin-bottom:10px">{{ b }}</div>{% endif %}
+  <h1 class="pv-title{{ ' is-italic' if p.is_self }}">{{ p.title }}</h1>
+  <div class="pv-meta">
+    <span class="up">&#9650; {{ p.score | fmtnum }}</span>
+    {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
+    <a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>
+    {{ time_ago(p.created_utc, p.edited_utc) }}
+    <span>{{ p.num_comments | fmtnum }} comments</span>
+    {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}
+    {%- if dl and not minimal %}<a class="share-btn" href="{{ dl }}" download title="Download media"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> download</a>{% endif %}
+    <a class="meta-item link" href="{{ p.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
+    {{ awards(p.awards) }}
+  </div>
+  {%- if p.crosspost_from or p.linked_post -%}
+    {{ crosspost(p, True) }}
+  {%- else -%}
+    {{ veiled(p, media(p, True)) }}
+  {%- endif -%}
+  {%- if article and not minimal -%}
+    <div class="pv-article-box"><a class="pv-article-link" href="{{ article }}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>{{ article }}</span></a></div>
+  {%- endif -%}
+  {{ poll(p) }}
+  {%- if p.is_self and p.selftext_html -%}
+    {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext_html | md) ~ '</div>' | safe, spoiler=False) }}
+  {%- endif -%}
+{%- endmacro %}

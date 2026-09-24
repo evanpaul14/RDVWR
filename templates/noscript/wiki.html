@@ -1,0 +1,10 @@
+{# A subreddit wiki page (page_data.build_wiki). #}
+{% import 'noscript/macros/ui.html' as ui %}
+<div class="wiki-page">
+  <div class="wiki-header">
+    <span class="wiki-sub"><a href="/r/{{ page.sub }}">r/{{ page.sub }}</a></span>
+    <span class="wiki-sep">/</span>
+    <span class="wiki-title">{% if page.page != 'index' %}<a href="/r/{{ page.sub }}/wiki">wiki</a>/{{ page.page }}{% else %}wiki{% endif %}</span>
+  </div>
+  {% if page.error %}{{ ui.empty_state(page.error.message) }}{% else %}<div class="wiki-body md">{{ page.html | md }}</div>{% endif %}
+</div>

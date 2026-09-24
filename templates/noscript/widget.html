@@ -1,0 +1,23 @@
+{# One subreddit sidebar widget `w` (sidebar.js renderWidget), as a disclosure. #}
+{% set title = w.name or w.kind | replace('-', ' ') | capitalize %}
+<details class="ns-about"><summary>{{ title }}</summary>
+  <div class="sidebar-section">
+  {% if w.kind == 'community-list' %}
+    <div class="sidebar-community-list">
+      {% for c in w['items'] %}<a class="sidebar-community" href="/r/{{ c.name }}">
+        {%- if c.icon %}<img class="sidebar-community-icon" src="{{ c.icon }}" alt="" loading="lazy">{% else %}<span class="sidebar-community-icon sidebar-community-icon--blank"></span>{% endif -%}
+        <span class="sidebar-community-name">r/{{ c.name }}</span>{% if c.subscribers %}<span class="sidebar-community-subs">{{ c.subscribers | fmtnum }}</span>{% endif %}</a>{% endfor %}
+    </div>
+  {% elif w.kind == 'calendar' %}
+    <ul class="sidebar-events">{% for ev in w.events %}<li class="sidebar-event"><span class="sidebar-event-title">{{ ev.title }}</span>{% if ev.startTime and not ev.allDay %}<span class="sidebar-event-time">{{ ev.startTime | timeago }}</span>{% endif %}</li>{% endfor %}</ul>
+  {% elif w.kind == 'image' %}
+    {% for im in w.images %}{% if im.linkUrl %}<a href="{{ im.linkUrl }}" target="_blank" rel="noopener noreferrer"><img class="sidebar-widget-img" src="{{ im.url }}" alt="" loading="lazy"></a>{% else %}<img class="sidebar-widget-img" src="{{ im.url }}" alt="" loading="lazy">{% endif %}{% endfor %}
+  {% elif w.kind == 'textarea' %}
+    <div class="sidebar-desc md">{% if w.text_html %}{{ w.text_html | md }}{% else %}{{ w.text }}{% endif %}</div>
+  {% elif w.kind == 'button' %}
+    <div class="sidebar-widget-btns">{% for b in w.buttons %}<a class="sidebar-widget-btn" href="{{ b.url }}" target="_blank" rel="noopener noreferrer">{{ b.text }}</a>{% endfor %}</div>
+  {% elif w.kind == 'menu' %}
+    <div class="sidebar-menu">{% for l in w.links %}<a class="sidebar-menu-link" href="{{ l.url }}" target="_blank" rel="noopener noreferrer">{{ l.text }}</a>{% endfor %}</div>
+  {% endif %}
+  </div>
+</details>

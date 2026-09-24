@@ -1,0 +1,7 @@
+{# A user's multireddit (page_data.build_multi). #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{% set stats %}<a class="ctx-sub-link" href="/user/{{ page.username }}">u/{{ page.username }}</a> multireddit{% endset %}
+{{ ui.ctx_header(page.title, stats) }}
+{{ ui.feed_sort_bar(page.nav) }}
+{% if page.error %}{{ ui.error_state(page.error) }}{% else %}{{ posts.feed(page.posts) }}{{ ui.next_link(page.nav.next_url) }}{% endif %}

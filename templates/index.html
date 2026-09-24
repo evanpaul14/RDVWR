@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="RDVWR">
-<title>RDVWR</title>
+<title>{{ page_title or 'RDVWR' }}</title>
 <meta name="referrer" content="no-referrer">
 {% if proxy_media %}<meta name="rdvwr-proxy-media" content="1">{% endif %}
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -19,7 +19,7 @@
 <meta name="theme-color" content="#0c0c0c">
 <link rel="modulepreload" href="{{ url_for('static', filename='app.bundle.js', v=asset_v('app.bundle.js')) }}">
 </head>
-<body class="theme-{{ ns_theme | default('dark') }}{% if ns_layout == 'minimal' %} minimal-mode{% endif %}{% if ns_nsfw_blur %} nsfw-blur{% endif %}{% if ns_nsfw_hide %} nsfw-hide{% endif %}">
+<body class="theme-{{ ns.theme }}{% if ns.layout == 'minimal' %} minimal-mode{% endif %}{% if ns.nsfw_blur %} nsfw-blur{% endif %}{% if ns.nsfw_hide %} nsfw-hide{% endif %}">
 <noscript><style>#app-shell{display:none}</style></noscript>
 <div id="app-shell">
 <!-- ── Header ── -->
@@ -194,7 +194,7 @@
   <div class="settings-body" id="settings-body"></div>
 </div>
 </div><!-- /#app-shell -->
-<noscript>{% include "_noscript.html" %}</noscript>
+<noscript>{% include "noscript/layout.html" %}</noscript>
 {% if initial_data %}<script nonce="{{ csp_nonce }}">window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
 {% if initial_about %}<script nonce="{{ csp_nonce }}">window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
 {% if initial_post %}<script nonce="{{ csp_nonce }}">window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}

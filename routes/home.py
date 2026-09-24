@@ -9,9 +9,25 @@ from curl_cffi import requests as cffi_requests
 from media_detection import process_post, extract_posts
 from reddit_client import reddit_get, PROXIES
 from shreddit import _parse_shreddit_post
-from helpers import CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, add_time_param, cached_json, error_response, hydrate_linked_posts, log
+from helpers import (CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
+                     cached_json, error_response, hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
+
+
+def fetch_frontpage(sort, t='', after='', timeout=10):
+    """Reddit's anonymous (logged-out) front page: {"posts", "after"}."""
+    params = {"limit": FEED_LIMIT, "raw_json": 1}
+    add_time_param(params, sort, t)
+    if after:
+        params["after"] = after
+    resp = reddit_get(f"https://www.reddit.com/{sort}.json", params=params, timeout=timeout)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code)
+    listing = resp.json()["data"]
+    posts   = extract_posts(listing)
+    hydrate_linked_posts(posts)
+    return {"posts": posts, "after": listing.get("after")}
 
 
 @bp.route("/api/home")
@@ -19,7 +35,7 @@ def get_home():
     sort  = request.args.get("sort", "best")
     t     = request.args.get("t", "")
     after = request.args.get("after", "")
-    if sort not in {"best", "hot", "new", "top", "rising", "controversial"}:
+    if sort not in FEED_SORTS:
         sort = "best"
     try:
         distance = min(max(int(request.args.get("distance", 4)), 4), 500)
@@ -144,19 +160,10 @@ def get_home():
             log.warning("shreddit home-feed failed: %s", e)
 
     # Fallback: anonymous JSON API
-    url    = f"https://www.reddit.com/{sort}.json"
-    params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
-    if after:
-        params["after"] = after
     try:
-        resp = reddit_get(url, params=params, timeout=10)
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing = resp.json()["data"]
-        posts   = extract_posts(listing)
-        hydrate_linked_posts(posts)
-        return cached_json({"posts": posts, "after": listing.get("after"), "via": "anonymous"}, CACHE_TTL_FEED)
+        return cached_json({**fetch_frontpage(sort, t, after), "via": "anonymous"}, CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception:

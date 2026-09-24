@@ -1,16 +1,15 @@
 """Post comment trees and 'load more' children."""
-from flask import Blueprint, jsonify, request
-from media_detection import process_post, _parse_awards, clean_reddit_html, DISABLE_NSFW
+from flask import Blueprint, request
+from media_detection import process_post, _parse_awards, DISABLE_NSFW
+from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
-from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, SUBREDDIT_RE, POST_ID_RE,
-                     cached_json, error_response, server_cache, validate_params, hydrate_linked_posts)
+from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
+                     cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
+                     UpstreamError)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
 bp = Blueprint("comments", __name__)
-
-
-COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 
 
 def _parse_comment_fields(d):
@@ -38,8 +37,9 @@ def _parse_comment_fields(d):
     }
 
 
-def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
-    """Fetch + parse a post's comments. Returns (data_dict, None) or (None, (error_msg, status))."""
+def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
+    """A post plus its comment tree: {"post", "comments", "avatar_prefetch"}. With
+    `comment_id`, the tree is that comment's thread (plus a few parents of context)."""
     if sort not in COMMENT_SORTS:
         sort = 'confidence'
     params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
@@ -56,15 +56,15 @@ def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence',
                 f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
                 quarantine=True, params=params, timeout=timeout)
     if resp.status_code != 200:
-        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+        raise UpstreamError.from_status(resp.status_code, "Post not found")
     data     = resp.json()
     children = data[0]["data"]["children"]
     if not children:
-        return None, ("Post not found", 404)
+        raise UpstreamError("Post not found", 404)
     post_raw = children[0]["data"]
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
-        return None, ("Post not found", 404)
+        raise UpstreamError("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view
     hydrate_linked_posts([post])
 
@@ -94,7 +94,7 @@ def _fetch_comments_data(subreddit, post_id, comment_id=None, sort='confidence',
 
     comments = [c for c in (parse_comment(c) for c in data[1]["data"]["children"]) if c]
     avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
-    return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}, None
+    return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
 
 
 @bp.route("/api/r/<subreddit>/comments/<post_id>")
@@ -105,57 +105,64 @@ def get_comments(subreddit, post_id):
         comment_id = request.args.get('comment')
         sort = request.args.get('sort', 'confidence')
         with_avatars = request.args.get('avatars') == '1'
-        data, err = _fetch_comments_data(subreddit, post_id, comment_id, sort, with_avatars=with_avatars)
-        if err:
-            msg, status = err
-            return jsonify({"error": msg}), status
-        return cached_json(data, CACHE_TTL_FEED)
+        return cached_json(fetch_comments(subreddit, post_id, comment_id, sort, with_avatars=with_avatars),
+                           CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except Exception:
         return error_response(500)
+
+
+def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_avatars=False):
+    """Expand a "load more comments" stub: `children` is its comma-separated comment ids.
+    Returns {"comments", "avatar_prefetch"} with the loaded comments re-nested."""
+    if sort not in COMMENT_SORTS:
+        sort = "confidence"
+    if not children:
+        return {"comments": [], "avatar_prefetch": {}}
+    resp = reddit_get(
+        "https://www.reddit.com/api/morechildren.json",
+        params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
+                "api_type": "json", "raw_json": 1},
+        timeout=timeout)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code)
+    things = resp.json().get("json", {}).get("data", {}).get("things", [])
+    by_id  = {}
+    ordered = []
+    author_fullnames = {}
+    for thing in things:
+        if thing["kind"] != "t1":
+            continue
+        d = thing["data"]
+        comment = _parse_comment_fields(d)
+        comment["_pid"] = d.get("parent_id", "")
+        author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
+        by_id[d["id"]] = comment
+        ordered.append(comment)
+    roots = []
+    for c in ordered:
+        pid = c.pop("_pid", "")
+        if pid.startswith("t1_"):
+            parent = by_id.get(pid[3:])
+            if parent:
+                parent["replies"].append(c)
+                continue
+        roots.append(c)
+    avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
+    return {"comments": roots, "avatar_prefetch": avatar_prefetch}
 
 
 @bp.route("/api/r/<subreddit>/morechildren/<post_id>")
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_morechildren(subreddit, post_id):
-    children = request.args.get("children", "")
-    sort     = request.args.get("sort", "confidence")
-    with_avatars = request.args.get("avatars") == "1"
-    if sort not in COMMENT_SORTS:
-        sort = "confidence"
-    if not children:
-        return cached_json({"comments": []}, CACHE_TTL_FEED)
     try:
-        resp = reddit_get(
-            "https://www.reddit.com/api/morechildren.json",
-            params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
-                    "api_type": "json", "raw_json": 1},
-            timeout=12)
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        things = resp.json().get("json", {}).get("data", {}).get("things", [])
-        by_id  = {}
-        ordered = []
-        author_fullnames = {}
-        for thing in things:
-            if thing["kind"] != "t1":
-                continue
-            d = thing["data"]
-            comment = _parse_comment_fields(d)
-            comment["_pid"] = d.get("parent_id", "")
-            author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
-            by_id[d["id"]] = comment
-            ordered.append(comment)
-        roots = []
-        for c in ordered:
-            pid = c.pop("_pid", "")
-            if pid.startswith("t1_"):
-                parent = by_id.get(pid[3:])
-                if parent:
-                    parent["replies"].append(c)
-                    continue
-            roots.append(c)
-        avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
-        return cached_json({"comments": roots, "avatar_prefetch": avatar_prefetch}, CACHE_TTL_FEED)
+        return cached_json(fetch_morechildren(post_id, request.args.get("children", ""),
+                                              request.args.get("sort", "confidence"),
+                                              with_avatars=request.args.get("avatars") == "1"),
+                           CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except Exception:
         return error_response(500)

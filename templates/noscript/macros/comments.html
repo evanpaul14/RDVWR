@@ -1,0 +1,51 @@
+{# Comment trees for the noscript post view (render.js renderCommentTree). Each comment
+   is a <details> so it collapses without JS. Import `with context`. #}
+
+{% import 'noscript/macros/posts.html' as posts with context %}
+
+{# Deeper replies continue on the comment's own page, like the JS app. #}
+{% set THREAD_MAX_DEPTH = 4 %}
+
+{% macro more_link(c, post, sort, depth) -%}
+  {# A "load more comments" stub: the JS app splices the missing comments in place;
+     here they open on a page of their own (see page_data.build_post). #}
+  {%- if c.children -%}
+    <div class="more-comments-wrap" data-depth="{{ depth }}"><a class="load-more-btn" href="/r/{{ post.subreddit }}/comments/{{ post.id }}?{{ {'more': c.children[:100] | join(','), 'sort': sort} | urlencode }}">
+      {%- if c.count > 0 %}Load {{ c.count }} more comment{{ 's' if c.count != 1 }}{% else %}Load more comments{% endif -%}
+    </a></div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro comment(c, post, sort, depth=0) -%}
+  {%- if c.kind == 'more' -%}
+    {{ more_link(c, post, sort, depth) }}
+  {%- else -%}
+    {%- set deleted = not c.body or c.body in ('[deleted]', '[removed]') -%}
+    {%- set is_mod = c.distinguished == 'moderator' -%}
+    {%- set is_op = post.author and post.author != '[deleted]' and not deleted and c.author == post.author -%}
+    {%- set permalink = '/r/' ~ post.subreddit ~ '/comments/' ~ post.id ~ '/_/' ~ c.id -%}
+    <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not (c.author == 'AutoModerator' or is_bot(c.author)) %} open{% endif %}>
+      <summary class="comment-header">
+        <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
+        {%- if is_mod %}<span class="comment-mod">MOD</span>{% endif -%}
+        {%- if c.distinguished == 'admin' %}<span class="comment-admin">ADMIN</span>{% endif -%}
+        {%- if is_op %}<span class="comment-op">OP</span>{% endif -%}
+        {%- if c.stickied %}<span class="badge badge-sticky">&#128204; stickied</span>{% endif -%}
+        {{ posts.author_flair(c) }}
+        <span class="comment-score">&#9650; {{ c.score | fmtnum }}</span>
+        <a class="comment-time" href="{{ permalink }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>{% if c.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}
+        {{ posts.awards(c.awards) }}
+      </summary>
+      <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
+      {%- if c.replies -%}
+        <div class="comment-replies">
+          {%- if depth >= THREAD_MAX_DEPTH -%}
+            <a class="continue-thread" href="{{ permalink }}">Continue thread &rarr;</a>
+          {%- else -%}
+            {%- for r in c.replies %}{{ comment(r, post, sort, depth + 1) }}{% endfor -%}
+          {%- endif -%}
+        </div>
+      {%- endif -%}
+    </details>
+  {%- endif -%}
+{%- endmacro %}
