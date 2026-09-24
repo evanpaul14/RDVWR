@@ -1,0 +1,9 @@
+{# A page that's only a message (page_data.build_message). #}
+<div class="feed-list">
+  <div class="state">
+    <div class="state-icon">&#8981;</div>
+    <div class="state-title">{{ page.title }}</div>
+    <div class="state-sub">{{ page.message }}</div>
+    {% if page.link %}<a class="state-continue-btn" href="{{ page.link }}"{% if page.link.startswith('http') %} target="_blank" rel="noopener"{% endif %}>{{ page.link_label }}</a>{% endif %}
+  </div>
+</div>

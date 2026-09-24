@@ -1,0 +1,53 @@
+{# The noscript settings form (routes/ns_settings.py). Field names are the preference
+   names in ns_prefs.PREFS; each is stored as a cookie. #}
+{% set prefs = page.prefs %}
+
+{% macro select_row(name, label, hint, opts) %}
+  <label class="ns-settings-row ns-settings-row--select">
+    <span class="ns-settings-row-text"><strong>{{ label }}</strong>{% if hint %}<small>{{ hint }}</small>{% endif %}</span>
+    <select class="settings-select" name="{{ name }}">
+      {% for v, l in opts %}<option value="{{ v }}"{% if v == prefs[name] %} selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </label>
+{% endmacro %}
+
+{% macro check_row(name, label, hint) %}
+  <label class="ns-settings-row">
+    <input type="checkbox" name="{{ name }}" value="1"{% if prefs[name] %} checked{% endif %}>
+    <span class="ns-settings-row-text"><strong>{{ label }}</strong>{% if hint %}<small>{{ hint }}</small>{% endif %}</span>
+  </label>
+{% endmacro %}
+
+<div class="ns-settings-wrap">
+  <h1 class="ns-settings-title">Settings</h1>
+  <form class="ns-settings-form" method="post" action="/settings">
+    <input type="hidden" name="next" value="{{ page.next }}">
+
+    <div class="settings-section-title">Appearance</div>
+    {{ select_row('theme', 'Theme', '', [('dark', 'Dark'), ('light', 'Light'), ('system', 'System default')]) }}
+    {{ select_row('layout', 'Layout', '', [('card', 'Card'), ('compact', 'Compact'), ('minimal', 'Minimal')]) }}
+
+    <div class="settings-section-title">Feed</div>
+    {{ select_row('sub_sort', 'Default sort', 'Used when browsing a subreddit without picking a sort.', [('hot', 'Hot'), ('new', 'New'), ('top', 'Top'), ('rising', 'Rising'), ('controversial', 'Controversial')]) }}
+    {{ select_row('sub_time', 'Default time', 'Used for Top/Controversial when no time filter is chosen.', [('hour', 'Past hour'), ('day', 'Today'), ('week', 'Past week'), ('month', 'Past month'), ('year', 'Past year'), ('all', 'All time')]) }}
+
+    <div class="settings-section-title">Comments</div>
+    {{ select_row('comment_sort', 'Default sort', '', [('confidence', 'Best'), ('top', 'Top'), ('new', 'New'), ('controversial', 'Controversial'), ('old', 'Old'), ('qa', 'Q&A')]) }}
+
+    <div class="settings-section-title">Privacy</div>
+    {{ check_row('link_external_media', "Don't embed third-party media", 'Show a plain link instead of embedding YouTube, TikTok, Streamable, redgifs or other outside players.') }}
+
+    <div class="settings-section-title">NSFW</div>
+    {{ check_row('nsfw_blur', 'Blur NSFW content', 'Hide NSFW post media and text behind a click-to-reveal.') }}
+    {{ check_row('nsfw_hide', 'Hide NSFW posts', 'Leave NSFW posts out of feeds and profiles entirely.') }}
+    {{ check_row('nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW posts out of search results.') }}
+
+    <div class="settings-section-title">Video</div>
+    {{ check_row('hls', 'Play Reddit videos with sound (HLS)', "Reddit keeps video and audio separate; only Safari can play them together without JavaScript. Elsewhere videos play silently either way.") }}
+
+    <div class="ns-settings-actions">
+      <button type="submit">Save</button>
+      <a class="ns-settings-cancel" href="{{ page.next }}">Cancel</a>
+    </div>
+  </form>
+</div>

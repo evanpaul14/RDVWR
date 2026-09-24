@@ -1,0 +1,57 @@
+{# A subreddit feed plus its sidebar (page_data.build_subreddit). The JS app's slide-out
+   sidebar becomes a row of <details> disclosures above the feed. #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{# Same wording as feed.js SUB_STATE_LABELS. #}
+{% set SUB_STATE_LABELS = {'restricted': 'restricted', 'archived': 'archived', 'quarantined': 'quarantined', 'gold_restricted': 'coin-restricted', 'employees_only': 'staff-only', 'user': 'user profile'} %}
+{% set about = page.about %}
+
+{% if about %}
+  {% set stats -%}
+    <span>{{ about.subscribers | fmtnum }}</span> members
+    {%- if about.active %} &middot; <span>{{ about.active | fmtnum }}</span> online{% endif -%}
+    {%- if about.state %} &middot; <span class="ctx-state">{{ SUB_STATE_LABELS.get(about.state, about.state) }}</span>{% endif -%}
+  {%- endset %}
+  {{ ui.ctx_header(about.title or 'r/' ~ page.sub, stats, about.icon) }}
+{% else %}
+  {{ ui.ctx_header('r/' ~ page.sub) }}
+{% endif %}
+
+{% if (about and (about.sidebar_html or about.description)) or page.rules or page.widgets or page.mods %}
+  <div class="ns-about-panel">
+    {% if about and (about.sidebar_html or about.description) %}
+      <details class="ns-about"><summary>About community</summary>
+        <div class="sidebar-section"><div class="sidebar-desc md">{% if about.sidebar_html %}{{ about.sidebar_html | md }}{% else %}{{ about.description }}{% endif %}</div></div>
+      </details>
+    {% endif %}
+    {% if page.rules %}
+      <details class="ns-about"><summary>Rules ({{ page.rules | length }})</summary>
+        <div class="sidebar-section"><ul class="sidebar-rules">{% for r in page.rules %}<li class="sidebar-rule"><span class="sidebar-rule-num">{{ loop.index }}.</span>{{ r.short_name }}</li>{% endfor %}</ul></div>
+      </details>
+    {% endif %}
+    {% for w in page.widgets %}{% include 'noscript/widget.html' %}{% endfor %}
+    {% if page.mods %}
+      <details class="ns-about"><summary>Moderators ({{ page.mods | length }})</summary>
+        <div class="sidebar-section"><div class="sidebar-mods">{% for m in page.mods %}<a class="sidebar-mod-name" href="/user/{{ m.name }}">u/{{ m.name }}</a>{% endfor %}</div></div>
+      </details>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% set wiki_link %}{% if page.show_wiki %}<a class="sort-btn sort-btn-wiki" href="/r/{{ page.sub }}/wiki">wiki</a>{% endif %}{% endset %}
+{% if page.error and page.error.state == 'quarantined' %}
+  <div class="feed-list">
+    <div class="state state-quarantine">
+      <div class="state-icon">&#9888;</div>
+      <div class="state-title">This subreddit is quarantined</div>
+      <div class="state-sub">{{ page.error.message }}</div>
+      <a class="state-continue-btn" href="{{ page.continue_url }}">Continue</a>
+    </div>
+  </div>
+{% elif page.error %}
+  {{ ui.error_state(page.error) }}
+{% else %}
+  {{ ui.feed_sort_bar(page.nav, wiki_link) }}
+  {{ posts.feed(page.posts) }}
+  {{ ui.next_link(page.nav.next_url) }}
+{% endif %}

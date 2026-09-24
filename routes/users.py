@@ -4,7 +4,7 @@ from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
-                     hydrate_linked_posts, log)
+                     hydrate_linked_posts, log, UpstreamError)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
 
@@ -39,15 +39,12 @@ def get_posts_live_info():
         return jsonify({})
 
 
-def _fetch_user_about(username, timeout=10):
-    """Returns (data_dict, None) or (None, (error_msg, status))."""
+def fetch_user_about(username, timeout=10):
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/about.json",
         params={"raw_json": 1}, timeout=timeout)
-    if resp.status_code == 404:
-        return None, ("User not found", 404)
     if resp.status_code != 200:
-        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+        raise UpstreamError.from_status(resp.status_code, "User not found")
     d    = resp.json()["data"]
     icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
     sub  = d.get("subreddit") or {}
@@ -65,7 +62,7 @@ def _fetch_user_about(username, timeout=10):
         "is_employee":         d.get("is_employee", False),
         "verified":            d.get("verified", False),
         "has_verified_email":  d.get("has_verified_email", False),
-    }, None
+    }
 
 
 @bp.route("/api/user/<username>/about")
@@ -73,11 +70,9 @@ def _fetch_user_about(username, timeout=10):
 @server_cache(CACHE_TTL_FEED)
 def get_user_about(username):
     try:
-        data, err = _fetch_user_about(username)
-        if err:
-            msg, status = err
-            return jsonify({"error": msg}), status
-        return cached_json(data, CACHE_TTL_FEED)
+        return cached_json(fetch_user_about(username), CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except Exception:
         return error_response(500)
 
@@ -110,48 +105,92 @@ def get_user_trophies(username):
         return jsonify({"trophies": []})
 
 
-def _fetch_listing_with_archive(username, after, item_key, do_live_request, parse_live_items,
-                                 fetch_archived, hydrate=False):
-    """Shared control flow for /user/<u>/posts and /user/<u>/comments: serve from
-    Reddit's live listing, transparently falling back to the Arctic Shift archive
-    on 403/404 or an empty result (both usually mean a suspended/shadowbanned/
-    deleted account whose data only survives in the archive)."""
+_PROFILE_GONE = "User not found or profile is private"
+
+
+def _archived(items, hydrate):
+    if hydrate:
+        hydrate_linked_posts(items)
+    return items, _arc_cursor(items, FEED_LIMIT)
+
+
+def _fetch_listing_with_archive(username, after, do_live_request, parse_live_items,
+                                fetch_archived, hydrate=False):
+    """Shared control flow for a user's posts and comments listings: serve from Reddit's
+    live listing, transparently falling back to the Arctic Shift archive on 403/404 or
+    an empty result (both usually mean a suspended/shadowbanned/deleted account whose
+    data only survives in the archive). Returns (items, next_after, archived)."""
     if after.startswith("arc:"):
+        return (*_archived(fetch_archived(FEED_LIMIT, before=int(after[4:])), hydrate), True)
+    resp = do_live_request()
+    if resp.status_code in (403, 404):
         try:
-            items = fetch_archived(FEED_LIMIT, before=int(after[4:]))
-            if hydrate:
-                hydrate_linked_posts(items)
-            return cached_json({item_key: items, "after": _arc_cursor(items, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-        except Exception:
-            return error_response(500)
+            items = fetch_archived(FEED_LIMIT)
+            if items:
+                return (*_archived(items, hydrate), True)
+        except Exception as e:
+            log.warning("archived fallback failed for %s: %s", username, e)
+        raise UpstreamError(_PROFILE_GONE, 404)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code)
+    listing = resp.json()["data"]
+    items   = parse_live_items(listing)
+    if not items and not after:
+        try:
+            archived = fetch_archived(FEED_LIMIT)
+            if archived:
+                return (*_archived(archived, hydrate), True)
+        except Exception as e:
+            log.warning("archived fallback failed for %s: %s", username, e)
+    if hydrate:
+        hydrate_linked_posts(items)
+    return items, listing.get("after"), False
+
+
+def _listing_params(sort, t, after):
+    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
+    add_time_param(params, sort, t, sorts_with_time=("top",))
+    if after:
+        params["after"] = after
+    return params
+
+
+def fetch_user_posts(username, sort='new', t='', after='', timeout=10):
+    """A user's submissions: {"posts", "after"}, plus "archived": True when served
+    from the Arctic Shift archive."""
+    posts, next_after, archived = _fetch_listing_with_archive(
+        username, after,
+        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/submitted.json",
+                                            params=_listing_params(sort, t, after), timeout=timeout),
+        parse_live_items=extract_posts,
+        fetch_archived=lambda limit, before=None: _fetch_archived_posts(username, limit, before=before),
+        hydrate=True,
+    )
+    return {"posts": posts, "after": next_after, **({"archived": True} if archived else {})}
+
+
+def _parse_comment_listing(listing):
+    return [_normalize_comment(c["data"]) for c in listing["children"] if c.get("kind") == "t1"]
+
+
+def fetch_user_comments(username, sort='new', t='', after='', timeout=10):
+    """A user's comments: {"comments", "after"}, plus "archived" like fetch_user_posts."""
+    comments, next_after, archived = _fetch_listing_with_archive(
+        username, after,
+        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/comments.json",
+                                            params=_listing_params(sort, t, after), timeout=timeout),
+        parse_live_items=_parse_comment_listing,
+        fetch_archived=lambda limit, before=None: _fetch_archived_comments(username, limit, before=before),
+    )
+    return {"comments": comments, "after": next_after, **({"archived": True} if archived else {})}
+
+
+def _user_listing_endpoint(fetch, username):
     try:
-        resp = do_live_request()
-        if resp.status_code in (403, 404):
-            try:
-                items = fetch_archived(FEED_LIMIT)
-                if items:
-                    if hydrate:
-                        hydrate_linked_posts(items)
-                    return cached_json({item_key: items, "after": _arc_cursor(items, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived %s fallback failed for %s: %s", item_key, username, e)
-            return jsonify({"error": "User not found or profile is private"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing = resp.json()["data"]
-        items   = parse_live_items(listing)
-        if not items and not after:
-            try:
-                archived = fetch_archived(FEED_LIMIT)
-                if archived:
-                    if hydrate:
-                        hydrate_linked_posts(archived)
-                    return cached_json({item_key: archived, "after": _arc_cursor(archived, FEED_LIMIT), "archived": True}, CACHE_TTL_FEED)
-            except Exception as e:
-                log.warning("archived %s fallback failed for %s: %s", item_key, username, e)
-        if hydrate:
-            hydrate_linked_posts(items)
-        return cached_json({item_key: items, "after": listing.get("after")}, CACHE_TTL_FEED)
+        return cached_json(fetch(username, request.args.get("sort", "new"), request.args.get("t", ""),
+                                 request.args.get("after", "")), CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except Exception:
         return error_response(500)
 
@@ -160,49 +199,19 @@ def _fetch_listing_with_archive(username, after, item_key, do_live_request, pars
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_posts_api(username):
-    sort  = request.args.get("sort", "new")
-    t     = request.args.get("t", "")
-    after = request.args.get("after", "")
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    add_time_param(params, sort, t, sorts_with_time=("top",))
-    if after:
-        params["after"] = after
-    return _fetch_listing_with_archive(
-        username, after, "posts",
-        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/submitted.json",
-                                            params=params, timeout=10),
-        parse_live_items=extract_posts,
-        fetch_archived=lambda limit, before=None: _fetch_archived_posts(username, limit, before=before),
-        hydrate=True,
-    )
+    return _user_listing_endpoint(fetch_user_posts, username)
 
 
 @bp.route("/api/user/<username>/comments")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_comments_api(username):
-    sort  = request.args.get("sort", "new")
-    t     = request.args.get("t", "")
-    after = request.args.get("after", "")
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    add_time_param(params, sort, t, sorts_with_time=("top",))
-    if after:
-        params["after"] = after
-
-    def parse_comments(listing):
-        return [_normalize_comment(c["data"]) for c in listing["children"] if c.get("kind") == "t1"]
-
-    return _fetch_listing_with_archive(
-        username, after, "comments",
-        do_live_request=lambda: reddit_get(f"https://www.reddit.com/user/{username}/comments.json",
-                                            params=params, timeout=10),
-        parse_live_items=parse_comments,
-        fetch_archived=lambda limit, before=None: _fetch_archived_comments(username, limit, before=before),
-    )
+    return _user_listing_endpoint(fetch_user_comments, username)
 
 
-def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
-    """Returns (data_dict, None) or (None, (error_msg, status)).
+def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
+    """A user's mixed posts+comments feed: {"items": [{"type", "data"}], "after"}, plus
+    "archived": True when served from the Arctic Shift archive.
 
     allow_archive=False skips the Arctic Shift fallback entirely (which does
     two sequential slow third-party API calls) and just reports the failure,
@@ -211,26 +220,22 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow
     client-side request instead."""
     if after.startswith("arc:"):
         items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
-        return {"items": items, "after": next_after, "archived": True}, None
+        return {"items": items, "after": next_after, "archived": True}
 
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
-    add_time_param(params, sort, t, sorts_with_time=("top",))
-    if after:
-        params["after"] = after
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/overview.json",
-        params=params, timeout=timeout)
+        params=_listing_params(sort, t, after), timeout=timeout)
     if resp.status_code in (403, 404):
         if allow_archive:
             try:
                 items, next_after = _fetch_archived_overview(username)
                 if items:
-                    return {"items": items, "after": next_after, "archived": True}, None
+                    return {"items": items, "after": next_after, "archived": True}
             except Exception as e:
                 log.warning("archived overview fallback failed for %s: %s", username, e)
-        return None, ("User not found or profile is private", 404)
+        raise UpstreamError(_PROFILE_GONE, 404)
     if resp.status_code != 200:
-        return None, (f"Reddit returned {resp.status_code}", resp.status_code)
+        raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
     items = []
     for child in listing["children"]:
@@ -250,24 +255,14 @@ def _fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow
         try:
             arc_items, next_after = _fetch_archived_overview(username)
             if arc_items:
-                return {"items": arc_items, "after": next_after, "archived": True}, None
+                return {"items": arc_items, "after": next_after, "archived": True}
         except Exception as e:
             log.warning("archived overview fallback failed for %s: %s", username, e)
-    return {"items": items, "after": listing.get("after")}, None
+    return {"items": items, "after": listing.get("after")}
 
 
 @bp.route("/api/user/<username>/overview")
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_overview_api(username):
-    sort  = request.args.get("sort", "new")
-    t     = request.args.get("t", "")
-    after = request.args.get("after", "")
-    try:
-        data, err = _fetch_user_overview(username, sort, t, after)
-        if err:
-            msg, status = err
-            return jsonify({"error": msg}), status
-        return cached_json(data, CACHE_TTL_FEED)
-    except Exception:
-        return error_response(500)
+    return _user_listing_endpoint(fetch_user_overview, username)

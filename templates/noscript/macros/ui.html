@@ -1,0 +1,54 @@
+{# Small building blocks shared by the noscript views. Controls that are <button>s wired
+   up by JS in the real app are plain links or GET forms here. #}
+
+{% set TIME_LABELS = (('hour', 'Past hour'), ('day', 'Today'), ('week', 'Past week'), ('month', 'Past month'), ('year', 'Past year'), ('all', 'All time')) %}
+
+{% macro empty_state(title, sub='') -%}
+  <div class="state"><div class="state-icon">&empty;</div><div class="state-title">{{ title }}</div>{% if sub %}<div class="state-sub">{{ sub }}</div>{% endif %}</div>
+{%- endmacro %}
+
+{% macro error_state(err) -%}
+  <div class="feed-list">{{ empty_state(err.message) }}</div>
+{%- endmacro %}
+
+{% macro next_link(url, label='Next page') -%}
+  {% if url %}<div class="ns-next"><a class="load-more-btn" href="{{ url }}">{{ label }} &rarr;</a></div>{% endif %}
+{%- endmacro %}
+
+{% macro ctx_header(title, stats='', icon='') -%}
+  {# The title strip above a feed (.ctx-info in the JS shell). `stats` is trusted markup. #}
+  <div class="ctx-info visible">
+    {% if icon %}<img class="ctx-icon" src="{{ icon }}" alt="" loading="lazy">{% endif %}
+    <div class="ctx-meta">
+      <div class="ctx-title">{{ title }}</div>
+      {% if stats %}<div class="ctx-stats">{{ stats }}</div>{% endif %}
+    </div>
+  </div>
+{%- endmacro %}
+
+{% macro time_filter(action, active, hidden={}) -%}
+  {# Stands in for the JS time-filter <select> (utils.js buildTimeFilterHtml), which
+     applies on change; without JS it needs its own "Go" button. #}
+  <form class="ns-time-form" method="get" action="{{ action }}">
+    {% for k, v in hidden.items() if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <div class="time-filter-wrap">
+      <select class="time-filter" name="t" aria-label="Time filter" title="Time filter">
+        {% for opt, label in TIME_LABELS | reverse %}<option value="{{ opt }}"{% if opt == active %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="time-filter-go" title="Apply time filter" aria-label="Apply time filter">Go</button>
+    </div>
+  </form>
+{%- endmacro %}
+
+{% macro sort_link(label, href, active) -%}
+  <a class="sort-btn{% if active %} active{% endif %}" href="{{ href }}">{{ label }}</a>
+{%- endmacro %}
+
+{% macro feed_sort_bar(nav, extra='') -%}
+  {# Sort buttons (+ time filter for timed sorts) for a listing at nav.base/<sort>. #}
+  <div class="sort-bar ns-sort-bar">
+    {% for s in nav.sorts %}{{ sort_link(s | capitalize, nav.base ~ '/' ~ s, s == nav.sort) }}{% endfor %}
+    {% if nav.time %}{{ time_filter(nav.base ~ '/' ~ nav.sort, nav.time) }}{% endif %}
+    {{ extra }}
+  </div>
+{%- endmacro %}
