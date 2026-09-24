@@ -1977,11 +1977,14 @@ a.scope-check-label { text-decoration:none; }
 /* Inline >!spoilers!<: revealed while hovered or focused (tapped) instead of on click. */
 .ns-root .spoiler:hover, .ns-root .spoiler:focus { background:var(--bg3); color:var(--tx); outline:none; }
 .ns-root .spoiler:hover a, .ns-root .spoiler:focus a { color:var(--ac); }
-/* Gallery: a scroll-snapping strip standing in for the JS gallery carousel. */
+/* Gallery: a scroll-snapping strip standing in for the JS gallery carousel (post view),
+   or its first image + count linking to the post (feeds). */
 .ns-gallery { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:0; }
 .ns-gallery-item { flex:0 0 100%; scroll-snap-align:start; margin:0; display:flex; flex-direction:column; align-items:center; }
 .ns-gallery-item a { display:flex; justify-content:center; width:100%; }
 .ns-gallery-item img { max-width:100%; max-height:70vh; object-fit:contain; }
+.ns-gallery-preview a { display:flex; justify-content:center; }
+.ns-gallery-preview img { max-width:100%; max-height:70vh; object-fit:contain; display:block; }
 .ns-gallery-item figcaption { font-family:var(--mono); font-size:11px; color:var(--tx3); padding:6px 12px; text-align:center; }
 /* Native <details>/<summary> stand in for JS's collapse button: hide the default
    marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
