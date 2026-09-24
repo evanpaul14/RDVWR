@@ -214,8 +214,12 @@ def sanitize_reddit_html(raw_html):
         parser.close()
     except Exception:
         return ''
-    return parser.get_html()
+    return _MD_LINK_OF_LINKS_RE.sub(r'\1', parser.get_html())
 
+
+# Reddit autolinks the text of a hand-typed markdown link, giving "[<a>label</a>](<a>target</a>)";
+# keep just the label's link.
+_MD_LINK_OF_LINKS_RE = re.compile(r'\[(<a\b[^>]*>[^<]*</a>)\]\(<a\b[^>]*>[^<]*</a>\)')
 
 _SC_MARKER_RE = re.compile(r'<!--\s*SC_(?:OFF|ON)\s*-->')
 
