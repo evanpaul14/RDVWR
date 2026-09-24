@@ -16,7 +16,7 @@ Do not install or run Playwright (or any other browser-automation tool) to verif
 
 Single-page Reddit viewer. Python/Flask backend proxies Reddit API; ES module frontend.
 
-**Backend files:** `app.py` (Flask app setup + blueprint registration only), `helpers.py` (shared constants, allowlist regexes, `TTLCache`, `server_cache`/`cached_json`/`validate_params`, `hydrate_linked_posts`, `UpstreamError`), `routes/` (one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `pages`, `ns_settings`, `mediaproxy`, `passthrough` — registered in `routes/__init__.py`; plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`), `template_helpers.py` (Jinja filters/globals), `ns_prefs.py` (noscript preference cookies), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers), `archive.py` (Arctic Shift fallback for user profiles), `media_detection.py` (media helpers), `reddit_client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every 30 min; disable with `REDDIT_OAUTH=0`), `update_vendor.py` (update vendored JS — run manually).
+**Backend files:** `app.py` (Flask app setup + blueprint registration only), `helpers.py` (shared constants, allowlist regexes, `TTLCache`, `server_cache`/`cached_json`/`validate_params`, `hydrate_linked_posts`, `UpstreamError`), `routes/` (one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `muxvideo`, `pages`, `ns_settings`, `mediaproxy`, `passthrough` — registered in `routes/__init__.py`; plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`), `template_helpers.py` (Jinja filters/globals), `ns_prefs.py` (noscript preference cookies), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers), `archive.py` (Arctic Shift fallback for user profiles), `media_detection.py` (media helpers), `reddit_client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every 30 min; disable with `REDDIT_OAUTH=0`), `update_vendor.py` (update vendored JS — run manually).
 
 `process_post()` normalizes post dicts. Media detection priority: galleries → redgifs → reddit HLS video → reddit_video_preview → YouTube → Streamable → TikTok → iframe → Imgur album → GIF/GIFV/Imgur image.
 
@@ -31,6 +31,7 @@ Keep each Python file under ~500 lines — add new endpoints to the matching `ro
 - `/redgifs/<id>`, `/redgifs/batch`, `/redgifs/media/<filename>` (CORS proxy)
 - `/m/<host>/<path>` (media proxy for Reddit/Imgur/Giphy CDNs; with `PROXY_MEDIA=1` an after-request hook rewrites those URLs in JSON/SPA HTML to point here)
 - `/img` (image proxy), `/resolve` (redirect follower), `/download`, `/download/gallery`, `/download/reddit-video`
+- `/v/<id>.mp4` (ffmpeg remux of a v.redd.it HLS playlist into one MP4 with audio, disk-cached; used by the noscript view when sound is enabled)
 - `/imgur/album/<id>`, `/live/<id>`, `/live/<id>/updates`, `/translate`, `/og-image`
 - Page routes (`routes/pages.py`) render `index.html` for every SPA URL; `/r/...json`-style Reddit URLs are proxied by `routes/passthrough.py`
 

@@ -8,6 +8,7 @@ import datetime
 from urllib.parse import urlencode, urlparse
 from flask import g, request
 from markupsafe import Markup
+from routes.muxvideo import muxed_video_url
 from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME
 from reddit_html import EXTERNAL_MEDIA_CLASS
 from ns_prefs import all_prefs, get_pref
@@ -176,6 +177,7 @@ def register(app):
     app.add_template_global(download_url)
     app.add_template_global(current_url)
     app.add_template_global(ns_hls_toggle_url)
+    app.add_template_global(muxed_video_url)
 
     def asset_v(filename):
         try:

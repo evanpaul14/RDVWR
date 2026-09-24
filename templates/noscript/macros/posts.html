@@ -70,18 +70,20 @@
 {%- endmacro %}
 
 {% macro video(p, full) -%}
-  {# Reddit video is separate video + audio streams, which only HLS (.m3u8) carries
-     together — and only Safari plays HLS without JS, so HLS is opt-in (ns.hls). #}
+  {# Reddit video is separate video + audio streams. With sound on (ns.hls), the server
+     remuxes them into one MP4 (/api/v/<id>.mp4) that every browser plays; the HLS
+     playlist (native in Safari) and the silent MP4 follow as fallback <source>s. #}
   {%- set cls = 'pv-media' if full else 'post-video' -%}
   {%- set preload = 'metadata' if full else 'none' -%}
+  {%- set muxed = muxed_video_url(p.hls_url) if ns.hls else None -%}
   {%- if ns.hls and p.hls_url -%}
-    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif %}</video></div>
-    <p class="ns-note">HLS: audio on Safari, silent video elsewhere &mdash; <a href="{{ ns_hls_toggle_url(False) }}">disable</a></p>
+    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}">{% if muxed %}<source src="{{ muxed }}" type="video/mp4">{% endif %}<source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif %}</video></div>
+    <p class="ns-note">{% if muxed %}Sound on{% else %}Sound on (Safari only on this server){% endif %} &mdash; <a href="{{ ns_hls_toggle_url(False) }}">disable</a></p>
   {%- elif p.video_url -%}
     <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.video_url }}" type="video/mp4"></video></div>
-    {%- if p.hls_url %}<p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS for audio (Safari only)</a></p>{% endif -%}
+    {%- if p.hls_url %}<p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable sound</a></p>{% endif -%}
   {%- elif p.hls_url -%}
-    <p class="ns-note">This video only plays via HLS &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS (Safari only)</a> or <a href="{{ p.permalink }}" target="_blank" rel="noopener">watch on reddit.com</a></p>
+    <p class="ns-note">This video needs sound playback &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable it</a> or <a href="{{ p.permalink }}" target="_blank" rel="noopener">watch on reddit.com</a></p>
   {%- endif -%}
 {%- endmacro %}
 
