@@ -112,7 +112,7 @@
     <div class="post-media ns-gallery-preview">
       <a href="{{ post_path(p) }}" title="View all {{ p.gallery | length }} images">
         <img loading="lazy" src="{{ first.thumb or first.url }}" alt="{{ first.caption or '' }}">
-        <span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>{{ p.gallery | length }}</span>
+        <span class="ns-gallery-badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>{{ p.gallery | length }} images &middot; view gallery &rarr;</span>
       </a>
     </div>
   {%- endif -%}
