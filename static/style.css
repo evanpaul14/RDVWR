@@ -1944,6 +1944,8 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .ns-pv-wrap.pv-wrap { padding-top:20px; }
 /* Prev/next page buttons (the JS app infinite-scrolls instead); styled like .state-continue-btn. */
 .ns-pager { max-width:720px; margin:4px auto 32px; padding:0 20px; display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+/* Pull it up into the feed's 80px end-of-list padding, ~24px below the last post. */
+.feed-list + .ns-pager { margin-top:-56px; }
 .ns-page-btn {
   display:inline-block; background:transparent; border:1px solid var(--b2); color:var(--tx3);
   font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
