@@ -1,6 +1,4 @@
-// localStorage wrappers that never throw: storage can be unavailable (Safari
-// private mode, blocked site data) or full (QuotaExceededError), and a failed
-// write should never break rendering.
+// localStorage wrappers that never throw (storage can be unavailable or full).
 export function storeGet(key) {
   try { return localStorage.getItem(key); }
   catch { return null; }

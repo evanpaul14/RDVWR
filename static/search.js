@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, setActiveButton, errState, buildTimeFilterHtml } from './utils.js';
+import { escHtml, setActiveButton, errState, emptyState, buildTimeFilterHtml } from './utils.js';
 import { renderPost, renderCommunityCard, renderUserCard } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { showSkeletons, setMainOpen } from './feed.js';
@@ -40,7 +40,7 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
     }
     if (!append) feed.innerHTML = '';
     if (!data.posts.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No results found</div></div>';
+      feed.innerHTML = emptyState('No results found');
       return;
     }
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
@@ -128,7 +128,7 @@ export async function loadCommunityResults(query, after=null, append=false) {
     if (myGen !== state.feedGen) return;
     if (!append) feed.innerHTML = '';
     if (!data.communities?.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No communities found</div></div>';
+      feed.innerHTML = emptyState('No communities found');
       return;
     }
     const startIdx = append ? feed.children.length : 0;
@@ -154,7 +154,7 @@ export async function loadUserResults(query, after=null, append=false) {
     if (myGen !== state.feedGen) return;
     if (!append) feed.innerHTML = '';
     if (!data.users?.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No users found</div></div>';
+      feed.innerHTML = emptyState('No users found');
       return;
     }
     const startIdx = append ? feed.children.length : 0;

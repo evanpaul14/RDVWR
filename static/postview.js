@@ -70,23 +70,9 @@ const COMMENT_SORTS = [
 ];
 
 // ── Lazy / prefetched comment avatars ────────────────────────────────────────
-// Server embeds the first AVATAR_EMBED_LIMIT commenters' pictures inline with
-// the comment payload (no pop-in), and ships an `avatar_prefetch` name->fullname
-// map for the next AVATAR_PREFETCH_LIMIT commenters. We fire a single request
-// for that whole map right away — before the user has scrolled anywhere near
-// them — through the fast bulk-lookup endpoint. One unchunked request beats
-// splitting into several: Reddit's bulk endpoint has a ~100-130ms fixed
-// per-request floor that dominates small batches, so batching more into one
-// call is strictly faster than paying that floor multiple times (measured:
-// ~0.22s for 100 users, ~0.64s for 450 in one call vs. 8x ~1s for 48 users
-// done one-by-one). Anyone beyond EMBED+PREFETCH still resolves the old way —
-// one Reddit request per user — so that fallback stays gated behind
-// IntersectionObserver rather than firing for everyone on thread load: on a
-// large thread (220+ unique commenters) that fallback can mean hundreds of
-// individual per-user requests, and firing them all at once was enough to
-// trip Reddit's rate limiting.
-// A session-wide icon cache also short-circuits repeat commenters across
-// different threads viewed in the same session.
+// The server embeds the first commenters' icons and ships `avatar_prefetch` for the
+// next batch, fetched at once in one bulk request. Anyone beyond that is fetched per
+// user only when scrolled into view, since firing hundreds at once trips rate limits.
 const _avatarIconCache = new Map();   // author -> url|null, resolved this session
 const _avatarPending    = new Set();  // author currently in flight (prefetch or scroll path)
 let _avatarQueue = new Set();
@@ -150,8 +136,7 @@ const _avatarObserver = new IntersectionObserver(entries => {
 }, { rootMargin: '200px' });
 
 function initCommentAvatars(container, avatarPrefetch) {
-  // Fire the fast fullname-batched prefetch first so it claims those authors'
-  // pending slots before the slow per-name fallback below sees them.
+  // The bulk prefetch claims its authors first, before the per-user fallback below.
   if (avatarPrefetch && Object.keys(avatarPrefetch).length) _prefetchAvatars(avatarPrefetch);
   container?.querySelectorAll('.comment-avatar-lazy').forEach(img => {
     const cached = _avatarIconCache.get(img.dataset.author);
@@ -159,8 +144,7 @@ function initCommentAvatars(container, avatarPrefetch) {
     if (cached) { img.src = cached; img.classList.remove('comment-avatar-lazy'); }
     else img.remove();
   });
-  // Anyone left (not resolved by the prefetch map above) falls back to the
-  // slow one-request-per-user path — keep that gated behind scroll-into-view.
+  // Everyone else: per-user lookups, gated behind scroll-into-view.
   container?.querySelectorAll('.comment-avatar-lazy').forEach(img => _avatarObserver.observe(img));
 }
 

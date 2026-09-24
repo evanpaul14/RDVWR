@@ -1,6 +1,5 @@
-// Tracks which home-feed post IDs have already been shown to the user, and
-// remembers the pagination cursor per sort/time so a plain refresh continues
-// deeper into Reddit's feed instead of re-requesting the same first page.
+// Home-feed IDs already shown, plus the last cursor per sort/time so a refresh
+// continues deeper into the feed.
 import { storeGet, storeSet } from './storage.js';
 
 const SEEN_KEY   = 'rdvwr_home_seen';

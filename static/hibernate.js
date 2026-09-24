@@ -1,7 +1,5 @@
-// Keeps long infinite-scroll feeds light: post cards far outside the viewport
-// have their contents detached (height locked so the scroll position doesn't
-// move) and re-attached as they approach again. The outer .post element stays
-// in place, so event delegation, keyboard indices and visited classes still work.
+// Keeps long feeds light: far off-screen cards have their contents detached (height
+// locked) and reattached as they approach. The .post element itself stays in place.
 const WAKE_MARGIN = '3000px 0px';
 const _stash = new WeakMap();
 

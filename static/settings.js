@@ -22,9 +22,7 @@ export const DEFAULTS = {
 };
 
 function _load() {
-  // Deployer-configurable defaults (RDVWR_DEFAULT_* env vars, see helpers.py) come
-  // between the hardcoded DEFAULTS and whatever a visitor has saved locally, so a
-  // visitor's own choices always win.
+  // Deployer defaults (RDVWR_DEFAULT_*) override DEFAULTS; saved settings override both.
   const serverDefaults = window.__DEFAULT_SETTINGS__ || {};
   try {
     const saved = JSON.parse(storeGet(KEY) || '{}');

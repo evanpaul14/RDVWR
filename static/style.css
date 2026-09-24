@@ -895,10 +895,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   display:flex; flex-direction:column;
   transform:translateY(100%);
   transition:transform .25s cubic-bezier(.4,0,.2,1);
-  /* iOS: when the address bar hides, the visual viewport grows beyond the
-     layout viewport. inset:0 alone anchors bottom to the layout viewport,
-     leaving a gap. 100lvh (large viewport height = UI fully hidden) ensures
-     the panel always covers the full visible area. */
+  /* iOS: 100lvh keeps the panel covering the area revealed when the address bar hides. */
   height:100vh; /* fallback */
   height:100lvh;
 }
@@ -1921,24 +1918,17 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 /* ── Settings panel swipe-to-close: disable transition while dragging ────── */
 .settings-panel.settings-dragging { transition:none !important; }
 
-/* ── No-JS fallback (server-rendered, shown only inside <noscript>) ──────────
-   templates/noscript/ reuses the JS app's own classes (post, post-header, comment,
-   sort-bar, ctx-info, sidebar-section, pv-*, wiki-*, live-*, community-card…) so the
-   fallback looks like the real site. Only glue for things the JS never renders
-   standalone — plain links/forms standing in for JS-driven controls, native
-   <details> standing in for click handlers — lives here. */
+/* ── No-JS fallback (inside <noscript>) ──────────────────────────────────────
+   Reuses the JS app's classes; only styles for no-JS stand-ins live here. */
 .ns-note { color:var(--tx3); font-size:12px; font-family:var(--mono); letter-spacing:.03em; }
 .ns-quicknav { display:flex; gap:10px; font-family:var(--mono); font-size:11px; flex-shrink:0; }
 .ns-quicknav a { color:var(--tx2); text-decoration:none; }
 .ns-quicknav a:hover { color:var(--ac); }
-/* Search form: like .search-container but never hidden at the mobile breakpoint
-   (the real app hides .search-container there and shows a JS-toggled overlay
-   instead, which doesn't exist here — the plain form has to stay reachable). */
+/* Like .search-container, but stays visible on mobile (no JS search overlay here). */
 .ns-search-form { flex:1 1 200px; min-width:160px; position:relative; }
 .ns-search-form .search-wrap { width:100%; }
 .ns-root .header-inner { flex-wrap:wrap; height:auto; min-height:56px; padding-top:10px; padding-bottom:10px; row-gap:8px; }
-/* Feed wrapper (JS uses id="feed" on an element inside #app-shell, which the
-   noscript markup must not collide with — same box model, different selector). */
+/* Separate selector from the JS app's #feed to avoid colliding with it. */
 .feed-list { max-width:720px; margin:0 auto; padding:20px 20px 80px; display:flex; flex-direction:column; gap:14px; }
 .minimal-mode .feed-list { gap:0; }
 .ns-pv-wrap.pv-wrap { padding-top:20px; }
@@ -1976,8 +1966,7 @@ a.scope-check-label { text-decoration:none; }
 .ns-poll { margin:0 16px 10px; }
 .ns-poll-opt { background:var(--bg3); border-radius:4px; padding:6px 10px; margin-bottom:4px; font-size:13px; }
 .ns-nsfw-label { color:#ff5050; }
-/* Native <details> standing in for the JS click-to-reveal spoiler/NSFW veils
-   (utils.js veilWrap); the NSFW label uses the JS veil label's #ff8080. */
+/* <details> in place of the JS spoiler/NSFW veils (utils.js veilWrap). */
 .ns-reveal summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-size:11px; letter-spacing:.03em; color:var(--tx3); background:var(--bg3); border-radius:4px; list-style:none; }
 .ns-reveal--nsfw summary { color:#ff8080; }
 .ns-reveal summary::-webkit-details-marker { display:none; }
@@ -1986,8 +1975,7 @@ a.scope-check-label { text-decoration:none; }
 /* Inline >!spoilers!<: revealed while hovered or focused (tapped) instead of on click. */
 .ns-root .spoiler:hover, .ns-root .spoiler:focus { background:var(--bg3); color:var(--tx); outline:none; }
 .ns-root .spoiler:hover a, .ns-root .spoiler:focus a { color:var(--ac); }
-/* Gallery: a scroll-snapping strip standing in for the JS gallery carousel (post view),
-   or its first image + count linking to the post (feeds). */
+/* Scroll-snapping strip in place of the JS gallery (post view), or first image + count (feeds). */
 .ns-gallery { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:0; }
 .ns-gallery-item { flex:0 0 100%; scroll-snap-align:start; margin:0; display:flex; flex-direction:column; align-items:center; }
 .ns-gallery-item a { display:flex; justify-content:center; width:100%; }
@@ -2005,8 +1993,7 @@ a.scope-check-label { text-decoration:none; }
 .ns-gallery-badge svg { flex-shrink:0; display:block; }
 .ns-gallery-preview a:hover .ns-gallery-badge { color:var(--ac); border-color:var(--ac); }
 .ns-gallery-item figcaption { font-family:var(--mono); font-size:11px; color:var(--tx3); padding:6px 12px; text-align:center; }
-/* Native <details>/<summary> stand in for JS's collapse button: hide the default
-   marker triangle and draw the same +/− indicator the JS comment-collapse button used. */
+/* <details> in place of the JS collapse button, with the same +/− marker. */
 details.comment > summary.comment-header { list-style:none; }
 details.comment > summary.comment-header::-webkit-details-marker { display:none; }
 details.comment > summary.comment-header::before {
@@ -2020,8 +2007,7 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .ucc-footer a { color:inherit; text-decoration:none; }
 .ucc-footer a:hover { color:var(--tx2); }
 
-/* Settings gear link in the noscript header — like .settings-btn but never hidden
-   on mobile (there's no bottom nav / JS settings panel to fall back to here). */
+/* Like .settings-btn, but stays visible on mobile (no bottom nav here). */
 .ns-settings-btn {
   background:none; border:none; cursor:pointer; text-decoration:none;
   color:var(--tx3); padding:6px; border-radius:4px; flex-shrink:0;
@@ -2030,10 +2016,7 @@ details.comment:not([open]) > .comment-replies { display:none; }
 }
 .ns-settings-btn:hover { color:var(--tx2); background:var(--bg3); }
 
-/* Time-filter dropdown standing in for the JS site's <select class="time-filter">
-   (static/utils.js buildTimeFilterHtml) — wrapped in a <form> since it needs an
-   explicit submit without JS, but display:contents keeps it a plain flex item
-   inside .sort-bar so it sits inline with the sort buttons like the JS version. */
+/* Time filter <form>; display:contents keeps it inline in .sort-bar. */
 .ns-time-form { display:contents; }
 .time-filter-go {
   background:var(--bg2); border:1px solid var(--b2); border-radius:4px; margin-left:6px;

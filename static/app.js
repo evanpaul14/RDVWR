@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
-import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
+import { _markPostVisited, clearVisitedHiding } from './visited-ui.js';
 import { escHtml, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
@@ -13,23 +13,19 @@ import { getSubs, isSubscribed, isSubscribable, toggleSub, MAX_SUBS } from './su
 import {
   loadSubreddit, loadSubFeed,
   loadMultireddit, loadMultiFeed,
-  loadHome, loadHomeFeed, buildHomeSortHtml,
+  loadHome, loadHomeFeed,
   loadDuplicatesPage, loadSaved, loadSubscribed,
-  sortBar, setMainOpen, buildSubSortHtml,
+  sortBar,
 } from './feed.js';
 import { loadProfile, loadProfileTab, buildProfileSortHtml } from './profile.js';
-import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, searchTypeBar, SEARCH_SORT_BTN_HTML } from './search.js';
+import { loadSearch, loadSearchResults, loadCommunityResults, loadUserResults, searchTypeBar } from './search.js';
 import { loadWikiPage } from './wiki.js';
 import { loadLiveThread, loadMoreLiveUpdates, cancelLivePoll } from './live.js';
-import { loadPostView, closePostView, openPostView, changeCommentSort, loadMoreComments, stepViewFullThread } from './postview.js';
+import { loadPostView, closePostView, changeCommentSort, loadMoreComments, stepViewFullThread } from './postview.js';
 import { closeSidebar, toggleSidebar, toggleUserSidebar } from './sidebar.js';
 
-// The backend's /api/* same-site gate normally checks Sec-Fetch-Site/Origin/Referer,
-// but some browser privacy hardening (e.g. Firefox's privacy.resistFingerprinting)
-// strips all three from every request, indistinguishable server-side from a bot. Echo
-// the rdvwr_csrf cookie the backend sets back as a header on every same-origin fetch()
-// (CSP's connect-src 'self' means that's the only kind we ever make) as a fallback proof
-// a cross-site page can't forge, since it can't read this origin's cookies either.
+// Echo the rdvwr_csrf cookie as a header: the /api/* gate's fallback for browsers that
+// strip Sec-Fetch-Site/Origin/Referer (see helpers.is_same_site_request).
 (() => {
   const nativeFetch = window.fetch.bind(window);
   window.fetch = (input, init = {}) => {
@@ -45,9 +41,9 @@ const sentinel          = document.getElementById('scroll-sentinel');
 const subInput          = document.getElementById('subreddit-input');
 const pvSubInput        = document.getElementById('pv-subreddit-input');
 const mobileSearchInput = document.getElementById('mobile-search-input');
-const pvScroll          = document.getElementById('pv-scroll');
 const postView          = document.getElementById('post-view');
 const pvContent         = document.getElementById('pv-content');
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 export function navigateOrOpen(path, e) {
   if (e && (e.ctrlKey || e.metaKey || e.button === 1)) { window.open(path, '_blank'); return; }
@@ -117,11 +113,13 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (!['home', 'subscribed', 'post'].includes(route.type)) state.subsMode = false;
   if (route.type !== 'post') { updateSubscribeBtn(route); updateFeedsActive(route); }
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
+  if (route.type !== 'post') {
+    closePostView();
+    closeSidebar();
+    if (route.type !== 'search') state.searchMode = false;
+  }
   switch (route.type) {
     case 'home':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       if (subscribedIsHome()) {
         await loadSubscribed(route.sort || 'best', route.time || 'all', route.after || null, '/home');
       } else {
@@ -130,15 +128,9 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       }
       break;
     case 'subscribed':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       await loadSubscribed(route.sort, route.time || 'all', route.after || null, '/subscribed');
       break;
     case 'sub': {
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       const subResult = await loadSubreddit(route.sub, route.sort, route.time || 'all', route.after || null);
       if (subResult?.notFound) {
         navigate(`/search?q=${encodeURIComponent(route.sub)}&stype=communities`, { replace: true });
@@ -146,9 +138,6 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       break;
     }
     case 'multi':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       state.profileMode = false;
       await loadMultireddit(route.username, route.multiname, route.sort, route.time || 'all', route.after || null);
       break;
@@ -158,41 +147,24 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       await loadPostView(route.sub, route.postId, route.commentId||'', restorePvScroll, isBoot);
       break;
     case 'user':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       await loadProfile(route.username, route.after || null);
       break;
     case 'search':
-      closePostView();
-      closeSidebar();
       await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts', route.after || null);
       break;
     case 'duplicates':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       state.profileMode = false;
       await loadDuplicatesPage(route.sub, route.postId, route.after || null);
       break;
     case 'wiki':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       state.profileMode = false;
       await loadWikiPage(route.sub, route.page);
       break;
     case 'saved':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       state.duplicatesMode = false;
       await loadSaved();
       break;
     case 'live':
-      closePostView();
-      closeSidebar();
-      state.searchMode = false;
       state.profileMode = false;
       await loadLiveThread(route.threadId);
       break;
@@ -200,25 +172,31 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
 }
 
+// Whether the feed on screen is already `route`, so going back only restores scroll.
+function isFeedShowing(route) {
+  const samePage = sort => sort === state.currentSort
+    && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter;
+  switch (route.type) {
+    case 'sub':
+      return route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode
+        && !state.multiMode && !state.homeMode && samePage(route.sort);
+    case 'home':
+    case 'subscribed':
+      if (state.subsMode && state.subsBase === `/${route.type}` && samePage(route.sort || 'best')) return true;
+      return route.type === 'home' && state.homeMode && samePage(route.sort);
+    case 'multi':
+      return state.multiMode && route.username === state.multiUsername && route.multiname === state.multiName
+        && samePage(route.sort);
+  }
+  return false;
+}
+
 window.addEventListener('popstate', (e) => {
   const savedScroll = e.state?.scrollY || 0;
   const savedPvScroll = e.state?.pvScrollTop || 0;
   const route = parseRoute();
   if (route.type !== 'post') closePostView();
-  const hasFeedPosts = !!feed.querySelector('.post');
-  if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && !state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
-    window.scrollTo({top: savedScroll, behavior: 'instant'});
-    return;
-  }
-  if ((route.type === 'home' || route.type === 'subscribed') && hasFeedPosts && state.subsMode && state.subsBase === (route.type === 'home' ? '/home' : '/subscribed') && (route.sort || 'best') === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
-    window.scrollTo({top: savedScroll, behavior: 'instant'});
-    return;
-  }
-  if (route.type === 'home' && hasFeedPosts && state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
-    window.scrollTo({top: savedScroll, behavior: 'instant'});
-    return;
-  }
-  if (route.type === 'multi' && hasFeedPosts && route.username === state.multiUsername && route.multiname === state.multiName && state.multiMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
+  if (feed.querySelector('.post') && isFeedShowing(route)) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
     return;
   }
@@ -247,7 +225,7 @@ function interceptNavLink(a, e) {
     if (!extra || /^\/(hot|new|top|rising|controversial|best|gilded)?\/?$/.test(extra)) {
       e.preventDefault(); navigateOrOpen(`/r/${redditSub[1]}`, e); return true;
     }
-    // Unrecognized path (e.g. share link /s/token) — resolve the redirect then navigate
+    // Unrecognized path (e.g. a /s/ share link): resolve its redirect first.
     e.preventDefault();
     fetch(`/api/resolve?url=${encodeURIComponent(href)}`)
       .then(r => r.json())
@@ -373,6 +351,19 @@ function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.s
   return url;
 }
 
+// Path of the current sub/home/subscribed/multi listing, without its sort.
+function feedBasePath(enc = s => s) {
+  if (state.subsMode)  return state.subsBase;
+  if (state.homeMode)  return '/home';
+  if (state.multiMode) return `/user/${enc(state.multiUsername)}/m/${enc(state.multiName)}`;
+  return `/r/${enc(state.currentSub)}`;
+}
+
+function resetFeedScroll() {
+  state.afterToken = null;
+  window.scrollTo({top:0, behavior:'instant'});
+}
+
 // Sort bar click
 sortBar.addEventListener('click', e => {
   if (e.target.closest('#sidebar-toggle-btn')) {
@@ -411,17 +402,8 @@ sortBar.addEventListener('click', e => {
   const newSort = sortBtn.dataset.sort;
   if (newSort === state.currentSort) return;
   state.currentSort = newSort; state.currentTime = newSort === 'controversial' ? 'day' : 'all';
-  state.afterToken = null;
-  window.scrollTo({top:0, behavior:'instant'});
-  if (state.subsMode) {
-    navigate(`${state.subsBase}/${state.currentSort}`, { replace:true });
-  } else if (state.homeMode) {
-    navigate(`/home/${state.currentSort}`, { replace:true });
-  } else if (state.multiMode) {
-    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
-  } else {
-    navigate(`/r/${state.currentSub}/${state.currentSort}`, { replace:true });
-  }
+  resetFeedScroll();
+  navigate(`${feedBasePath()}/${state.currentSort}`, { replace:true });
 });
 
 // Sort bar change (time filter, scope checkbox)
@@ -441,26 +423,10 @@ sortBar.addEventListener('change', e => {
     state.profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
-  } else if (state.subsMode) {
-    state.currentTime = sel.value;
-    state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`${state.subsBase}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
-  } else if (state.homeMode) {
-    state.currentTime = sel.value;
-    state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/home/${state.currentSort}?t=${state.currentTime}`, { replace:true });
-  } else if (state.multiMode) {
-    state.currentTime = sel.value;
-    state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
   } else {
     state.currentTime = sel.value;
-    state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/r/${state.currentSub}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
+    resetFeedScroll();
+    navigate(`${feedBasePath()}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
   }
 });
 
@@ -488,19 +454,12 @@ function handleSearchInput(e) {
     navigate(url);
   }
 }
-document.getElementById('search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
-document.getElementById('subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(); }
-});
-document.getElementById('pv-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
-document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
-});
-document.getElementById('mobile-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
-mobileSearchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
-  if (e.key === 'Escape') { closeMobileSearch(); }
-});
+function submitSearch(e) { hideAllAutocomplete(); handleSearchInput(e); }
+for (const [btnId, input] of [['search-btn', subInput], ['pv-search-btn', pvSubInput], ['mobile-search-btn', mobileSearchInput]]) {
+  document.getElementById(btnId).addEventListener('click', submitSearch);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submitSearch(e); });
+}
+mobileSearchInput.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobileSearch(); });
 mobileSearchInput.addEventListener('blur', () => {
   setTimeout(() => {
     if (!document.activeElement?.closest('#mobile-search-bar')) closeMobileSearch();
@@ -536,42 +495,19 @@ function buildNextPageUrl() {
                 : state.searchType === 'users'       ? state.userAfter
                 : state.searchAfter;
     if (!after) return null;
-    let url = `/search?q=${encodeURIComponent(state.searchQuery)}&sort=${state.searchSort}`;
-    if (state.searchTime !== 'all') url += `&t=${state.searchTime}`;
-    if (state.searchSub) url += `&sub=${encodeURIComponent(state.searchSub)}`;
-    url += `&stype=${state.searchType}&after=${encodeURIComponent(after)}&page=${nextPage}`;
-    return url;
+    return `${buildSearchUrl()}&stype=${state.searchType}&after=${encodeURIComponent(after)}&page=${nextPage}`;
   } else if (state.profileMode) {
     if (!state.profileAfter) return null;
     return `/user/${encodeURIComponent(state.profileUser)}?after=${encodeURIComponent(state.profileAfter)}&page=${nextPage}`;
   } else if (state.duplicatesMode) {
     if (!state.duplicatesAfter) return null;
     return `/r/${encodeURIComponent(state.duplicatesSub)}/duplicates/${encodeURIComponent(state.duplicatesPostId)}?after=${encodeURIComponent(state.duplicatesAfter)}&page=${nextPage}`;
-  } else if (state.subsMode) {
-    if (!state.afterToken) return null;
-    const params = [];
-    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
-    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
-    return `${state.subsBase}/${state.currentSort}?${params.join('&')}`;
-  } else if (state.homeMode) {
-    if (!state.afterToken) return null;
-    const params = [];
-    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
-    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
-    return `/home/${state.currentSort}?${params.join('&')}`;
-  } else if (state.multiMode) {
-    if (!state.afterToken) return null;
-    const params = [];
-    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
-    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
-    return `/user/${encodeURIComponent(state.multiUsername)}/m/${encodeURIComponent(state.multiName)}/${state.currentSort}?${params.join('&')}`;
-  } else {
-    if (!state.afterToken) return null;
-    const params = [];
-    if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
-    params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
-    return `/r/${encodeURIComponent(state.currentSub)}/${state.currentSort}?${params.join('&')}`;
   }
+  if (!state.afterToken) return null;
+  const params = [];
+  if (state.currentSort === 'top' || state.currentSort === 'controversial') params.push(`t=${state.currentTime}`);
+  params.push(`after=${encodeURIComponent(state.afterToken)}`, `page=${nextPage}`);
+  return `${feedBasePath(encodeURIComponent)}/${state.currentSort}?${params.join('&')}`;
 }
 
 new IntersectionObserver(entries => {
@@ -604,11 +540,11 @@ sentinel.addEventListener('click', e => {
   }
 });
 
-// Spoiler reveal — delegated so it works in feed excerpts, post view body, and comments
+// Spoiler reveal, delegated so it works everywhere
 document.addEventListener('click', e => {
   const spoiler = e.target.closest('.spoiler');
   if (!spoiler) return;
-  if (e.target.closest('a')) return; // let a click on a revealed link's <a> navigate instead of re-hiding
+  if (e.target.closest('a')) return; // let links inside a revealed spoiler work
   e.stopPropagation();
   spoiler.classList.toggle('revealed');
 });
@@ -691,60 +627,37 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && open) open.open = false;
 });
 
-// Bottom nav
+// Mobile search toggles (bottom nav, header, post view)
+function toggleMobileSearch() {
+  if (!document.body.classList.contains('mobile-search-open')) { openMobileSearch(); return; }
+  closeMobileSearch();
+  updateBottomNav(parseRoute());
+}
 document.getElementById('bn-home').addEventListener('click', () => navigate('/'));
-document.getElementById('bn-search').addEventListener('click', () => {
-  if (document.body.classList.contains('mobile-search-open')) {
-    closeMobileSearch();
-    updateBottomNav(parseRoute());
-  } else {
-    openMobileSearch();
-  }
-});
+document.getElementById('bn-search').addEventListener('click', toggleMobileSearch);
 document.getElementById('bn-saved').addEventListener('click', () => navigate('/saved'));
 document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
-
-// Post-view search toggle (mobile)
-document.getElementById('pv-search-toggle')?.addEventListener('click', () => {
-  if (document.body.classList.contains('mobile-search-open')) {
-    closeMobileSearch();
-  } else {
-    openMobileSearch();
-  }
-});
-
-// Header search button (mobile)
-document.getElementById('header-search-btn').addEventListener('click', () => {
-  if (document.body.classList.contains('mobile-search-open')) {
-    closeMobileSearch();
-    updateBottomNav(parseRoute());
-  } else {
-    openMobileSearch();
-  }
-});
+document.getElementById('pv-search-toggle')?.addEventListener('click', toggleMobileSearch);
+document.getElementById('header-search-btn').addEventListener('click', toggleMobileSearch);
 
 // Long-press on post card → open in new tab (mobile)
 let _longPressTimer = null;
-let _longPressTriggered = false;
 document.addEventListener('touchstart', e => {
-  _longPressTriggered = false;
   const post = e.target.closest('#feed .post, #feed .post-compact');
   if (!post || e.target.closest('a, button, video, iframe, input')) return;
   const titleLink = post.querySelector('a[data-nav]');
   if (!titleLink) return;
   _longPressTimer = setTimeout(() => {
     _longPressTimer = null;
-    _longPressTriggered = true;
     if (navigator.vibrate) navigator.vibrate(40);
     window.open(titleLink.dataset.nav, '_blank');
   }, 550);
 }, { passive: true });
-document.addEventListener('touchmove', e => {
+function cancelLongPress() {
   if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
-}, { passive: true });
-document.addEventListener('touchend', e => {
-  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
-}, { passive: true });
+}
+document.addEventListener('touchmove', cancelLongPress, { passive: true });
+document.addEventListener('touchend', cancelLongPress, { passive: true });
 
 // iOS PWA: intercept in-app links on touchend
 let _touchStartX = 0, _touchStartY = 0, _navFromTouch = false;
@@ -779,8 +692,7 @@ document.addEventListener('click', e => {
   interceptNavLink(a, e);
 }, true);
 
-// Spoiler/nsfw veils (veilWrap). Capture phase so the reveal + preventDefault land before
-// bubble-phase card/keyboard handlers, matching the old inline-handler ordering.
+// Spoiler/NSFW veils; capture phase so the reveal beats bubble-phase card handlers.
 document.addEventListener('click', e => {
   const veil = e.target.closest('.spoiler-veil, .nsfw-veil');
   if (!veil) return;
@@ -967,46 +879,35 @@ function openSettingsPanel() {
 }
 
 function bindSettingEvents() {
-  settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
-  settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
-  settingsBody.querySelector('#s-reddit-cookies')?.addEventListener('change', e => {
-    settings.redditCookies = e.target.value.trim();
+  // Save input `id` into settings[key], then run `after`.
+  const bind = (id, key, after) => settingsBody.querySelector(id)?.addEventListener('change', e => {
+    const el = e.target;
+    settings[key] = el.type === 'checkbox' ? el.checked : el.value.trim();
     saveSettings();
-    updateFeedsBtn();
-    settingsBody.querySelector('#s-home-feed-row').style.display = settings.redditCookies ? '' : 'none';
+    after?.(settings[key]);
   });
-  settingsBody.querySelector('#s-home-feed')?.addEventListener('change', e => {
-    settings.homeFeed = e.target.value;
-    saveSettings();
+  bind('#s-theme', 'theme');
+  bind('#s-layout', 'layout', retryFeedLoad);
+  bind('#s-sub-sort', 'subSort');
+  bind('#s-sub-time', 'subTime');
+  bind('#s-reddit-cookies', 'redditCookies', cookies => {
+    updateFeedsBtn();
+    settingsBody.querySelector('#s-home-feed-row').style.display = cookies ? '' : 'none';
+  });
+  bind('#s-home-feed', 'homeFeed', () => {
     updateFeedsBtn();
     if (parseRoute().type === 'home') renderRoute(parseRoute());
   });
-  settingsBody.querySelector('#s-comment-sort').addEventListener('change', e => {
-    settings.commentSort = e.target.value;
-    state.currentCommentSort = e.target.value;
-    saveSettings();
-  });
-  settingsBody.querySelector('#s-pagination').addEventListener('change', e => {
-    settings.pagination = e.target.checked;
-    if (!e.target.checked) sentinel.innerHTML = '';
-    saveSettings();
-  });
-  settingsBody.querySelector('#s-show-avatars').addEventListener('change', e => {
-    settings.showAvatars = e.target.checked;
-    saveSettings();
+  bind('#s-comment-sort', 'commentSort', sort => { state.currentCommentSort = sort; });
+  bind('#s-pagination', 'pagination', on => { if (!on) sentinel.innerHTML = ''; });
+  bind('#s-show-avatars', 'showAvatars', () => {
     if (postView.classList.contains('open')) changeCommentSort(state.currentCommentSort);
   });
-  settingsBody.querySelector('#s-link-external-media').addEventListener('change', e => {
-    settings.linkExternalMedia = e.target.checked;
-    saveSettings();
-    retryFeedLoad();
-  });
-  settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
-  settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
-  settingsBody.querySelector('#s-nsfw-search-hide').addEventListener('change', e => { settings.nsfwSearchHide = e.target.checked; saveSettings(); });
-  settingsBody.querySelector('#s-mark-read').addEventListener('change', e => { settings.markRead = e.target.checked; saveSettings(); });
+  bind('#s-link-external-media', 'linkExternalMedia', retryFeedLoad);
+  bind('#s-nsfw-blur', 'nsfwBlur');
+  bind('#s-nsfw-hide', 'nsfwHide');
+  bind('#s-nsfw-search-hide', 'nsfwSearchHide');
+  bind('#s-mark-read', 'markRead');
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();
     clearVisitedHiding();

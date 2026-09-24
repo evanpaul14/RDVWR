@@ -60,9 +60,7 @@ function _ensureHls() {
   if (_hlsPromise) return _hlsPromise;
   _hlsPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    // Cache-busted via mtime so a deploy that changes hls.min.js (e.g. swapping the
-    // vendored build) doesn't keep serving stale bytes to browsers that already
-    // cached this URL under the 1-week static max-age.
+    // mtime cache-bust so a new hls.min.js isn't masked by the 1-week static max-age.
     const v = window.__HLS_JS_V__;
     s.src = v ? `/static/hls.min.js?v=${encodeURIComponent(v)}` : '/static/hls.min.js';
     s.onload = resolve;
@@ -159,12 +157,8 @@ const _gifObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-// Animated <img> gifs (giphy embeds in comments) have no play/pause API and decode
-// every frame forever once loaded, even off-screen — a thread with many gif reactions
-// tanks scroll performance. Drop the src when scrolled away and restore it on return.
-// These <img> tags have no reserved size, so dropping the src collapses them — done
-// on a short delay (cancelled if the gif re-enters view first) so a quick scroll pass
-// doesn't collapse-and-reflow the thread out from under the reader.
+// Animated <img> gifs decode forever, even off-screen: drop their src when scrolled
+// away and restore it on return. The drop is delayed so a quick scroll doesn't reflow.
 const _imgGifUnloadTimers = new WeakMap();
 const _IMG_GIF_UNLOAD_DELAY = 1500;
 const _imgGifObserver = new IntersectionObserver((entries) => {
@@ -193,9 +187,7 @@ export function initGifImages(container) {
   });
 }
 
-// Resolved URL cache shared across feed and postview — keyed by redgifs ID.
-// Feed's batch fetch populates it; postview hits it instantly for the same IDs.
-// Capped so a long scrolling session doesn't grow this unbounded.
+// Resolved redgifs URLs by ID, shared by feed and post view; size-capped.
 const _rgCache = new Map();
 const RG_CACHE_MAX = 500;
 
@@ -235,9 +227,8 @@ function _buildHlsWrap(wrap) {
   }
 }
 
-// Reddit-video gif reactions embedded in comment markdown (.md-video-embed) are
-// built lazily like redgifs below — a gif-heavy thread can have many of these, and
-// eagerly attaching hls.js to every one fires a manifest fetch per embed on mount.
+// Reddit-video embeds in comments are built lazily, like redgifs, to avoid a manifest
+// fetch per embed on mount.
 const _hlsBuildObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -302,12 +293,8 @@ async function _buildRedgifsWrap(wrap) {
   }
 }
 
-// Batches wraps that become near-visible within the same tick into one call to
-// /api/redgifs/batch (e.g. a page of feed cards all mounting at once), while wraps
-// that only reach the viewport later via scrolling are built individually against
-// the (likely already-prefetched) per-id cache. Building only fires near the
-// viewport instead of for the whole container up front — a comment thread with
-// dozens of gif replies no longer creates a <video> for every single one on load.
+// Wraps that come near the viewport in the same tick share one /api/redgifs/batch call;
+// later ones build individually from the (likely prefetched) cache.
 let _rgBuildQueue = [];
 let _rgBuildScheduled = false;
 function _flushRgBuildQueue() {
@@ -344,6 +331,15 @@ const _rgBuildObserver = new IntersectionObserver((entries) => {
     }
   });
 }, { rootMargin: '200px' });
+
+// Appends rendered cards to `container`, initializing their media before insertion.
+export function appendWithMedia(container, html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  initMedia(tmp);
+  container.append(...tmp.childNodes);
+  initGifVideos(container);
+}
 
 export function initMedia(container) {
   initVideos(container);
@@ -396,8 +392,7 @@ export async function initImgurAlbums(container) {
   }));
 }
 
-// Dedupes og-image/description lookups: og-placeholder (image) and pv-article-desc
-// (subtitle) can both want the same post URL, so share one fetch and one cached result.
+// Shares one og-image/description fetch per URL between the thumbnail and the subtitle.
 const _ogFetchCache = new Map();
 const OG_FETCH_CACHE_MAX = 500;
 function fetchOg(url) {
@@ -453,13 +448,11 @@ export function initOgDescriptions(container) {
   });
 }
 
-// Gallery items carry downscaled `thumb` (≥640px, for feed cards) and `mini` (strip
-// thumbnails) renditions; Imgur albums and older payloads only have `url`.
+// Gallery items may carry downscaled `thumb` (cards) and `mini` (strip) renditions.
 export const galleryThumb = g => g.thumb || g.url;
 export const galleryMini  = g => g.mini || g.thumb || g.url;
 
-// `full` (post view) shows originals on the stage; feed cards show the card rendition.
-// data-full always holds the original, for the lightbox and downloads.
+// The post view shows originals; data-full always holds the original for lightbox/downloads.
 export function renderGallery(images, full = true) {
   if (!images?.length) return '';
   const stageSrc = img => full ? img.url : galleryThumb(img);
@@ -496,8 +489,7 @@ function _mediaLink(p) {
   return { label: 'image ↗', href: realMediaUrl(href) };
 }
 
-// True when rendering this post's media inline would make the browser load it
-// straight from a third party (an iframe player or an unproxied CDN URL).
+// True when rendering the media inline would load it straight from a third party.
 function _embedsThirdParty(p, full) {
   if (p.poll || p.is_devvit || p.redgifs_id || p.imgur_album_id) return false;
   if (p.youtube_id || p.tiktok_id || p.streamable_id || p.embed_url) return true;
@@ -508,8 +500,7 @@ function _embedsThirdParty(p, full) {
   return !!img && !isLocalUrl(img);
 }
 
-// "Don't embed third-party media" setting: such posts are shown like article links —
-// a proxied preview image (if any) plus an outbound link to where the media lives.
+// "Don't embed third-party media": show a proxied preview plus an outbound link.
 export function linksOutMedia(p, full = false) {
   return !!settings.linkExternalMedia && _embedsThirdParty(p, full);
 }
@@ -693,16 +684,11 @@ document.addEventListener('click', e => {
         btn.textContent = 'Not available';
         return;
       }
-      // Without a parent Reddit page doing the postMessage handshake, the
-      // Devvit SDK falls back to reading its render context (post id, poll
-      // state, signed auth token) from the URL hash — forward what the
-      // server already extracted so the app renders instead of erroring.
+      // Without Reddit's parent frame, the webview reads its context from the URL hash.
       const url = d.bridge && Object.keys(d.bridge).length
         ? `${d.url}#${encodeURIComponent(JSON.stringify(d.bridge))}`
         : d.url;
-      // Devvit webviews send frame-ancestors allowing only reddit.com and
-      // localhost/127.0.0.1 (dev/loopback testing) — anywhere else, inline
-      // iframing is blocked by the browser, so fall back to a new tab.
+      // Devvit only allows framing from reddit.com and localhost; elsewhere open a new tab.
       const isLoopback = ['localhost', '127.0.0.1'].includes(location.hostname);
       if (!isLoopback) {
         window.open(url, '_blank', 'noopener');

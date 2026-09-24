@@ -1,4 +1,4 @@
-import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
+import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -78,8 +78,7 @@ function _initMarked() {
   marked.use({ renderer: r, breaks: true, gfm: true });
 }
 
-// Comments often just paste reddit's video player URL as plain text (no real embed
-// metadata is exposed for comments, unlike posts) — rewrite it into a video embed.
+// Comments often paste Reddit's video player URL as plain text; turn it into an embed.
 function embedRedditCommentVideos(text) {
   return text.replace(
     /(`[^`]*`|\[[^\]]*\]\([^)]*\))|https?:\/\/(?:www\.)?reddit\.com\/link\/[A-Za-z0-9_]+\/video\/([A-Za-z0-9_]+)\/?(?:player)?\/?/gi,
@@ -121,10 +120,7 @@ function _nestSup(chain) {
 
 const _CODE_SKIP = '```[\\s\\S]*?```|`[^`]*`';
 
-// Reddit escapes underscores in raw markdown (e.g. "foo\_bar") to stop them
-// triggering italics. Marked unescapes this within [text](url) links, but not
-// inside bare autolinked URLs — so bare-URL underscores stay literally
-// backslash-escaped in the output. Strip those escapes before parsing.
+// Marked keeps Reddit's "\_" escapes inside bare autolinked URLs; strip them first.
 function unescapeBareUrlUnderscores(text) {
   return text.replace(new RegExp(`(${_CODE_SKIP})|(https?:\\/\\/\\S+)`, 'g'),
     (m, skip, url) => skip ? skip : url.replace(/\\_/g, '_'));
@@ -137,8 +133,7 @@ export function renderMd(text) {
   const processed = embedRedditCommentVideos(linkifyReddit(unescapeBareUrlUnderscores(text)))
     .replace(new RegExp(`(${_CODE_SKIP})|>!([\\s\\S]*?)(?:!<|$)`, 'g'), (m, skip, inner) =>
       skip ? skip : `<span class="spoiler" role="button" tabindex="0">${inner}</span>`)
-    // Backslash-escaped carets (e.g. "\^\^") are left alone so marked's own escape
-    // handling renders them as literal "^" instead of us mangling them into broken tags.
+    // Escaped carets stay escaped so marked renders them literally.
     .replace(new RegExp(`(${_CODE_SKIP})|(?<!\\\\)\\^\\(([^)]*)\\)`, 'g'), (m, skip, inner) => skip ? skip : `<sup>${inner}</sup>`)
     .replace(new RegExp(`(${_CODE_SKIP})|(?<!\\\\)\\^(\\S+)`, 'g'), (m, skip, inner) => {
       if (skip) return skip;
@@ -149,9 +144,7 @@ export function renderMd(text) {
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
 }
 
-// Titles with no characters outside Latin script (incl. accented Latin and
-// typographic punctuation like smart quotes/em dashes) are never worth a
-// translate round-trip — skips the network call for the vast majority of posts.
+// Latin-only titles never need translating, which skips the request for most posts.
 const _NON_LATIN_RE = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿऀ-ॿ฀-๿぀-ヿ㐀-鿿가-힣豈-﫿]/;
 
 export async function translatePost(p, container) {
@@ -243,17 +236,14 @@ function _compactHasMedia(m) {
   return !m.is_self && (m.is_video || m.youtube_id || m.tiktok_id || m.redgifs_id || m.imgur_album_id || m.streamable_id || m.embed_url || m.gif_url || m.gallery?.length > 0 || isImageDomain);
 }
 
-// In minimal mode only show thumbnails for posts whose content IS an image/gallery.
-// Videos, embeds, and link posts skip the thumb entirely.
+// Minimal mode only shows thumbnails for image/gallery posts.
 function _isNativeImage(m) {
   const isImageDomain = m.domain && (m.domain === 'i.redd.it' || m.domain === 'i.imgur.com' || /^i\.\w/.test(m.domain));
   return !!(m.gallery?.length > 0 || isImageDomain || (m.gif_url && !m.gif_is_video));
 }
 
 
-// A thumb qualifies for opening straight into the lightbox (rather than
-// navigating to postview) only when it's a single static image — multi-image
-// galleries and video/embeds need the postview UI to actually view them.
+// A thumb opens the lightbox directly only for a single static image.
 function _isSingleStaticImage(m) {
   if (m.is_video || m.youtube_id || m.tiktok_id || m.redgifs_id || m.imgur_album_id || m.streamable_id || m.embed_url) return false;
   if (m.gif_url && m.gif_is_video) return false;
@@ -274,8 +264,7 @@ function _fullImgSrc(m) {
   return m.url || _compactThumbSrc(m);
 }
 
-// Reddit galleries only ever contain static images (see media_detection.py),
-// so any multi-image gallery can open straight into the lightbox too.
+// Reddit galleries are static images only, so any gallery can open in the lightbox.
 function _galleryUrls(m) {
   return m.gallery.map(g => g.url);
 }
@@ -505,8 +494,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
     const isDeleted = !c.body || c.body==='[deleted]' || c.body==='[removed]';
     const isAutoMod = c.author === 'AutoModerator';
     const isStickied = c.stickied;
-    // Match 'bot' at end of name, at start, or adjacent to separators/_/digits.
-    // Avoids false positives like "Robotics" (bot mid-word after alpha) — Scunthorpe problem.
+    // "bot" at either end or beside a separator/digit, so not "Robotics".
     const isBotUser = c.author && /(?:^|[_\-\d])bot(?:[_\-\d]|$)|bot$/i.test(c.author);
     const startCollapsed = isAutoMod || isBotUser;
     const isOP    = postAuthor && postAuthor !== '[deleted]' && !isDeleted && c.author === postAuthor;

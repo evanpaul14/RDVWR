@@ -7,11 +7,8 @@ export const AUTOCOMPLETE_DEBOUNCE = 280;
 export const TOUCH_MOVE_THRESHOLD  = 10;
 export const GALLERY_SWIPE_MIN     = 40;
 
-// Opens a real reddit.com URL in a new tab. Tags the URL so the rdvwr browser
-// extension's redirect-to-rdvwr logic (background.js) knows not to bounce
-// this navigation straight back — otherwise clicking "open in reddit" from
-// inside the app would just redirect back to the app. Uses a URL fragment
-// (not a query param) so the tag stays client-side and is never sent to Reddit.
+// Opens a reddit.com URL in a new tab, tagged (in the fragment, never sent to Reddit)
+// so the rdvwr browser extension doesn't redirect it back here.
 export function openOnReddit(href) {
   let target = href;
   try {
@@ -22,8 +19,7 @@ export function openOnReddit(href) {
   window.open(target, '_blank', 'noopener');
 }
 
-// PROXY_MEDIA=1 on the server adds this meta tag; media URLs the frontend builds itself
-// (markdown images, comment gifs/videos) then go through /api/m/ like the API's do.
+// Set by PROXY_MEDIA=1: media URLs built client-side also go through /api/m/.
 const _PROXY_MEDIA = document.querySelector('meta[name="rdvwr-proxy-media"]')?.content === '1';
 // Keep in sync with MEDIA_PROXY_HOSTS in routes/mediaproxy.py.
 const _PROXY_HOSTS = new Set([
@@ -40,11 +36,8 @@ export function proxyMedia(url) {
   } catch {}
   return url;
 }
-// hls.js fetches playlists/segments via XHR, which the CSP's connect-src 'self' blocks
-// for a direct cross-origin v.redd.it URL (unlike a plain <video src>, which only needs
-// media-src) — so HLS URLs we build ourselves (comment-embedded reddit videos) must
-// always go through /api/m/, unlike proxyMedia() above which is opt-in via PROXY_MEDIA.
-// Mirrors proxy_hls() in media_detection.py, which the API's own hls_url fields go through.
+// HLS always goes through /api/m/: hls.js uses XHR, which connect-src 'self' blocks.
+// Mirrors proxy_hls() in media_detection.py.
 export function proxyHls(url) {
   if (!url) return url;
   try {
@@ -57,8 +50,7 @@ export function proxyHls(url) {
 export function isLocalUrl(url) {
   return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//');
 }
-// Inverse of the /api/img and /api/m/ proxies — the upstream URL, for host checks,
-// filenames and the download endpoints. Accepts relative or absolute (img.src) forms.
+// Upstream URL behind an /api/img or /api/m/ URL (relative or absolute).
 export function realMediaUrl(url) {
   if (!url) return url;
   const path = url.startsWith(location.origin + '/') ? url.slice(location.origin.length) : url;
@@ -85,10 +77,8 @@ export function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Delegated fallback handling for broken <img> loads, driven by a data-onerror
-// attribute instead of an inline onerror="..." attribute — the CSP's script-src
-// has no 'unsafe-inline', which blocks inline event-handler attributes outright.
-// The 'error' event doesn't bubble, so this has to listen on the capture phase.
+// Delegated <img> error fallback via data-onerror (CSP forbids inline handlers).
+// 'error' doesn't bubble, so listen in the capture phase.
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || !img.dataset.onerror) return;
@@ -171,12 +161,17 @@ export function renderAuthorFlair(c) {
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
 
-// Click-to-reveal overlay for spoiler/nsfw content. Reveal is handled by a delegated
-// listener in app.js. variant 'thumb'/'text' adds a compact modifier class + short label.
+// Click-to-reveal overlay for spoiler/NSFW content (revealed by a listener in app.js).
+// variant 'thumb'/'text' adds a compact modifier class and short label.
 export function veilWrap(kind, html, variant = '') {
   const wrapCls = variant ? `${kind}-media-wrap ${kind}-${variant}-wrap` : `${kind}-media-wrap`;
   const label   = variant ? kind : `${kind} — click to reveal`;
   return `<div class="${wrapCls}"><div class="${kind}-veil" role="button" tabindex="0"><span class="${kind}-veil-label">${label}</span></div><div class="${kind}-content">${html}</div></div>`;
+}
+
+export function emptyState(title, sub='') {
+  const subHtml = sub ? `<div class="state-sub">${sub}</div>` : '';
+  return `<div class="state"><div class="state-icon">∅</div><div class="state-title">${title}</div>${subHtml}</div>`;
 }
 
 export function errState(msg, retryTarget, sub='') {

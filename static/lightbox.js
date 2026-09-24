@@ -27,8 +27,7 @@ function _lbShowIndex(i) {
   _lbReset();
 }
 
-// src can be a single image URL, or an array of URLs for a gallery (with index
-// picking the starting image) — the gallery gets prev/next nav controls.
+// `src` is one URL, or an array for a gallery starting at `index`.
 export function openLightbox(src, index = 0) {
   if (Array.isArray(src)) {
     _lbGallery = src;

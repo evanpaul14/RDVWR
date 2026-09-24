@@ -4,9 +4,7 @@ import { markVisited, isVisited } from './visited.js';
 
 const feed = document.getElementById('feed');
 
-// In-memory only — not persisted. Posts enter when they scroll past the top
-// in the current session, driving post-read-hidden without hiding everything
-// on a fresh page load.
+// Posts scrolled past this session (not persisted), for hiding read posts.
 const _hideSet = new Set();
 
 function _shouldHideReadPosts() {

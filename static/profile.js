@@ -1,7 +1,7 @@
 import { state } from './state.js';
-import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml } from './utils.js';
+import { escHtml, fmtNum, fmtDate, errState, emptyState, buildTimeFilterHtml } from './utils.js';
 import { renderPost, renderUserCommentCard, waitForMdLibs } from './render.js';
-import { initMedia, initGifVideos } from './media.js';
+import { appendWithMedia } from './media.js';
 import { showSkeletons, setMainOpen } from './feed.js';
 import { cardContent } from './hibernate.js';
 
@@ -26,10 +26,7 @@ export function buildProfileSortHtml(tab='overview', sort='new', time='all') {
   return tabBtns + `<div style="display:flex;align-items:center;border-left:1px solid var(--b);margin-left:4px;padding-left:8px;gap:2px">` + sortBtns + `</div>` + (sort==='top' ? buildTimeFilterHtml(time) : '') + sidebarBtn;
 }
 
-// Archived (Arctic Shift) fetches go through a slower third-party API than a
-// normal Reddit call. If a fresh profile load is still pending after this long,
-// assume that's what's happening and say so, rather than leaving skeletons up
-// with no explanation.
+// Archived profiles load slowly; after this long, explain the wait.
 const ARCHIVE_NOTICE_DELAY = 700;
 
 export async function loadProfileTab(username, tab, sort='new', time='all', after=null, append=false, injectedData=null) {
@@ -86,19 +83,15 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
     if (tab === 'overview') {
       const items = data.items;
       if (!items?.length && !append) {
-        feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>`;
+        feed.innerHTML = emptyState('Nothing here');
         return;
       }
       const startIdx = append ? feed.children.length : 0;
-      const tmp = document.createElement('div');
-      tmp.innerHTML = items.map((item, i) =>
+      appendWithMedia(feed, items.map((item, i) =>
         item.type === 'post'
           ? renderPost(item.data, startIdx + i, true)
           : renderUserCommentCard(item.data, startIdx + i)
-      ).join('');
-      initMedia(tmp);
-      while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-      initGifVideos(feed);
+      ).join(''));
       if (data.archived) {
         const postIds = items.filter(i => i.type === 'post').map(i => i.data.id);
         refreshArchivedLiveInfo(postIds, myGen);
@@ -106,16 +99,12 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
     } else {
       const items = tab === 'posts' ? data.posts : data.comments;
       if (!items?.length && !append) {
-        feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>`;
+        feed.innerHTML = emptyState('Nothing here');
         return;
       }
       const startIdx = append ? feed.children.length : 0;
       if (tab === 'posts') {
-        const tmp = document.createElement('div');
-        tmp.innerHTML = items.map((p,i)=>renderPost(p,startIdx+i,true)).join('');
-        initMedia(tmp);
-        while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-        initGifVideos(feed);
+        appendWithMedia(feed, items.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
         if (data.archived) refreshArchivedLiveInfo(items.map(p => p.id), myGen);
       } else {
         feed.insertAdjacentHTML('beforeend', items.map((c,i)=>renderUserCommentCard(c,startIdx+i)).join(''));
@@ -127,9 +116,7 @@ export async function loadProfileTab(username, tab, sort='new', time='all', afte
   finally  { clearTimeout(noticeTimer); if (myGen === state.feedGen) state.loading = false; }
 }
 
-// Arctic Shift's score/comment-count is a stale snapshot from whenever it first
-// crawled the post. Fetch current numbers from Reddit in the background and
-// patch cards in place, instead of blocking the (already slow) archived load on it.
+// Archived scores are stale snapshots; refresh them from Reddit in the background.
 async function refreshArchivedLiveInfo(postIds, myGen) {
   if (!postIds.length) return;
   try {

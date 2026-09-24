@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { escHtml, fmtNum, errState } from './utils.js';
 import { renderLiveUpdate, renderMd } from './render.js';
-import { showSkeletons, setMainOpen } from './feed.js';
+import { setMainOpen } from './feed.js';
 
 const feed      = document.getElementById('feed');
 const sentinel  = document.getElementById('scroll-sentinel');

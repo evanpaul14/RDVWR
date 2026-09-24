@@ -1,8 +1,8 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
+import { escHtml, fmtNum, errState, emptyState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
-import { initMedia, initGifVideos } from './media.js';
+import { initMedia, initGifVideos, appendWithMedia } from './media.js';
 import { getSavedPosts } from './saved.js';
 import { getSubs } from './subscriptions.js';
 import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
@@ -79,6 +79,20 @@ export function showSkeletons() {
   sentinel.classList.remove('active', 'loading');
 }
 
+// Shared feed-load lifecycle: generation guard, loading flag, skeletons and network errors.
+async function runFeedLoad(append, load) {
+  if (append && state.loading) return;
+  if (!append) state.feedGen++;
+  const myGen = state.feedGen;
+  state.loading = true;
+  if (!append) showSkeletons();
+  else sentinel.classList.add('loading');
+  try {
+    return await load(myGen);
+  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
+  finally  { if (myGen === state.feedGen) state.loading = false; }
+}
+
 // ── Home feed ─────────────────────────────────────────────────────────────────
 export function buildHomeSortHtml(sort='best', time='all') {
   const btns = ['best','hot','new','top','rising','controversial'].map(s =>
@@ -103,16 +117,8 @@ async function _fetchHomePage(sort, time, after, distance) {
 }
 
 export async function loadHomeFeed(sort, time, after=null, append=false) {
-  if (append && state.loading) return;
-  if (!append) state.feedGen++;
-  const myGen = state.feedGen;
-  state.loading = true;
-  if (!append) showSkeletons();
-  else sentinel.classList.add('loading');
-  try {
-    // On a fresh (non-append) load, resume from the last-known cursor so a
-    // plain refresh pages deeper into Reddit's feed instead of re-fetching
-    // the same first page, then dedupe against posts already shown.
+  return runFeedLoad(append, async myGen => {
+    // A fresh load resumes from the last cursor so refreshing shows new posts, deduped.
     let curAfter = after;
     let curDistance = 4;
     const cursor = getHomeCursor(sort, time);
@@ -142,25 +148,16 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
 
     if (!append) feed.innerHTML = '';
     if (!collected.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      feed.innerHTML = emptyState('No posts found');
       return;
     }
     const startIdx = append ? feed.querySelectorAll('.post').length : 0;
-    const tmp = document.createElement('div');
-    const parts = [];
-    collected.forEach((p, i) => {
-      parts.push(renderPost(p, startIdx + i, true));
-    });
-    tmp.innerHTML = parts.join('');
-    initMedia(tmp);
-    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-    initGifVideos(feed);
+    appendWithMedia(feed, collected.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
     markHomeSeen(collected.map(p => p.id));
     setHomeCursor(sort, time, curAfter, curDistance);
     state.afterToken = curAfter;
     sentinel.classList.remove('loading');
-  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
-  finally  { if (myGen === state.feedGen) state.loading = false; }
+  });
 }
 
 export async function loadHome(sort='best', time='all', after=null) {
@@ -206,7 +203,7 @@ export async function loadSaved() {
   sentinel.innerHTML = '';
   sentinel.classList.remove('active', 'loading');
   if (!posts.length) {
-    feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No saved posts</div><div class="state-sub">Use the save button on any post to keep it here.</div></div>';
+    feed.innerHTML = emptyState('No saved posts', 'Use the save button on any post to keep it here.');
     return;
   }
   await waitForMdLibs();
@@ -217,8 +214,7 @@ export async function loadSaved() {
 }
 
 // ── Subscribed feed (local subscriptions) ─────────────────────────────────────
-// `base` is the URL prefix the feed lives under: /home when it stands in for the
-// anonymous home feed, /subscribed when a personalized home feed takes /home.
+// `base` is /home when this replaces the anonymous home feed, else /subscribed.
 export async function loadSubscribed(sort='hot', time='all', after=null, base='/subscribed') {
   const subs = getSubs();
   state.subsMode    = true;
@@ -250,7 +246,7 @@ export async function loadSubscribed(sort='hot', time='all', after=null, base='/
     sortBar.style.display = 'none';
     sentinel.innerHTML = '';
     sentinel.classList.remove('active', 'loading');
-    feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No subscriptions</div><div class="state-sub">Open a subreddit and use its subscribe button to add it here.</div></div>';
+    feed.innerHTML = emptyState('No subscriptions', 'Open a subreddit and use its subscribe button to add it here.');
     return;
   }
   setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
@@ -308,14 +304,8 @@ async function fetchPosts(sub, sort, time, after, quarantineOptIn=false) {
 }
 
 export async function loadSubFeed(sub, sort, time='all', after=null, append=false, quarantineOptIn=false) {
-  if (append && state.loading) return;
-  if (!append) state.feedGen++;
-  const myGen = state.feedGen;
-  state.loading = true;
-  if (!append) showSkeletons();
-  else sentinel.classList.add('loading');
-  try {
-    let data, ok, status;
+  return runFeedLoad(append, async myGen => {
+    let data, ok;
     const inj = !append && !quarantineOptIn && window.__INITIAL_DATA__;
     if (inj && inj._sub === sub.toLowerCase() && inj._sort === sort && inj._time === (time || 'all')) {
       window.__INITIAL_DATA__ = null;
@@ -325,7 +315,6 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
       const res = await fetchPosts(sub, sort, time, after, quarantineOptIn);
       data = await res.json();
       ok = res.ok;
-      status = res.status;
     }
     if (myGen !== state.feedGen) return;
     if (!ok) {
@@ -346,22 +335,17 @@ export async function loadSubFeed(sub, sort, time='all', after=null, append=fals
     }
     if (!append) feed.innerHTML = '';
     if (!data.posts.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      feed.innerHTML = emptyState('No posts found');
       return;
     }
     await waitForMdLibs();
     if (myGen !== state.feedGen) return;
     const startIdx = append ? feed.children.length : 0;
     const multiSub = state.currentSub === 'popular' || state.currentSub === 'all' || state.currentSub.includes('+');
-    const tmp = document.createElement('div');
-    tmp.innerHTML = data.posts.map((p,i)=>renderPost(p,startIdx+i,multiSub)).join('');
-    initMedia(tmp);
-    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-    initGifVideos(feed);
+    appendWithMedia(feed, data.posts.map((p, i) => renderPost(p, startIdx + i, multiSub)).join(''));
     state.afterToken = data.after;
     sentinel.classList.remove('loading');
-  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
-  finally  { if (myGen === state.feedGen) state.loading = false; }
+  });
 }
 
 export async function loadSubreddit(sub, sort='top', time='all', after=null) {
@@ -385,13 +369,7 @@ export async function loadSubreddit(sub, sort='top', time='all', after=null) {
 
 // ── Multi feed ────────────────────────────────────────────────────────────────
 export async function loadMultiFeed(username, multiname, sort, time, after=null, append=false) {
-  if (append && state.loading) return;
-  if (!append) state.feedGen++;
-  const myGen = state.feedGen;
-  state.loading = true;
-  if (!append) showSkeletons();
-  else sentinel.classList.add('loading');
-  try {
+  return runFeedLoad(append, async myGen => {
     let url = `/api/user/${encodeURIComponent(username)}/m/${encodeURIComponent(multiname)}?sort=${sort}`;
     if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
     if (after) url += `&after=${after}`;
@@ -411,19 +389,14 @@ export async function loadMultiFeed(username, multiname, sort, time, after=null,
     }
     if (!append) feed.innerHTML = '';
     if (!data.posts.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+      feed.innerHTML = emptyState('No posts found');
       return;
     }
     const startIdx = append ? feed.children.length : 0;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
-    initMedia(tmp);
-    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-    initGifVideos(feed);
+    appendWithMedia(feed, data.posts.map((p, i) => renderPost(p, startIdx + i, true)).join(''));
     state.afterToken = data.after;
     sentinel.classList.remove('loading');
-  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
-  finally  { if (myGen === state.feedGen) state.loading = false; }
+  });
 }
 
 export async function loadMultireddit(username, multiname, sort='hot', time='all', after=null) {
@@ -494,7 +467,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
         <span class="dupes-count">${data.posts.length} other post${data.posts.length !== 1 ? 's' : ''} linking to this URL</span>
       </div>`;
       if (!data.posts.length) {
-        feed.insertAdjacentHTML('beforeend', '<div class="state"><div class="state-icon">∅</div><div class="state-title">No duplicates found</div></div>');
+        feed.insertAdjacentHTML('beforeend', emptyState('No duplicates found'));
         return;
       }
     }

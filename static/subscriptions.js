@@ -1,6 +1,5 @@
-// Locally subscribed subreddits (no Reddit account involved). Their combined
-// feed replaces the anonymous home feed, or is offered as its own feed when a
-// personalized (cookie-backed) home feed is configured.
+// Local subreddit subscriptions. Their combined feed is the home feed, or its own
+// feed when a personalized home feed is configured.
 import { storeGet, storeSet } from './storage.js';
 
 const KEY      = 'rdvwr_subs';
