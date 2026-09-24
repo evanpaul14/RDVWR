@@ -9,7 +9,7 @@
     {%- if about.created_utc %} &middot; joined {{ about.created_utc | fmtdate }}{% endif -%}
   {%- endset %}
   {{ ui.ctx_header('u/' ~ about.name, stats, about.icon) }}
-  {% if about.description %}<div class="ns-about-panel"><details class="ns-about"><summary>About</summary><div class="sidebar-section"><div class="sidebar-desc">{{ about.description }}</div></div></details></div>{% endif %}
+  {% if about.description %}<div class="ns-about-panel"><details class="ns-about"><summary>About</summary><div class="sidebar-section"><div class="sidebar-desc">{{ about.description | mdtext }}</div></div></details></div>{% endif %}
 {% else %}
   {{ ui.ctx_header('u/' ~ page.username) }}
 {% endif %}
@@ -41,7 +41,7 @@
             <span>&middot;</span>
             <a class="ucc-post-link" href="{{ post_url }}">{{ c.link_title }}</a>
           </div>
-          <div class="ucc-body md">{% if c.body_html %}{{ c.body_html | md }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
+          <div class="ucc-body md">{% if c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
           <div class="ucc-footer">
             <span class="ucc-score">&#9650; {{ c.score | fmtnum }}</span>
             <a class="ucc-permalink" href="{{ post_url }}/_/{{ c.id }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>

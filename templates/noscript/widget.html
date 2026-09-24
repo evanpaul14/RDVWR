@@ -13,7 +13,7 @@
   {% elif w.kind == 'image' %}
     {% for im in w.images %}{% if im.linkUrl %}<a href="{{ im.linkUrl }}" target="_blank" rel="noopener noreferrer"><img class="sidebar-widget-img" src="{{ im.url }}" alt="" loading="lazy"></a>{% else %}<img class="sidebar-widget-img" src="{{ im.url }}" alt="" loading="lazy">{% endif %}{% endfor %}
   {% elif w.kind == 'textarea' %}
-    <div class="sidebar-desc md">{% if w.text_html %}{{ w.text_html | md }}{% else %}{{ w.text }}{% endif %}</div>
+    <div class="sidebar-desc md">{% if w.text_html %}{{ w.text_html | md }}{% else %}{{ w.text | mdtext }}{% endif %}</div>
   {% elif w.kind == 'button' %}
     <div class="sidebar-widget-btns">{% for b in w.buttons %}<a class="sidebar-widget-btn" href="{{ b.url }}" target="_blank" rel="noopener noreferrer">{{ b.text }}</a>{% endfor %}</div>
   {% elif w.kind == 'menu' %}

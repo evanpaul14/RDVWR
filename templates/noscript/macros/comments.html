@@ -36,7 +36,7 @@
         <a class="comment-time" href="{{ permalink }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>{% if c.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}
         {{ posts.awards(c.awards) }}
       </summary>
-      <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
+      <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
       {%- if c.replies -%}
         <div class="comment-replies">
           {%- if depth >= THREAD_MAX_DEPTH -%}

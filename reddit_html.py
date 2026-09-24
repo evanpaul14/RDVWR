@@ -49,24 +49,53 @@ def local_reddit_path(href):
     return path
 
 
-# Plain-text "u/name" / "r/name" mentions Reddit left unlinked, linkified like the JS
-# renderer's linkifyReddit (render.js).
-_MENTION_RE = re.compile(r'(?<![\w/])(/?)(u|r)/([A-Za-z0-9_-]+)')
+# Plain-text "u/name" / "r/name" mentions and literal `[label](target)` markdown links
+# Reddit left unrendered, linkified like the JS renderer's linkifyReddit (render.js).
+_MENTION_RE = re.compile(
+    r'\[(?P<label>[^\]\n]+)\]\((?P<href>[^)\s]+)\)|(?<![\w/])/?(?P<kind>[ur])/(?P<name>[A-Za-z0-9_-]+)')
+
+
+def _md_href(href):
+    """(href, external) for a literal markdown link target, else None."""
+    if re.match(r'^/?(?:u|r|user)/[A-Za-z0-9_-]', href):
+        return local_reddit_path('/' + href.lstrip('/').replace('u/', 'user/', 1)), False
+    local = local_reddit_path(href)
+    if local:
+        return local, False
+    if href.startswith(('http://', 'https://')):
+        return href, True
+    return None
 
 
 def _linkify_mentions(text):
-    """Escape `text` and wrap u/name and r/name mentions in on-site links."""
+    """Escape `text` and wrap mentions / literal markdown links in links."""
     out, last = [], 0
     for m in _MENTION_RE.finditer(text):
-        kind, name = m.group(2), m.group(3)
-        if kind == 'r' and '-' in name:
-            continue
+        if m.group('href'):
+            target = _md_href(m.group('href'))
+            if not target:
+                continue
+            href, external = target
+            label = html_lib.escape(m.group('label'))
+            ext = ' target="_blank" rel="noopener noreferrer"' if external else ''
+            piece = f'<a href="{html_lib.escape(href, quote=True)}"{ext}>{label}</a>'
+        else:
+            kind, name = m.group('kind'), m.group('name')
+            if kind == 'r' and '-' in name:
+                continue
+            path = f"/{'user' if kind == 'u' else 'r'}/{name}"
+            piece = f'<a href="{path}">{kind}/{html_lib.escape(name)}</a>'
         out.append(html_lib.escape(text[last:m.start()]))
-        path = f"/{'user' if kind == 'u' else 'r'}/{name}"
-        out.append(f'<a href="{path}">{kind}/{html_lib.escape(name)}</a>')
+        out.append(piece)
         last = m.end()
     out.append(html_lib.escape(text[last:]))
     return ''.join(out)
+
+
+def linkify_plain_text(text):
+    """Plain-text body (no *_html available) as paragraphs with linked mentions."""
+    paras = [p for p in re.split(r'\n{2,}', text or '') if p.strip()]
+    return ''.join(f'<p>{_linkify_mentions(p.strip()).replace(chr(10), "<br>")}</p>' for p in paras)
 
 
 def _inline_img_src(href):
