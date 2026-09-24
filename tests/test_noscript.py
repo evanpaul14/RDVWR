@@ -285,6 +285,21 @@ class TestPostPage:
         assert "window.__INITIAL_POST__" in resp.get_data(as_text=True)
 
     @patch.object(reddit_client.SESSION, "get")
+    def test_meta_matches_js_post_view(self, mock_get, client):
+        payload = _comments_payload()
+        post = payload[0]["data"]["children"][0]["data"]
+        post.update(edited=1700000000, all_awardings=[
+            {"name": "Gold", "count": 2, "icon_url": "https://i.redd.it/x.png", "resized_icons": []}])
+        mock_get.side_effect = _reddit({r"/comments/abc123\.json": payload})
+        ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        meta = re.search(r'<div class="pv-meta">.*?</div>', ns, re.S).group(0)
+        # plain time span (inherits .pv-meta sizing, like postview.js), edited age shown
+        assert 'class="meta-item" title' not in meta and "*edited " in meta
+        client.set_cookie("ns_layout", "minimal")
+        ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        assert '<span class="awards" title="Gold">&#127941;2</span>' in ns
+
+    @patch.object(reddit_client.SESSION, "get")
     def test_more_page_shows_loaded_comments(self, mock_get, client):
         mock_get.side_effect = _reddit({
             r"/comments/abc123\.json": _comments_payload([_comment("c1", "Top comment")]),
