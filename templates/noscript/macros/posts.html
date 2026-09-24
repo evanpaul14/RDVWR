@@ -78,7 +78,7 @@
      together. Browsers that play HLS natively (Safari) pick that <source> and get audio;
      the rest skip it by type and fall back to the silent MP4. #}
   {%- if p.hls_url or p.video_url -%}
-    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ p.preview_img or '' }}">
+    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ (p.thumb_url or p.preview_img or '') if not full else (p.preview_img or '') }}">
       {%- if p.hls_url %}<source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% endif -%}
       {%- if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif -%}
     </video></div>
@@ -125,7 +125,7 @@
   {%- elif p.is_video -%}
     {{ video(p, full) }}
   {%- elif p.gif_url and p.gif_is_video -%}
-    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls loop muted playsinline preload="{{ 'metadata' if full else 'none' }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.gif_url }}" type="video/mp4"></video></div>
+    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls loop muted playsinline preload="{{ 'metadata' if full else 'none' }}" poster="{{ (p.thumb_url or p.preview_img or '') if not full else (p.preview_img or '') }}"><source src="{{ p.gif_url }}" type="video/mp4"></video></div>
   {%- elif p.gif_url -%}
     <div class="{{ cls }}"><img loading="lazy" src="{{ p.gif_url }}" alt=""></div>
   {%- elif p.redgifs_id -%}
@@ -144,8 +144,10 @@
   {%- elif p.embed_url -%}
     {{ embed(p, full, p.embed_url, 'embedded media — open source →', p.embed_url) }}
   {%- elif p.preview_img or p.thumb_url -%}
+    {# Feed cards show the ~640px thumb; the link still opens the full-size original. #}
     {%- set src = p.preview_img or p.thumb_url -%}
-    <div class="{{ cls }}"><a href="{{ src }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ src }}" alt=""></a></div>
+    {%- set shown = (p.thumb_url or src) if not full else src -%}
+    <div class="{{ cls }}"><a href="{{ src }}" target="_blank" rel="noopener"><img loading="lazy" decoding="async" src="{{ shown }}" alt=""></a></div>
   {%- endif -%}
 {%- endmacro %}
 
