@@ -44,7 +44,11 @@
 {%- endmacro %}
 
 {% macro awards(list) -%}
-  {%- if list -%}
+  {#- static/utils.js renderAwards(): minimal layout collapses them to one medal + total. -#}
+  {%- if list and ns.layout == 'minimal' -%}
+    {%- set ns_total = namespace(n=0) -%}{%- for a in list %}{% set ns_total.n = ns_total.n + (a.count if a.count > 1 else 1) %}{% endfor -%}
+    <span class="awards" title="{{ list | map(attribute='name') | join(', ') }}">&#127941;{{ ns_total.n }}</span>
+  {%- elif list -%}
     <span class="awards">{% for a in list %}<span class="award-item" title="{{ a.name }}{% if a.count > 1 %} &times;{{ a.count }}{% endif %}"><img src="{{ a.icon }}" alt="{{ a.name }}" loading="lazy" width="16" height="16">{% if a.count > 1 %}<span class="award-count">{{ a.count }}</span>{% endif %}</span>{% endfor %}</span>
   {%- endif -%}
 {%- endmacro %}
@@ -290,7 +294,7 @@
     <span class="up">&#9650; {{ p.score | fmtnum }}</span>
     {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
     <a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>
-    {{ time_ago(p.created_utc, p.edited_utc) }}
+    <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>{% endif %}</span>
     <span>{{ p.num_comments | fmtnum }} comments</span>
     {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}
     {%- if dl and not minimal %}<a class="share-btn" href="{{ dl }}" download title="Download media"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> download</a>{% endif %}
