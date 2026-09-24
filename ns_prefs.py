@@ -28,7 +28,7 @@ PREFS = {
     'nsfw_blur':           Pref('ns_nsfw_blur', 'nsfwBlur', None),
     'nsfw_hide':           Pref('ns_nsfw_hide', 'nsfwHide', None),
     'nsfw_search_hide':    Pref('ns_nsfw_search_hide', 'nsfwSearchHide', None),
-    # Off by default: sound means the server remuxing each video (routes/muxvideo.py).
+    # Off by default: only Safari plays HLS (.m3u8) natively without JS.
     'hls':                 Pref('ns_hls', None, None),
 }
 

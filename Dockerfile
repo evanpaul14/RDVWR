@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# ffmpeg is needed by /api/download/reddit-video and /api/v/<id>.mp4 to merge video + audio
+# ffmpeg is needed by /api/download/reddit-video to merge video + audio
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
