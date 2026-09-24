@@ -49,6 +49,26 @@ def local_reddit_path(href):
     return path
 
 
+# Plain-text "u/name" / "r/name" mentions Reddit left unlinked, linkified like the JS
+# renderer's linkifyReddit (render.js).
+_MENTION_RE = re.compile(r'(?<![\w/])(/?)(u|r)/([A-Za-z0-9_-]+)')
+
+
+def _linkify_mentions(text):
+    """Escape `text` and wrap u/name and r/name mentions in on-site links."""
+    out, last = [], 0
+    for m in _MENTION_RE.finditer(text):
+        kind, name = m.group(2), m.group(3)
+        if kind == 'r' and '-' in name:
+            continue
+        out.append(html_lib.escape(text[last:m.start()]))
+        path = f"/{'user' if kind == 'u' else 'r'}/{name}"
+        out.append(f'<a href="{path}">{kind}/{html_lib.escape(name)}</a>')
+        last = m.end()
+    out.append(html_lib.escape(text[last:]))
+    return ''.join(out)
+
+
 def _inline_img_src(href):
     """(src, is_third_party) for a link that should render as an inline image, else None."""
     parsed = urlparse(href)
@@ -67,6 +87,7 @@ class _AllowlistHtmlSanitizer(HTMLParser):
         self._span_stack = []   # whether each open <span> was emitted
         self._img_link = None   # (href, (src, is_third_party), [link text]) inside an inline-image <a>
         self._skip_depth = 0    # >0 inside <script>/<style>, whose text is dropped
+        self._no_link_depth = 0 # >0 inside <a>/<code>/<pre>, where mentions aren't linkified
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -84,6 +105,8 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             return
         if tag not in _SANITIZE_ALLOWED_TAGS:
             return
+        if tag in ('a', 'code', 'pre'):
+            self._no_link_depth += 1
         if tag == 'a':
             href = attrs.get('href') or ''
             src = _inline_img_src(href) if href.startswith('https://') else None
@@ -107,6 +130,7 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             return
         if self._img_link:
             if tag == 'a':
+                self._no_link_depth = max(0, self._no_link_depth - 1)
                 self._flush_img_link()
             return
         if tag == 'span':
@@ -114,6 +138,8 @@ class _AllowlistHtmlSanitizer(HTMLParser):
                 self.out.append('</span>')
             return
         if tag in _SANITIZE_ALLOWED_TAGS:
+            if tag in ('a', 'code', 'pre'):
+                self._no_link_depth = max(0, self._no_link_depth - 1)
             self.out.append(f'</{tag}>')
 
     def handle_startendtag(self, tag, attrs):
@@ -125,8 +151,10 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             return
         if self._img_link:
             self._img_link[2].append(data)
-        else:
+        elif self._no_link_depth:
             self.out.append(html_lib.escape(data))
+        else:
+            self.out.append(_linkify_mentions(data))
 
     def _flush_img_link(self):
         href, (src, third_party), text = self._img_link
