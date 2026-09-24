@@ -71,16 +71,13 @@
 
 {% macro video(p, full) -%}
   {# Reddit video is separate video + audio streams, which only HLS (.m3u8) carries
-     together — and only Safari plays HLS without JS, so HLS is opt-in (ns.hls). #}
-  {%- set cls = 'pv-media' if full else 'post-video' -%}
-  {%- set preload = 'metadata' if full else 'none' -%}
-  {%- if ns.hls and p.hls_url -%}
-    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif %}</video></div>
-  {%- elif p.video_url -%}
-    <div class="{{ cls }}"><video controls preload="{{ preload }}" poster="{{ p.preview_img or '' }}"><source src="{{ p.video_url }}" type="video/mp4"></video></div>
-    {%- if p.hls_url %}<p class="ns-note">No audio &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS for audio</a></p>{% endif -%}
-  {%- elif p.hls_url -%}
-    <p class="ns-note">This video only plays via HLS &mdash; <a href="{{ ns_hls_toggle_url(True) }}">enable HLS</a> or <a href="{{ p.permalink }}" target="_blank" rel="noopener">watch on reddit.com</a></p>
+     together. Browsers that play HLS natively (Safari) pick that <source> and get audio;
+     the rest skip it by type and fall back to the silent MP4. #}
+  {%- if p.hls_url or p.video_url -%}
+    <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls preload="{{ 'metadata' if full else 'none' }}" poster="{{ p.preview_img or '' }}">
+      {%- if p.hls_url %}<source src="{{ p.hls_url }}" type="application/vnd.apple.mpegurl">{% endif -%}
+      {%- if p.video_url %}<source src="{{ p.video_url }}" type="video/mp4">{% endif -%}
+    </video></div>
   {%- endif -%}
 {%- endmacro %}
 

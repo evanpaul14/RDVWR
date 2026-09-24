@@ -74,7 +74,6 @@ class TestPrefs:
         with app.test_request_context("/"):
             prefs = all_prefs()
         assert prefs["theme"] == helpers.DEFAULT_SETTINGS["theme"]
-        assert prefs["hls"] is False
 
     def test_invalid_enum_cookie_falls_back_to_default(self):
         from ns_prefs import get_pref
@@ -102,7 +101,6 @@ class TestSettingsPage:
         cookies = resp.headers.getlist("Set-Cookie")
         assert any(c.startswith("ns_theme=light") for c in cookies)
         assert any(c.startswith("ns_nsfw_blur=1") for c in cookies)
-        assert any(c.startswith("ns_hls=0") for c in cookies)
         # An invalid enum value clears the cookie instead of storing it.
         assert any(c.startswith("ns_layout=;") for c in cookies)
 
@@ -110,11 +108,6 @@ class TestSettingsPage:
     def test_post_rejects_offsite_next(self, client, bad):
         resp = client.post("/settings", data={"next": bad})
         assert resp.headers["Location"] == "/"
-
-    def test_hls_toggle_link(self, client):
-        resp = client.get("/ns-hls?enable=1&next=/r/pics")
-        assert resp.headers["Location"] == "/r/pics"
-        assert any(c.startswith("ns_hls=1") for c in resp.headers.getlist("Set-Cookie"))
 
     def test_prefs_apply_to_pages(self, client):
         client.set_cookie("ns_theme", "light")
@@ -267,6 +260,16 @@ class TestSubredditPage:
         ns = _noscript(client.get("/r/testsub/hot"))
         assert "ns-gallery-preview" in ns and "ns-gallery-item" not in ns
         assert 'href="/r/testsub/comments/p1" title="View all 3 images"' in ns
+
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_video_offers_hls_then_mp4(self, mock_get, client):
+        video = {"is_video": True, "media": {"reddit_video": {
+            "fallback_url": "https://v.redd.it/vid1/DASH_720.mp4",
+            "hls_url": "https://v.redd.it/vid1/HLSPlaylist.m3u8"}}}
+        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([{**_make_post("p1", "Clip", "testsub"), **video}])})
+        ns = _noscript(client.get("/r/testsub/hot"))
+        assert ns.index("HLSPlaylist.m3u8") < ns.index("DASH_720.mp4")
 
 
 class TestPostPage:

@@ -164,10 +164,6 @@ def current_url():
     return request.path + (f"?{qs}" if qs else '')
 
 
-def ns_hls_toggle_url(enable):
-    return '/ns-hls?' + urlencode({'enable': 1 if enable else 0, 'next': current_url()})
-
-
 def register(app):
     for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md):
         app.add_template_filter(f)
@@ -175,7 +171,6 @@ def register(app):
         app.add_template_global(fn)
     app.add_template_global(download_url)
     app.add_template_global(current_url)
-    app.add_template_global(ns_hls_toggle_url)
 
     def asset_v(filename):
         try:
