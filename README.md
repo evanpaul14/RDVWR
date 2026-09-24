@@ -43,6 +43,7 @@ RDVWR is a single-page Reddit viewer. A Python/Flask backend proxies Reddit's AP
 - Subreddit and post search
 - Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - Dark theme, mobile-friendly
+- Works without JavaScript: every page is also server-rendered, with its own cookie-based settings page (`/settings`)
 
 ## Built with
 

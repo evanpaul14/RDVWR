@@ -1,0 +1,56 @@
+{# A user profile (page_data.build_profile): overview/posts/comments tabs with sorts. #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{% set about = page.about %}
+
+{% if about %}
+  {% set stats -%}
+    <span>{{ about.karma_post | fmtnum }}</span> post karma &middot; <span>{{ about.karma_comment | fmtnum }}</span> comment karma
+    {%- if about.created_utc %} &middot; joined {{ about.created_utc | fmtdate }}{% endif -%}
+  {%- endset %}
+  {{ ui.ctx_header('u/' ~ about.name, stats, about.icon) }}
+  {% if about.description %}<div class="ns-about-panel"><details class="ns-about"><summary>About</summary><div class="sidebar-section"><div class="sidebar-desc">{{ about.description }}</div></div></details></div>{% endif %}
+{% else %}
+  {{ ui.ctx_header('u/' ~ page.username) }}
+{% endif %}
+
+<div class="sort-bar ns-sort-bar">
+  {% for t, url in page.tab_links %}{{ ui.sort_link(t | capitalize, url, t == page.tab) }}{% endfor %}
+  <span class="ns-sort-divider"></span>
+  {% for s, url in page.sort_links %}{{ ui.sort_link(s | capitalize, url, s == page.sort) }}{% endfor %}
+  {% if page.sort == 'top' %}{{ ui.time_filter(page.base, page.time, {'tab': page.tab if page.tab != 'overview' else '', 'sort': 'top'}) }}{% endif %}
+</div>
+
+{% if page.error %}
+  <div class="feed-list">
+    {{ ui.empty_state(page.error.message) }}
+    {% if page.archive_url %}<div class="ns-next"><a class="load-more-btn" href="{{ page.archive_url }}">Check archived history &rarr;</a></div>{% endif %}
+  </div>
+{% else %}
+  <div class="feed-list">
+    {% if page.archived %}<div class="thread-banner">u/{{ page.username }}'s post history is not available. Data is from Arctic Shift</div>{% endif %}
+    {% for item in page['items'] if not (item.type == 'post' and item.data.over_18 and ns.nsfw_hide) %}
+      {% if item.type == 'post' %}
+        {{ posts.card(item.data) }}
+      {% else %}
+        {% set c = item.data %}
+        {% set post_url = '/r/' ~ c.subreddit ~ '/comments/' ~ c.link_id %}
+        <div class="user-comment-card">
+          <div class="ucc-context">
+            <span>in <a href="/r/{{ c.subreddit }}">r/{{ c.subreddit }}</a></span>
+            <span>&middot;</span>
+            <a class="ucc-post-link" href="{{ post_url }}">{{ c.link_title }}</a>
+          </div>
+          <div class="ucc-body md">{% if c.body_html %}{{ c.body_html | md }}{% else %}<p>{{ c.body }}</p>{% endif %}</div>
+          <div class="ucc-footer">
+            <span class="ucc-score">&#9650; {{ c.score | fmtnum }}</span>
+            <a class="ucc-permalink" href="{{ post_url }}/_/{{ c.id }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      {{ ui.empty_state('Nothing here') }}
+    {% endfor %}
+  </div>
+  {{ ui.next_link(page.next_url) }}
+{% endif %}

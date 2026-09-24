@@ -1,0 +1,65 @@
+{# Search results (page_data.build_search), laid out like the JS search view (search.js). #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+
+{% if not page.q %}
+  <div class="feed-list">{{ ui.empty_state('Enter a search term above', 'Tip: type r/name or u/name to go straight to a subreddit or user.') }}</div>
+{% else %}
+  {% set label = page.q if page.q.startswith('flair:') else '"' ~ page.q ~ '"' %}
+  {{ ui.ctx_header(('r/' ~ page.sub ~ ': ' if page.sub else 'Search: ') ~ label) }}
+
+  {% if not page.scoped %}
+    <div class="search-type-bar ns-search-type-bar">
+      {% for opt, url in page.type_links %}<a class="search-type-btn{% if opt == page.stype %} active{% endif %}" href="{{ url }}">{{ opt | capitalize }}</a>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if page.stype == 'posts' %}
+    <div class="sort-bar ns-sort-bar">
+      {% for s, url in page.sort_links %}{{ ui.sort_link(s | capitalize, url, s == page.sort) }}{% endfor %}
+      {% if page.sort == 'top' %}{{ ui.time_filter('/search', page.time, page.time_form_fields) }}{% endif %}
+      {% if page.scope_toggle_url %}
+        <a class="scope-check-label" href="{{ page.scope_toggle_url }}" role="checkbox" aria-checked="{{ 'true' if page.sub else 'false' }}"><span class="ns-checkbox{% if page.sub %} checked{% endif %}" aria-hidden="true"></span><span>r/{{ page.scope }}</span></a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if page.error %}
+    {{ ui.error_state(page.error) }}
+  {% elif page.stype == 'communities' %}
+    <div class="feed-list">
+      {% for c in page.results %}
+        <a class="community-card" href="/r/{{ c.name }}">
+          <div class="community-card-icon">{% if c.icon %}<img src="{{ c.icon }}" alt="" loading="lazy">{% else %}<span>{{ (c.name or '?')[0] | upper }}</span>{% endif %}</div>
+          <div class="community-card-body">
+            <div class="community-card-name">r/{{ c.name }}</div>
+            {% if c.title %}<div class="community-card-title">{{ c.title }}</div>{% endif %}
+            {% if c.description %}<div class="community-card-desc">{{ c.description }}</div>{% endif %}
+            <div class="community-card-stats"><span>{{ c.subscribers | fmtnum }}</span> members{% if c.over_18 %} &middot; <span class="ns-nsfw-label">nsfw</span>{% endif %}</div>
+          </div>
+        </a>
+      {% else %}
+        {{ ui.empty_state('No communities found') }}
+      {% endfor %}
+    </div>
+    {{ ui.next_link(page.next_url) }}
+  {% elif page.stype == 'users' %}
+    <div class="feed-list">
+      {% for u in page.results %}
+        <a class="user-card" href="/user/{{ u.name }}">
+          <div class="user-card-icon">{% if u.icon %}<img src="{{ u.icon }}" alt="" loading="lazy">{% else %}<span>{{ (u.name or '?')[0] | upper }}</span>{% endif %}</div>
+          <div class="user-card-body">
+            <div class="user-card-name">u/{{ u.name }}</div>
+            <div class="user-card-stats"><span>{{ u.karma_post | fmtnum }}</span> post karma &middot; <span>{{ u.karma_comment | fmtnum }}</span> comment karma{% if u.created_utc %} &middot; joined {{ u.created_utc | fmtdate }}{% endif %}</div>
+          </div>
+        </a>
+      {% else %}
+        {{ ui.empty_state('No users found') }}
+      {% endfor %}
+    </div>
+    {{ ui.next_link(page.next_url) }}
+  {% else %}
+    {{ posts.feed(page.results, hide_nsfw=ns.nsfw_hide or ns.nsfw_search_hide, empty='No results found') }}
+    {{ ui.next_link(page.next_url) }}
+  {% endif %}
+{% endif %}
