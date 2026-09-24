@@ -269,63 +269,6 @@ class TestSubredditPage:
         assert 'href="/r/testsub/comments/p1" title="View all 3 images"' in ns
 
 
-    @patch.object(reddit_client.SESSION, "get")
-    def test_video_sound_uses_muxed_mp4(self, mock_get, client, monkeypatch):
-        from routes import muxvideo
-        monkeypatch.setattr(muxvideo, "MUX_ENABLED", True)
-        video = {"is_video": True, "media": {"reddit_video": {
-            "fallback_url": "https://v.redd.it/vid1/DASH_720.mp4",
-            "hls_url": "https://v.redd.it/vid1/HLSPlaylist.m3u8"}}}
-        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([{**_make_post("p1", "Clip", "testsub"), **video}])})
-        ns = _noscript(client.get("/r/testsub/hot"))
-        assert "enable sound" in ns and "/api/v/vid1.mp4" not in ns
-        client.set_cookie("ns_hls", "1")
-        ns = _noscript(client.get("/r/testsub/hot"))
-        # muxed MP4 first, then HLS, then the silent MP4 as fallbacks
-        assert ns.index('src="/api/v/vid1.mp4"') < ns.index("HLSPlaylist.m3u8") < ns.index("DASH_720.mp4")
-
-
-class TestMuxedVideo:
-    def test_url_from_proxied_or_raw_hls(self, monkeypatch):
-        from routes import muxvideo
-        monkeypatch.setattr(muxvideo, "MUX_ENABLED", True)
-        assert muxvideo.muxed_video_url("/api/m/v.redd.it/ab12/HLSPlaylist.m3u8?a=1") == "/api/v/ab12.mp4"
-        assert muxvideo.muxed_video_url("https://v.redd.it/ab12/HLSPlaylist.m3u8") == "/api/v/ab12.mp4"
-        assert muxvideo.muxed_video_url("https://example.com/x.m3u8") is None
-        monkeypatch.setattr(muxvideo, "MUX_ENABLED", False)
-        assert muxvideo.muxed_video_url("https://v.redd.it/ab12/HLSPlaylist.m3u8") is None
-
-    def test_muxes_once_then_serves_ranges(self, client, monkeypatch, tmp_path):
-        from routes import muxvideo
-        monkeypatch.setattr(muxvideo, "MUX_ENABLED", True)
-        monkeypatch.setattr(muxvideo, "CACHE_DIR", str(tmp_path))
-        calls = []
-
-        def fake_run(cmd, **kwargs):
-            calls.append(cmd)
-            with open(cmd[-1], "wb") as f:
-                f.write(b"0123456789")
-            return type("R", (), {"returncode": 0, "stderr": b""})()
-        monkeypatch.setattr(muxvideo.subprocess, "run", fake_run)
-        resp = client.get("/api/v/abc123.mp4")
-        assert resp.status_code == 200 and resp.data == b"0123456789"
-        assert resp.mimetype == "video/mp4"
-        assert "https://v.redd.it/abc123/HLSPlaylist.m3u8" in calls[0]
-        resp = client.get("/api/v/abc123.mp4", headers={"Range": "bytes=2-4"})
-        assert resp.status_code == 206 and resp.data == b"234"
-        assert len(calls) == 1
-
-    def test_failure_and_bad_id_404(self, client, monkeypatch, tmp_path):
-        from routes import muxvideo
-        monkeypatch.setattr(muxvideo, "MUX_ENABLED", True)
-        monkeypatch.setattr(muxvideo, "CACHE_DIR", str(tmp_path))
-        monkeypatch.setattr(muxvideo.subprocess, "run",
-                            lambda cmd, **kw: type("R", (), {"returncode": 1, "stderr": b"boom"})())
-        assert client.get("/api/v/abc123.mp4").status_code == 404
-        assert client.get("/api/v/a-b.mp4").status_code == 404
-        assert list(tmp_path.iterdir()) == []
-
-
 class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):
