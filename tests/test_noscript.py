@@ -256,6 +256,19 @@ class TestSubredditPage:
         assert "ns-reveal--nsfw" in _noscript(client.get("/r/testsub/hot"))
 
 
+    @patch.object(reddit_client.SESSION, "get")
+    def test_feed_gallery_shows_only_first_image(self, mock_get, client):
+        gallery = {"is_gallery": True, "url": "https://www.reddit.com/gallery/p1",
+                   "gallery_data": {"items": [{"media_id": "m1"}, {"media_id": "m2"}, {"media_id": "m3"}]},
+                   "media_metadata": {m: {"status": "valid", "e": "Image", "m": "image/jpg",
+                                          "s": {"u": f"https://preview.redd.it/{m}.jpg", "x": 10, "y": 10}}
+                                      for m in ("m1", "m2", "m3")}}
+        mock_get.side_effect = _reddit({r"/hot\.json": _make_listing([{**_make_post("p1", "Album", "testsub"), **gallery}])})
+        ns = _noscript(client.get("/r/testsub/hot"))
+        assert "ns-gallery-preview" in ns and "ns-gallery-item" not in ns
+        assert 'href="/r/testsub/comments/p1" title="View all 3 images"' in ns
+
+
 class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):

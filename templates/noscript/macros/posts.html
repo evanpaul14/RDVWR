@@ -94,16 +94,28 @@
 {%- endmacro %}
 
 {% macro gallery(p, full) -%}
-  {# Horizontally scroll-snapping strip standing in for the JS gallery carousel; each
-     image links to its full-size original (the JS lightbox). #}
-  <div class="{{ 'pv-media' if full else 'post-media' }} ns-gallery">
-    {%- for img in p.gallery -%}
-      <figure class="ns-gallery-item">
-        <a href="{{ img.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ img.url if full else (img.thumb or img.url) }}" alt="{{ img.caption or '' }}"></a>
-        <figcaption>{{ loop.index }} / {{ loop.length }}{% if img.caption %} &middot; {{ img.caption }}{% endif %}</figcaption>
-      </figure>
-    {%- endfor -%}
-  </div>
+  {%- if full -%}
+    {# Horizontally scroll-snapping strip standing in for the JS gallery carousel; each
+       image links to its full-size original (the JS lightbox). #}
+    <div class="pv-media ns-gallery">
+      {%- for img in p.gallery -%}
+        <figure class="ns-gallery-item">
+          <a href="{{ img.url }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ img.url }}" alt="{{ img.caption or '' }}"></a>
+          <figcaption>{{ loop.index }} / {{ loop.length }}{% if img.caption %} &middot; {{ img.caption }}{% endif %}</figcaption>
+        </figure>
+      {%- endfor -%}
+    </div>
+  {%- else -%}
+    {# In a feed, just the first image with an image count; the whole gallery is on
+       the post page, so a long gallery doesn't make the feed a long scroll. #}
+    {%- set first = p.gallery[0] -%}
+    <div class="post-media ns-gallery-preview">
+      <a href="{{ post_path(p) }}" title="View all {{ p.gallery | length }} images">
+        <img loading="lazy" src="{{ first.thumb or first.url }}" alt="{{ first.caption or '' }}">
+        <span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>{{ p.gallery | length }}</span>
+      </a>
+    </div>
+  {%- endif -%}
 {%- endmacro %}
 
 {% macro media(p, full) -%}
