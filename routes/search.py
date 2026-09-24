@@ -3,7 +3,8 @@ import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
-from helpers import CACHE_TTL_FEED, FEED_LIMIT, cached_json, error_response, server_cache, hydrate_linked_posts, log
+from helpers import (CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
+                     hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("search", __name__)
 
@@ -40,111 +41,103 @@ def subreddit_search():
 
 # ── Search API ───────────────────────────────────────────────────────────────
 
-SEARCH_SORTS = {'relevance', 'hot', 'top', 'new'}
-
-@bp.route("/api/search")
-@server_cache(CACHE_TTL_FEED)
-def search_posts():
-    q     = request.args.get("q", "").strip()
-    sort  = request.args.get("sort", "relevance")
-    t     = request.args.get("t", "all")
-    after = request.args.get("after", "")
-    sub   = request.args.get("sub", "")
-    if not q:
-        return jsonify({"error": "Missing query"}), 400
+def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='', timeout=10):
+    """Post search, optionally restricted to one subreddit: {"posts", "after"}."""
     if sort not in SEARCH_SORTS:
         sort = "relevance"
     url    = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
-    nsfw   = not DISABLE_NSFW and request.args.get("nsfw", "0") == "1"
-    params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1, "include_over_18": int(nsfw)}
+    params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1,
+              "include_over_18": int(nsfw and not DISABLE_NSFW)}
     if sub:
         params["restrict_sr"] = 1
     if after:
         params["after"] = after
+    resp = reddit_get(url, params=params, timeout=timeout)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code)
+    listing = resp.json()["data"]
+    posts   = extract_posts(listing)
+    hydrate_linked_posts(posts)
+    return {"posts": posts, "after": listing.get("after")}
+
+
+@bp.route("/api/search")
+@server_cache(CACHE_TTL_FEED)
+def search_posts():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"error": "Missing query"}), 400
     try:
-        resp = reddit_get(url, params=params, timeout=10)
-        if resp.status_code == 404:
-            return jsonify({"error": "Not found"}), 404
-        if resp.status_code != 200:
-            return jsonify({"error": f"Reddit returned {resp.status_code}"}), resp.status_code
-        listing = resp.json()["data"]
-        posts   = extract_posts(listing)
-        hydrate_linked_posts(posts)
-        return cached_json({"posts": posts, "after": listing.get("after")}, CACHE_TTL_FEED)
+        return cached_json(fetch_search_posts(
+            q, request.args.get("sort", "relevance"), request.args.get("t", "all"),
+            request.args.get("sub", ""), request.args.get("nsfw", "0") == "1",
+            request.args.get("after", "")), CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
     except requests.exceptions.Timeout:
         return jsonify({"error": "Request timed out"}), 504
     except Exception:
         return error_response(500)
 
 
+def _search_things(q, kind, after, timeout):
+    """Raw `data` dicts of one kind (t5 subreddits / t2 users) from Reddit's search,
+    plus the next-page cursor."""
+    params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": {"t5": "sr", "t2": "user"}[kind]}
+    if after:
+        params["after"] = after
+    resp = reddit_get("https://www.reddit.com/search.json", params=params, timeout=timeout)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code)
+    listing = resp.json()["data"]
+    return [c["data"] for c in listing["children"] if c.get("kind") == kind], listing.get("after")
+
+
+def fetch_search_communities(q, after='', timeout=10):
+    things, next_after = _search_things(q, "t5", after, timeout)
+    results = [{
+        "name":        d.get("display_name", ""),
+        "title":       d.get("title", ""),
+        "description": d.get("public_description", ""),
+        "subscribers": d.get("subscribers", 0),
+        "over_18":     d.get("over_18", False),
+        "icon":        clean_url(d.get("icon_img") or d.get("community_icon") or "") or "",
+    } for d in things if not (DISABLE_NSFW and d.get("over_18"))]
+    return {"communities": results, "after": next_after}
+
+
+def fetch_search_users(q, after='', timeout=10):
+    things, next_after = _search_things(q, "t2", after, timeout)
+    results = [{
+        "name":          d.get("name", ""),
+        "icon":          clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or "",
+        "karma_post":    d.get("link_karma", 0),
+        "karma_comment": d.get("comment_karma", 0),
+        "created_utc":   d.get("created_utc", 0),
+    } for d in things]
+    return {"users": results, "after": next_after}
+
+
+def _best_effort_search(fetch, key):
+    """Community/user search answers an empty result instead of an error, so the JS
+    search page just shows "none found"."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({key: [], "after": None})
+    try:
+        return jsonify(fetch(q, request.args.get("after", "")))
+    except Exception as e:
+        log.warning("%s failed q=%r: %s", fetch.__name__, q, e)
+        return jsonify({key: [], "after": None})
+
+
 @bp.route("/api/search/communities")
 @server_cache(CACHE_TTL_FEED)
 def search_communities():
-    q = request.args.get("q", "").strip()
-    after = request.args.get("after", "")
-    if not q:
-        return jsonify({"communities": [], "after": None})
-    try:
-        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "sr"}
-        if after:
-            params["after"] = after
-        resp = reddit_get("https://www.reddit.com/search.json",
-                           params=params, timeout=10)
-        if resp.status_code != 200:
-            return jsonify({"communities": [], "after": None})
-        listing = resp.json()["data"]
-        results = []
-        for c in listing["children"]:
-            if c.get("kind") != "t5":
-                continue
-            d = c["data"]
-            if DISABLE_NSFW and d.get("over_18"):
-                continue
-            icon = clean_url(d.get("icon_img") or d.get("community_icon") or "")
-            results.append({
-                "name":        d.get("display_name", ""),
-                "title":       d.get("title", ""),
-                "description": d.get("public_description", ""),
-                "subscribers": d.get("subscribers", 0),
-                "over_18":     d.get("over_18", False),
-                "icon":        icon or "",
-            })
-        return jsonify({"communities": results, "after": listing.get("after")})
-    except Exception as e:
-        log.warning("search_communities failed q=%r: %s", q, e)
-        return jsonify({"communities": [], "after": None})
+    return _best_effort_search(fetch_search_communities, "communities")
 
 
 @bp.route("/api/search/users")
 @server_cache(CACHE_TTL_FEED)
 def search_users():
-    q = request.args.get("q", "").strip()
-    after = request.args.get("after", "")
-    if not q:
-        return jsonify({"users": [], "after": None})
-    try:
-        params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": "user"}
-        if after:
-            params["after"] = after
-        resp = reddit_get("https://www.reddit.com/search.json",
-                           params=params, timeout=10)
-        if resp.status_code != 200:
-            return jsonify({"users": [], "after": None})
-        listing = resp.json()["data"]
-        results = []
-        for c in listing["children"]:
-            if c.get("kind") != "t2":
-                continue
-            d = c["data"]
-            icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "")
-            results.append({
-                "name":          d.get("name", ""),
-                "icon":          icon or "",
-                "karma_post":    d.get("link_karma", 0),
-                "karma_comment": d.get("comment_karma", 0),
-                "created_utc":   d.get("created_utc", 0),
-            })
-        return jsonify({"users": results, "after": listing.get("after")})
-    except Exception as e:
-        log.warning("search_users failed q=%r: %s", q, e)
-        return jsonify({"users": [], "after": None})
+    return _best_effort_search(fetch_search_users, "users")

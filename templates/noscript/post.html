@@ -1,0 +1,27 @@
+{# A post and its comments (page_data.build_post). #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{% import 'noscript/macros/comments.html' as comments with context %}
+{% set COMMENT_SORT_LABELS = (('confidence', 'Best'), ('top', 'Top'), ('new', 'New'), ('controversial', 'Controversial'), ('old', 'Old'), ('qa', 'Q&A')) %}
+
+{% if page.error %}
+  {{ ui.error_state(page.error) }}
+{% else %}
+  <div class="pv-wrap ns-pv-wrap">
+    {{ posts.detail(page.post) }}
+    <div class="pv-divider"><div class="pv-divider-line"></div><span class="pv-divider-label">{{ page.post.num_comments | fmtnum }} comments</span><div class="pv-divider-line"></div></div>
+    <div class="comment-sort-bar">
+      {% for s, label in COMMENT_SORT_LABELS %}{{ ui.sort_link(label, page.sort_links[s], s == page.comment_sort) }}{% endfor %}
+    </div>
+    <div class="pv-comments-area">
+      {% if page.comments %}
+        <div class="pv-comments">
+          {% if page.thread_link %}<div class="thread-banner"><a href="{{ page.thread_link }}">&larr; View full thread</a></div>{% endif %}
+          {% for c in page.comments %}{{ comments.comment(c, page.post, page.comment_sort) }}{% endfor %}
+        </div>
+      {% else %}
+        {{ ui.empty_state('No comments yet') }}
+      {% endif %}
+    </div>
+  </div>
+{% endif %}

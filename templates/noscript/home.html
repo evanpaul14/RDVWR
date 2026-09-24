@@ -1,0 +1,5 @@
+{# Reddit's logged-out front page (page_data.build_home). #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{{ ui.feed_sort_bar(page.nav) }}
+{% if page.error %}{{ ui.error_state(page.error) }}{% else %}{{ posts.feed(page.posts) }}{{ ui.next_link(page.nav.next_url) }}{% endif %}

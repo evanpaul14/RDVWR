@@ -1,0 +1,17 @@
+{# Other posts linking to the same URL (page_data.build_duplicates). #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
+{% if page.post %}
+  {% set stats %}<a class="ctx-sub-link" href="/r/{{ page.post.subreddit }}">r/{{ page.post.subreddit }}</a>{% endset %}
+  {{ ui.ctx_header(page.post.title, stats) }}
+{% endif %}
+{% if page.error %}
+  {{ ui.error_state(page.error) }}
+{% else %}
+  <div class="dupes-header">
+    <a class="dupes-back" href="/r/{{ page.sub }}/comments/{{ page.post_id }}">&larr; back to post</a>
+    <span class="dupes-count">{{ page.posts | length }} other post{{ 's' if page.posts | length != 1 }} linking to this URL</span>
+  </div>
+  {{ posts.feed(page.posts, empty='No duplicates found') }}
+  {{ ui.next_link(page.next_url) }}
+{% endif %}

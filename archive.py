@@ -1,5 +1,6 @@
 """Arctic Shift archive fetches — fallback for suspended/deleted/private user profiles."""
-from media_detection import process_post, filter_nsfw, clean_reddit_html
+from media_detection import process_post, filter_nsfw
+from reddit_html import clean_reddit_html
 from reddit_client import SESSION
 from helpers import FEED_LIMIT, hydrate_linked_posts, log
 

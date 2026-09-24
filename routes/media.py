@@ -171,27 +171,31 @@ def _is_reddit_url(parsed):
     return parsed.scheme in ('http', 'https') and (hostname == 'reddit.com' or hostname.endswith('.reddit.com'))
 
 
+def resolve_reddit_url(url):
+    """Follow a reddit.com URL's redirects (e.g. a /r/<sub>/s/<token> share link) to where
+    it ends up. Redirects are followed by hand so a hop off reddit.com (e.g. an
+    outbound-link redirect) is returned instead of being requested server-side.
+    Raises ValueError for a non-reddit.com URL."""
+    if not _is_reddit_url(urlparse(url)):
+        raise ValueError("Only reddit.com URLs supported")
+    for _ in range(RESOLVE_MAX_REDIRECTS):
+        r = SESSION.head(url, allow_redirects=False, timeout=5)
+        location = r.headers.get('Location') if r.status_code in (301, 302, 303, 307, 308) else None
+        if not location:
+            break
+        url = urljoin(url, location)
+        if not _is_reddit_url(urlparse(url)):
+            break
+    return url
+
+
 @bp.route("/api/resolve")
 def resolve_url():
     url = request.args.get('url', '').strip()
     try:
-        parsed = urlparse(url)
-    except Exception:
-        return jsonify({'error': 'Invalid URL'}), 400
-    if not _is_reddit_url(parsed):
-        return jsonify({'error': 'Only reddit.com URLs supported'}), 400
-    try:
-        # Follow redirects by hand so a hop off reddit.com (e.g. an outbound-link
-        # redirect) is returned to the client instead of being requested server-side.
-        for _ in range(RESOLVE_MAX_REDIRECTS):
-            r = SESSION.head(url, allow_redirects=False, timeout=5)
-            location = r.headers.get('Location') if r.status_code in (301, 302, 303, 307, 308) else None
-            if not location:
-                break
-            url = urljoin(url, location)
-            if not _is_reddit_url(urlparse(url)):
-                break
-        return jsonify({'url': url})
+        return jsonify({'url': resolve_reddit_url(url)})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception:
         log.warning("resolve_url failed host=%s", urlparse(url).hostname)
         return jsonify({'error': 'Request failed'}), 502
@@ -278,11 +282,9 @@ def _scrape_imgur_album(album_id):
     return _imgur_from_regex(html_text)
 
 
-@bp.route("/api/imgur/album/<album_id>")
-@server_cache(CACHE_TTL_SUBREDDIT)
-def get_imgur_album(album_id):
-    if not IMGUR_ALBUM_ID_RE.match(album_id):
-        return jsonify({"error": "Invalid album ID"}), 400
+def fetch_imgur_album(album_id):
+    """An Imgur album's images ([{"url", "width", "height", "description"}]), or [] when
+    they can't be found."""
     # Official API if client ID is available (legacy support)
     if IMGUR_CLIENT_ID:
         try:
@@ -293,14 +295,23 @@ def get_imgur_album(album_id):
             if resp.status_code == 200:
                 imgs = _imgur_items_to_images(resp.json().get("data", []))
                 if imgs:
-                    return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
+                    return imgs
         except Exception as e:
             log.warning("imgur API fetch failed album=%s: %s", album_id, e)
     # Fall back to scraping the album page
     try:
-        imgs = _scrape_imgur_album(album_id)
-        if imgs:
-            return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
+        return _scrape_imgur_album(album_id) or []
     except Exception as e:
         log.warning("imgur scrape failed album=%s: %s", album_id, e)
+        return []
+
+
+@bp.route("/api/imgur/album/<album_id>")
+@server_cache(CACHE_TTL_SUBREDDIT)
+def get_imgur_album(album_id):
+    if not IMGUR_ALBUM_ID_RE.match(album_id):
+        return jsonify({"error": "Invalid album ID"}), 400
+    imgs = fetch_imgur_album(album_id)
+    if imgs:
+        return cached_json({"images": imgs}, CACHE_TTL_SUBREDDIT)
     return jsonify({"error": "no_images"}), 404
