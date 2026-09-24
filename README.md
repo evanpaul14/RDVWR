@@ -114,6 +114,7 @@ python3 -m pytest tests/
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
 | `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
+| `DISABLE_VIDEO_MUX` | `0` | Set to `1` to disable `/api/v/<id>.mp4`, which remuxes Reddit video + audio with ffmpeg so the no-JS view can play videos with sound in any browser (muxed files are cached under the system temp dir, up to 1 GB). Also off automatically when ffmpeg isn't installed. |
 | `RDVWR_DISABLE_PERSONALIZED_HOME` | `0` | Set to `1` to disable the personalized (logged-in) home feed entirely. |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
