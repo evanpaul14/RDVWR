@@ -2,13 +2,30 @@
 import re
 from datetime import datetime
 from urllib.parse import urlparse
-from media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
-                              GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls)
+from media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, REDDIT_IMAGE_HOSTS,
+                              gif_from_url, parse_linked_post, proxy_if_reddit_preview, build_reddit_video_urls)
+
+_SUB_HREF_RE      = re.compile(r'^/r/([^/]+)/?$')
+_COMMENTS_HREF_RE = re.compile(r'^/r/([^/]+)/comments/([A-Za-z0-9]+)')
+
+
+def _int_attr(el, name, default=0):
+    try:
+        return int(el.get(name, default) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _img_src(img):
+    return img.get('src', '') or img.get('data-lazy-src', '') or img.get('data-src', '') or ''
+
+
+def _is_reddit_image(src):
+    return (urlparse(src).hostname or '') in REDDIT_IMAGE_HOSTS
 
 
 def _parse_shreddit_crosspost(el):
-    """Extract the original post's subreddit/title/media from a crosspost shreddit-post
-    element's embedded 'post-media-container' block (the original media is inlined there)."""
+    """Original post's subreddit/title/media from a crosspost's 'post-media-container'."""
     container = el.find('div', {'slot': 'post-media-container'})
     if not container:
         return None
@@ -20,7 +37,7 @@ def _parse_shreddit_crosspost(el):
     if credit_bar:
         a = credit_bar.find('a', href=True)
         if a:
-            m = re.match(r'^/r/([^/]+)/?$', a['href'])
+            m = _SUB_HREF_RE.match(a['href'])
             if m:
                 orig_sub = m.group(1)
     title_div = container.find(class_='crosspost-title')
@@ -28,28 +45,22 @@ def _parse_shreddit_crosspost(el):
         a = title_div.find('a', href=True)
         if a:
             orig_title = a.get_text(strip=True)
-            pm = re.match(r'^/r/([^/]+)/comments/([A-Za-z0-9]+)', a['href'])
+            pm = _COMMENTS_HREF_RE.match(a['href'])
             if pm:
                 orig_sub = orig_sub or pm.group(1)
                 orig_id = pm.group(2)
 
-    # Link-post crossposts render a plain card instead of the
-    # crosspost-credit-bar/crosspost-title elements above (no wrapping <a> on
-    # the title, and the sub/comments links live in a differently-classed
-    # block) — fall back to structure-agnostic lookups within the container.
+    # Link-post crossposts use a plain card without the classes above.
     if not orig_id:
-        comments_a = container.find('a', href=re.compile(r'^/r/[^/]+/comments/[A-Za-z0-9]+'))
+        comments_a = container.find('a', href=_COMMENTS_HREF_RE)
         if comments_a:
-            pm = re.match(r'^/r/([^/]+)/comments/([A-Za-z0-9]+)', comments_a['href'])
-            if pm:
-                orig_sub = orig_sub or pm.group(1)
-                orig_id = pm.group(2)
+            pm = _COMMENTS_HREF_RE.match(comments_a['href'])
+            orig_sub = orig_sub or pm.group(1)
+            orig_id = pm.group(2)
     if not orig_sub:
-        sub_a = container.find('a', href=re.compile(r'^/r/[^/]+/?$'))
+        sub_a = container.find('a', href=_SUB_HREF_RE)
         if sub_a:
-            m = re.match(r'^/r/([^/]+)/?$', sub_a['href'])
-            if m:
-                orig_sub = m.group(1)
+            orig_sub = _SUB_HREF_RE.match(sub_a['href']).group(1)
     if not orig_title:
         # Both crosspost-title layouts mark the title element with dir="auto".
         text_div = container.find(attrs={'dir': 'auto'})
@@ -68,8 +79,7 @@ def _parse_shreddit_crosspost(el):
         base = m.group(1) if m else None
         if base:
             is_video = True
-            # src is always the HLS playlist URL here, which carries no DASH-vs-CMAF hint;
-            # there's no way to detect the actual encoding from a shreddit-player tag alone.
+            # src is the HLS playlist, which doesn't reveal the encoding; assume DASH.
             urls = build_reddit_video_urls(base, cmaf=False)
             hls_url, video_url, audio_url = urls['hls_url'], urls['video_url'], urls['audio_url']
         poster = player.get('poster', '') or ''
@@ -78,11 +88,8 @@ def _parse_shreddit_crosspost(el):
     else:
         seen = set()
         for img in container.find_all('img'):
-            src = img.get('src', '') or img.get('data-lazy-src', '') or img.get('data-src', '') or ''
-            if not src or src in seen:
-                continue
-            h = urlparse(src).hostname or ''
-            if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
+            src = _img_src(img)
+            if not src or src in seen or not _is_reddit_image(src):
                 continue
             seen.add(src)
             proxied = proxy_if_reddit_preview(src)
@@ -129,12 +136,10 @@ def _parse_shreddit_post(el):
     except Exception:
         created_utc = 0
 
-    try: score = int(el.get('score', 0))
-    except Exception: score = 0
-    try: upvote_ratio = round(float(el.get('upvote-ratio', 0)) * 100)
-    except Exception: upvote_ratio = 0
-    try: num_comments = int(el.get('comment-count', 0))
-    except Exception: num_comments = 0
+    try:
+        upvote_ratio = round(float(el.get('upvote-ratio', 0)) * 100)
+    except (TypeError, ValueError):
+        upvote_ratio = 0
 
     domain_str = el.get('domain', '')
     is_self = post_type in ('self', 'text', 'poll') or domain_str.startswith('self.')
@@ -169,12 +174,7 @@ def _parse_shreddit_post(el):
     is_gallery_url = content_href and '/gallery/' in content_href
     gallery = []
     if post_type == 'gallery' or is_gallery_url:
-        # Each slide is a <li slot="page-N"> containing three <img>s: a blurred
-        # background decoration, a low-res visible preview, and a full-res copy
-        # hidden in .lightboxed-content for the zoom viewer — all three carry
-        # different exact src URLs, so collecting every <img> under the post
-        # doubles (or triples) each slide. Pick one image per slot instead,
-        # preferring the hidden full-res copy.
+        # Each slide <li> holds several <img> variants; take one, preferring full-res.
         for li in el.find_all('li', slot=re.compile(r'^page-\d+$')):
             lightboxed = li.find(class_='lightboxed-content')
             img = lightboxed.find('img') if lightboxed else None
@@ -183,21 +183,13 @@ def _parse_shreddit_post(el):
                 img = (fig.find('img') if fig else None) or li.find('img')
             if not img:
                 continue
-            src = (img.get('src', '') or img.get('data-lazy-src', '') or
-                   img.get('data-src', '') or '')
-            if not src:
+            src = _img_src(img)
+            if not src or not _is_reddit_image(src):
                 continue
-            h = urlparse(src).hostname or ''
-            if h not in ('preview.redd.it', 'external-preview.redd.it', 'i.redd.it'):
-                continue
-            proxied = proxy_if_reddit_preview(src)
             fig = img.find_parent('figure')
             cap_el = fig.find('figcaption') if fig else None
-            try: w = int(img.get('width', 0) or 0)
-            except Exception: w = 0
-            try: h_val = int(img.get('height', 0) or 0)
-            except Exception: h_val = 0
-            gallery.append({'url': proxied, 'width': w, 'height': h_val,
+            gallery.append({'url': proxy_if_reddit_preview(src),
+                            'width': _int_attr(img, 'width'), 'height': _int_attr(img, 'height'),
                             'caption': cap_el.get_text().strip() if cap_el else ''})
         if gallery and not preview_img:
             preview_img = gallery[0]['url']
@@ -218,46 +210,22 @@ def _parse_shreddit_post(el):
     yt = YOUTUBE_RE.search(url); youtube_id = yt.group(1) if yt else None
     sm = STREAMABLE_RE.search(url); streamable_id = sm.group(1) if sm else None
 
-    gif_url = None
-    gif_is_video = False
+    gif_url, gif_is_video = None, False
     if not is_video and not redgifs_id and not youtube_id and not streamable_id:
-        lower_url = url.lower().split('?')[0]
-        if lower_url.endswith('.gif'):
-            gif_url = url
-        elif lower_url.endswith('.gifv'):
-            gif_url = GIFV_RE.sub('.mp4', url)
-            gif_is_video = True
-        elif post_type == 'gif' and content_href:
-            lower_href = content_href.lower().split('?')[0]
-            if lower_href.endswith('.gif'):
-                gif_url = content_href
-            elif lower_href.endswith('.gifv'):
-                gif_url = GIFV_RE.sub('.mp4', content_href)
-                gif_is_video = True
-            else:
-                gif_url = content_href
-                gif_is_video = True
+        gif_url, gif_is_video = gif_from_url(url)
+        if not gif_url and post_type == 'gif' and content_href:
+            gif_url, gif_is_video = gif_from_url(content_href)
+            if not gif_url:
+                gif_url, gif_is_video = content_href, True
 
     is_devvit = post_type == 'custom'
     devvit_url = (f'https://sh.reddit.com/r/{el.get("subreddit-name", "")}/comments/{post_id}'
                   if is_devvit else None)
 
-    linked_post = None
-    if not is_self and not is_crosspost:
-        lm = LINK_POST_RE.match(url)
-        if lm:
-            linked_post = {
-                'subreddit': lm.group(1),
-                'id':        lm.group(2),
-                'title':     lm.group(3).replace('_', ' ').strip() if lm.group(3) else '',
-            }
+    linked_post = parse_linked_post(url) if not is_self and not is_crosspost else None
 
-    awards = []
     icon = el.get('award-icon-url', '')
-    if icon:
-        try: cnt = int(el.get('award-count', 1))
-        except Exception: cnt = 1
-        awards = [{'name': '', 'count': cnt, 'icon': icon}]
+    awards = [{'name': '', 'count': _int_attr(el, 'award-count', 1), 'icon': icon}] if icon else []
 
     crosspost_from = _parse_shreddit_crosspost(el) if is_crosspost else None
 
@@ -265,8 +233,8 @@ def _parse_shreddit_post(el):
         'id': post_id, 'title': el.get('post-title', ''),
         'author': el.get('author', '[deleted]'),
         'subreddit': el.get('subreddit-name', ''),
-        'score': score, 'upvote_ratio': upvote_ratio,
-        'num_comments': num_comments, 'created_utc': created_utc,
+        'score': _int_attr(el, 'score'), 'upvote_ratio': upvote_ratio,
+        'num_comments': _int_attr(el, 'comment-count'), 'created_utc': created_utc,
         'url': url, 'permalink': f'https://www.reddit.com{permalink}',
         'is_self': is_self, 'selftext': selftext, 'selftext_html': selftext_html,
         'preview_img': preview_img, 'gallery': gallery,

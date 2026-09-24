@@ -13,11 +13,11 @@ DISABLE_NSFW = os.environ.get('DISABLE_NSFW', '0').strip().lower() in ('1', 'tru
 
 
 def filter_nsfw(posts):
-    """Drops over_18 posts when DISABLE_NSFW is set. Call on every list of processed
-    posts before it reaches a client."""
+    """Drop over_18 posts when DISABLE_NSFW is set; apply to every post list sent out."""
     if not DISABLE_NSFW:
         return posts
     return [p for p in posts if not p.get('over_18')]
+
 
 YOUTUBE_RE      = re.compile(r'(?:youtube\.com/watch.*?[?&]v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE      = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
@@ -37,11 +37,33 @@ def clean_url(url):
 
 
 REDDIT_PREVIEW_HOSTS = ('preview.redd.it', 'external-preview.redd.it')
+REDDIT_IMAGE_HOSTS   = REDDIT_PREVIEW_HOSTS + ('i.redd.it',)
+
+
+def gif_from_url(url):
+    """(gif_url, gif_is_video) for a direct .gif/.gifv link, else (None, False)."""
+    path = url.lower().split("?")[0]
+    if path.endswith(".gif"):
+        return url, False
+    if path.endswith(".gifv"):
+        return GIFV_RE.sub(".mp4", url), True
+    return None, False
+
+
+def parse_linked_post(url):
+    """Stub {subreddit, id, title} when `url` points at another Reddit post."""
+    m = LINK_POST_RE.match(url)
+    if not m:
+        return None
+    return {
+        "subreddit": m.group(1),
+        "id":        m.group(2),
+        "title":     m.group(3).replace("_", " ").strip() if m.group(3) else "",
+    }
 
 
 def proxy_if_reddit_preview(url):
-    """Wrap a preview.redd.it / external-preview.redd.it URL in our /api/img proxy
-    so it loads reliably; other hosts (e.g. i.redd.it) are returned unchanged."""
+    """Route preview.redd.it images through /api/img; other hosts pass through."""
     if not url:
         return url
     if (urlparse(url).hostname or '') in REDDIT_PREVIEW_HOSTS:
@@ -50,10 +72,8 @@ def proxy_if_reddit_preview(url):
 
 
 def proxy_hls(url):
-    """Always route v.redd.it HLS playlists through /api/m/, regardless of PROXY_MEDIA:
-    hls.js loads segments/playlists via XHR, which the CSP's connect-src 'self' blocks
-    for a direct cross-origin v.redd.it URL (unlike a plain <video src>, which only
-    needs media-src). PROXY_MEDIA's own rewrite pass only fires for other hosts here."""
+    """Route v.redd.it HLS through /api/m/ even without PROXY_MEDIA: hls.js fetches
+    via XHR, which the CSP's connect-src 'self' would block."""
     if not url:
         return url
     parsed = urlparse(url)
@@ -64,17 +84,8 @@ def proxy_hls(url):
 
 
 def build_reddit_video_urls(base, cmaf=True):
-    """Given a v.redd.it base URL (e.g. 'https://v.redd.it/abc123'), build the
-    HLS playlist / fallback video / audio-track URLs Reddit serves under it.
-
-    Reddit has two video encodings depending on when the video was transcoded:
-    older posts use DASH_<res>.mp4 + DASH_audio.mp4, newer ones use
-    CMAF_<res>.mp4 + CMAF_AUDIO_128.mp4. The legacy DASH_audio.mp4 path 403s
-    for CMAF-encoded videos (and vice versa), so callers that already know
-    which encoding a post uses (from its fallback_url/src) should pass
-    cmaf=False to get the DASH variant; cmaf=True (the default) matches
-    current uploads.
-    """
+    """HLS/video/audio URLs under a v.redd.it base. Older uploads are DASH_*,
+    newer are CMAF_*; the wrong variant 403s, so pass cmaf=False for DASH posts."""
     if cmaf:
         return {
             "hls_url":   base + '/HLSPlaylist.m3u8',
@@ -119,8 +130,7 @@ def process_post(p):
         if imgs.get("source"):
             preview_img = clean_url(imgs["source"]["url"])
             res = imgs.get("resolutions", [])
-            # card thumbnail: smallest resolution ≥640px wide (crisp at feed-card width without
-            # downloading the full-size source image, which can be 10-20x larger)
+            # Smallest rendition ≥640px wide: crisp on cards without the full-size source.
             card = next((r for r in res if r.get("width", 0) >= 640), None) or (res[-1] if res else None)
             if card:
                 thumb_url = clean_url(card["url"])
@@ -129,23 +139,21 @@ def process_post(p):
 
     # Fallback: NSFW/image posts often lack preview data; the URL itself is the image.
     if not preview_img and p.get("url"):
-        _pu = p["url"]
-        _ext = _pu.lower().split("?")[0].rsplit(".", 1)[-1] if "." in _pu else ""
-        if p.get("post_hint") == "image" or _ext in {"jpg", "jpeg", "png", "webp"}:
-            preview_img = clean_url(_pu)
+        ext = p["url"].lower().split("?")[0].rsplit(".", 1)[-1]
+        if p.get("post_hint") == "image" or ext in {"jpg", "jpeg", "png", "webp"}:
+            preview_img = clean_url(p["url"])
 
     gallery = []
     if p.get("is_gallery") and p.get("gallery_data") and p.get("media_metadata"):
-        meta = p.get("media_metadata", {})
+        meta = p["media_metadata"]
         for item in p["gallery_data"].get("items", []):
             mid = str(item.get("media_id", ""))
             if mid in meta and meta[mid].get("status") == "valid":
                 s = meta[mid].get("s", {})
                 url = clean_url(s.get("u") or s.get("gif"))
                 if url:
-                    # Downscaled renditions for feed cards / strip thumbnails, so only the
-                    # post view and lightbox pull the full-size original. Animated items
-                    # ("gif" source) only have still previews, so they keep the original.
+                    # Downscaled renditions for cards/strips; animated items have only
+                    # still previews, so they keep the original.
                     res = (meta[mid].get("p") or []) if s.get("u") else []
                     card = next((r for r in res if r.get("x", 0) >= 640), None) or (res[-1] if res else None)
                     mini = next((r for r in res if r.get("x", 0) >= 216), None)
@@ -160,14 +168,13 @@ def process_post(p):
     if not preview_img and gallery:
         preview_img = gallery[0]["url"]
 
-    # Proxy preview.redd.it / external-preview.redd.it images through backend so they load reliably
     preview_img = proxy_if_reddit_preview(preview_img)
     thumb_url = proxy_if_reddit_preview(thumb_url)
 
-    # RedGifs: extract ID from post URL early so we skip Reddit's video-only preview
-    redgifs_id = extract_redgifs_id(p.get("url", ""))
+    post_url = p.get("url", "")
+    # Found first so Reddit's silent mirror of the clip isn't used as the main video.
+    redgifs_id = extract_redgifs_id(post_url)
 
-    # Reddit-hosted video (skip for redgifs — Reddit only mirrors video, no audio)
     is_video  = p.get("is_video", False)
     video_url = hls_url = None
     if not redgifs_id and is_video and p.get("media") and (p["media"] or {}).get("reddit_video"):
@@ -175,7 +182,6 @@ def process_post(p):
         video_url = clean_url(rv.get("fallback_url"))
         hls_url   = proxy_hls(clean_url(rv.get("hls_url")))
 
-    # reddit_video_preview — skip for redgifs (same reason)
     if not redgifs_id and not is_video:
         rvp = (p.get("preview") or {}).get("reddit_video_preview")
         if rvp and rvp.get("fallback_url"):
@@ -183,8 +189,7 @@ def process_post(p):
             hls_url   = proxy_hls(clean_url(rvp.get("hls_url")))
             is_video  = True
 
-    # Reddit also mirrors redgifs videos (video-only, no audio) — keep it as a fallback
-    # in case the redgifs video has since been deleted/taken down upstream.
+    # Reddit's silent mirror, kept as a fallback if the original is taken down.
     redgifs_fallback_url = None
     redgifs_fallback_hls = None
     if redgifs_id:
@@ -193,76 +198,50 @@ def process_post(p):
             redgifs_fallback_url = clean_url(rvp["fallback_url"])
             redgifs_fallback_hls = proxy_hls(clean_url(rvp.get("hls_url")))
 
-    # Audio track for v.redd.it videos (fallback_url is video-only; audio lives in a
-    # sibling file whose name depends on the video's encoding — see build_reddit_video_urls).
+    # fallback_url is video-only; audio is a sibling file named per encoding.
     audio_url = None
     if video_url and 'v.redd.it' in video_url:
         m = VREDDDIT_RE.match(video_url)
         if m:
             audio_url = build_reddit_video_urls(m.group(1), cmaf='/DASH_' not in video_url)['audio_url']
 
-    youtube_id = None
-    yt = YOUTUBE_RE.search(p.get("url", ""))
-    if yt:
-        youtube_id = yt.group(1)
-
-    streamable_id = None
-    sm = STREAMABLE_RE.search(p.get("url", ""))
-    if sm:
-        streamable_id = sm.group(1)
-
-    tiktok_id = None
+    yt = YOUTUBE_RE.search(post_url)
+    youtube_id = yt.group(1) if yt else None
+    sm = STREAMABLE_RE.search(post_url)
+    streamable_id = sm.group(1) if sm else None
     oembed_html = ((p.get("secure_media") or {}).get("oembed") or {}).get("html", "")
     tt = TIKTOK_RE.search(oembed_html)
-    if tt:
-        tiktok_id = tt.group(1)
+    tiktok_id = tt.group(1) if tt else None
 
-    # Streamin: real video clips (not silent loops) — play like a regular video, not an
-    # autoplaying gif.
+    # Streamin clips have sound, so play them as regular video rather than a gif loop.
     if not is_video and not redgifs_id and not youtube_id:
-        m = STREAMIN_RE.search(p.get("url", ""))
+        m = STREAMIN_RE.search(post_url)
         if m:
             is_video  = True
             video_url = f"https://c-cdn.streamin.top/uploads/{m.group(1)}.mp4"
 
-    # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
     if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
-        sec       = p.get("secure_media_embed") or {}
-        media_url = clean_url(sec.get("media_domain_url", ""))
-        if media_url:
-            embed_url = media_url
+        embed_url = clean_url((p.get("secure_media_embed") or {}).get("media_domain_url", "")) or None
 
     imgur_album_id = None
     if not redgifs_id and not is_video and not youtube_id:
-        m = IMGUR_ALBUM_RE.search(p.get("url", ""))
+        m = IMGUR_ALBUM_RE.search(post_url)
         if m:
             imgur_album_id = m.group(1)
 
     gif_url = None
     gif_is_video = False
     if not is_video and not redgifs_id and not youtube_id and not embed_url and not imgur_album_id:
-        post_url  = p.get("url", "")
-        lower_url = post_url.lower().split("?")[0]
-        if lower_url.endswith(".gif"):
-            gif_url = post_url
-        elif lower_url.endswith(".gifv"):
-            gif_url      = GIFV_RE.sub(".mp4", post_url)
-            gif_is_video = True
-        else:
+        gif_url, gif_is_video = gif_from_url(post_url)
+        if not gif_url:
             m = IMGUR_DIRECT_RE.search(post_url)
             if m:
                 gif_url = f"https://i.imgur.com/{m.group(1)}.jpg"
 
-    # Devvit custom posts: is_self + magic selftext string
-    is_devvit = False
-    devvit_url = None
-    if p.get("is_self"):
-        full_selftext = p.get("selftext", "")
-        m = DEVVIT_RE.search(full_selftext)
-        if m:
-            is_devvit = True
-            devvit_url = m.group(1)
+    # Devvit custom posts are self posts with a placeholder selftext linking to sh.reddit.
+    m = DEVVIT_RE.search(p.get("selftext", "")) if p.get("is_self") else None
+    devvit_url = m.group(1) if m else None
 
     poll = None
     if p.get("poll_data"):
@@ -281,7 +260,7 @@ def process_post(p):
         orig.pop("crosspost_parent_list", None)
         try:
             crosspost_from = process_post(orig)
-        except Exception as e:
+        except Exception:
             crosspost_from = {
                 "subreddit": orig.get("subreddit", ""),
                 "id":        orig.get("id", ""),
@@ -290,13 +269,7 @@ def process_post(p):
 
     linked_post = None
     if not crosspost_from and not p.get("is_self"):
-        m = LINK_POST_RE.match(p.get("url", ""))
-        if m:
-            linked_post = {
-                "subreddit": m.group(1),
-                "id":        m.group(2),
-                "title":     m.group(3).replace("_", " ").strip() if m.group(3) else "",
-            }
+        linked_post = parse_linked_post(post_url)
 
     edited = p.get("edited")
     edited_utc = edited if isinstance(edited, (int, float)) and edited else None
@@ -312,7 +285,7 @@ def process_post(p):
         "upvote_ratio":   round(p.get("upvote_ratio", 0) * 100),
         "num_comments":   p.get("num_comments", 0),
         "created_utc":    p.get("created_utc", 0),
-        "url":            p.get("url", ""),
+        "url":            post_url,
         "permalink":      f"https://www.reddit.com{p.get('permalink', '')}",
         "is_self":        p.get("is_self", False),
         "selftext":       p.get("selftext", "")[:SELFTEXT_MAX_LEN] if p.get("is_self") else "",
@@ -351,7 +324,7 @@ def process_post(p):
         "locked":         p.get("locked", False),
         "edited_utc":     edited_utc,
         "awards":         awards,
-        "is_devvit":      is_devvit,
+        "is_devvit":      bool(devvit_url),
         "devvit_url":     devvit_url,
     }
 

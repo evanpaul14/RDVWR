@@ -9,22 +9,15 @@ from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, log
 bp = Blueprint("avatars", __name__)
 
 
-AVATAR_EMBED_LIMIT = 20  # rest are left unresolved for the client to lazy-load as they scroll into view
-AVATAR_PREFETCH_LIMIT = 200  # further commenters whose name:fullname pairs ship to the client for an
-# immediate background bulk fetch (not tied to scroll position). Reddit's bulk lookup endpoint showed
-# no real cap and near-linear scaling through ~450 ids in testing, with a ~100-130ms fixed per-request
-# floor dominating small batches -- so one unchunked request beats splitting into several. This cap is
-# a payload/safety bound, not a batching-efficiency one; threads with more unique commenters than
-# EMBED+PREFETCH fall back to the old per-scroll fetch for the remainder.
-AVATAR_BATCH_CHUNK = 200  # server->Reddit chunk size for _fetch_user_icons_batch, same reasoning
+AVATAR_EMBED_LIMIT    = 20   # icons embedded in the comments payload
+AVATAR_PREFETCH_LIMIT = 200  # further commenters the client bulk-fetches right away
+AVATAR_BATCH_CHUNK    = 200  # ids per bulk-lookup request; one big request beats several small
 
-THREAD_MAX_DEPTH = 4  # mirrors static/render.js — replies past this depth are collapsed
-                       # behind a "Continue thread" link and never actually rendered, so
-                       # counting their authors would waste embed slots on invisible comments
-
+THREAD_MAX_DEPTH = 4  # static/render.js; deeper replies aren't rendered
 
 _avatar_cache = TTLCache(5000, name='avatar')
 AVATAR_CACHE_TTL = 6 * 3600
+
 
 def _fetch_user_icon(username):
     hit = _avatar_cache.get(username)
@@ -45,9 +38,7 @@ def _fetch_user_icon(username):
 
 
 def _collect_comment_authors_ordered(comments, seen, ordered, depth=0):
-    """Depth-first, matching render order, so the first N found are the ones
-    actually visible first. Stops descending past THREAD_MAX_DEPTH since the
-    frontend doesn't render replies beyond that depth either."""
+    """Unique authors in render order, down to THREAD_MAX_DEPTH."""
     for c in comments:
         if c.get("kind") == "more":
             continue
@@ -60,10 +51,7 @@ def _collect_comment_authors_ordered(comments, seen, ordered, depth=0):
 
 
 def _apply_comment_avatars(comments, icon_map, resolved_authors):
-    """Only stamp author_icon on comments whose author was actually resolved
-    (in resolved_authors) — the key is left absent for the rest so the client
-    can tell "no icon" (key present, null) apart from "not fetched yet"
-    (key absent) and lazy-load only the latter."""
+    """Set author_icon only for resolved authors: a missing key tells the client to lazy-load."""
     for c in comments:
         if c.get("kind") == "more":
             continue
@@ -75,12 +63,8 @@ def _apply_comment_avatars(comments, icon_map, resolved_authors):
 
 
 def _fetch_user_icons_batch(pairs):
-    """pairs: [(author, author_fullname), ...]. Resolves many accounts in a
-    single request via Reddit's bulk account-lookup endpoint instead of one
-    Reddit request per user — ~5x faster than parallel per-user about.json
-    calls in testing (1.04s -> 0.19s for 48 commenters), verified to return
-    identical icon URLs. Falls back to nothing (caller retries per-user) for
-    any author whose fullname is missing or absent from the batch response."""
+    """{author: icon} for [(author, fullname)] via Reddit's bulk account lookup
+    (much faster than per-user about.json)."""
     result = {}
     to_fetch = {}  # fullname -> author
     for author, fullname in pairs:
@@ -107,19 +91,22 @@ def _fetch_user_icons_batch(pairs):
     return result
 
 
-def _embed_comment_avatars(comments, fullname_map=None):
-    """Batch-resolve + embed the first AVATAR_EMBED_LIMIT commenters' profile
-    pictures directly on the comment dicts, mirroring how flair already ships
-    inline in the payload — keeps avatars appearing with the rest of the
-    comment instead of a jarring pop-in after a separate client round trip.
-    Capped so a big thread with hundreds of unique commenters doesn't block
-    the whole response on a wall of uncached Reddit requests.
+def _resolve_icons(pairs):
+    """{author: icon or None} for [(author, fullname or None)]: bulk lookup where the
+    fullname is known, per-user requests otherwise."""
+    result = _fetch_user_icons_batch([(a, f) for a, f in pairs if f])
+    unbatchable = [a for a, f in pairs if not f]
+    if unbatchable:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for author, icon in zip(unbatchable, ex.map(_fetch_user_icon, unbatchable)):
+                result[author] = icon
+    return result
 
-    Returns a {author: fullname} map for the next AVATAR_PREFETCH_LIMIT
-    commenters beyond the embed cutoff, so the client can kick off a
-    background bulk fetch for them immediately (before they've scrolled
-    anywhere near them) instead of waiting on IntersectionObserver. Anyone
-    past EMBED+PREFETCH still falls back to the old per-scroll fetch."""
+
+def _embed_comment_avatars(comments, fullname_map=None):
+    """Embed icons for the first AVATAR_EMBED_LIMIT commenters so they render with the
+    comments. Returns {author: fullname} for the next AVATAR_PREFETCH_LIMIT, which the
+    client bulk-fetches in the background."""
     seen = set()
     ordered = []
     _collect_comment_authors_ordered(comments, seen, ordered)
@@ -127,19 +114,7 @@ def _embed_comment_avatars(comments, fullname_map=None):
         return {}
     embed_authors = ordered[:AVATAR_EMBED_LIMIT]
     fullname_map = fullname_map or {}
-    batchable = [(a, fullname_map.get(a)) for a in embed_authors if fullname_map.get(a)]
-    unbatchable = [a for a in embed_authors if not fullname_map.get(a)]
-    icon_map = _fetch_user_icons_batch(batchable) if batchable else {}
-    if unbatchable:
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futures = {ex.submit(_fetch_user_icon, a): a for a in unbatchable}
-            for fut in futures:
-                try:
-                    icon = fut.result()
-                except Exception:
-                    icon = None
-                if icon:
-                    icon_map[futures[fut]] = icon
+    icon_map = _resolve_icons([(a, fullname_map.get(a)) for a in embed_authors])
     _apply_comment_avatars(comments, icon_map, set(embed_authors))
     prefetch_authors = ordered[AVATAR_EMBED_LIMIT:AVATAR_EMBED_LIMIT + AVATAR_PREFETCH_LIMIT]
     return {a: fullname_map[a] for a in prefetch_authors if fullname_map.get(a)}
@@ -147,15 +122,11 @@ def _embed_comment_avatars(comments, fullname_map=None):
 
 FULLNAME_RE = re.compile(r'^t2_[A-Za-z0-9]{1,20}$')
 
+
 @bp.route("/api/user/avatars")
 def get_user_avatars():
-    """Batch-fetch profile picture URLs for commenters beyond AVATAR_EMBED_LIMIT.
-    `pairs` carries name:fullname (from the avatar_prefetch map shipped with the
-    comments payload) and resolves through the fast bulk-lookup endpoint in one
-    request — this is the path fired proactively right after comments load,
-    before anything has scrolled into view. `names` (fullname unknown) is the
-    legacy per-scroll fallback for commenters past the prefetch cap, resolved
-    one Reddit request per user."""
+    """Icons for commenters past the embed cutoff. `pairs` is name:fullname (bulk
+    lookup); `names` is for commenters past the prefetch cap (per-user lookup)."""
     seen = set()
     pairs = []  # [(name, fullname_or_None), ...]
     for item in request.args.get("pairs", "").split(","):
@@ -174,17 +145,4 @@ def get_user_avatars():
     pairs = pairs[:AVATAR_PREFETCH_LIMIT]
     if not pairs:
         return jsonify({})
-    batchable   = [(a, f) for a, f in pairs if f]
-    unbatchable = [a for a, f in pairs if not f]
-    result = _fetch_user_icons_batch(batchable) if batchable else {}
-    if unbatchable:
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futures = {ex.submit(_fetch_user_icon, n): n for n in unbatchable}
-            for fut in futures:
-                icon = None
-                try:
-                    icon = fut.result()
-                except Exception:
-                    pass
-                result[futures[fut]] = icon
-    return cached_json(result, 3600)
+    return cached_json(_resolve_icons(pairs), 3600)

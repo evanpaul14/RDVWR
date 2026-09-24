@@ -1,11 +1,8 @@
-"""Sanitizing Reddit's pre-rendered *_html fields (selftext_html, body_html,
-description_html, wiki content_html) for the server-rendered no-JS fallback, which
-can't pull in a client-side sanitizer like DOMPurify since that needs JS to run.
+"""Allowlist sanitizer for Reddit's pre-rendered *_html fields, for the no-JS view.
 
-Strips every tag and attribute except a small safe set — no script/style/event-handler/
-class/id attrs can survive — and otherwise renders the way the JS markdown renderer
-(static/render.js renderMd) would: reddit.com links stay on this site, >!spoilers!< stay
-hidden, and bare image links show the image."""
+Keeps a small set of tags with no attributes except safe hrefs, and mirrors
+render.js renderMd: reddit links stay on-site, spoilers stay hidden, bare image
+links render inline."""
 import re
 import html as html_lib
 from html.parser import HTMLParser
@@ -17,22 +14,15 @@ _SANITIZE_ALLOWED_TAGS = {
 }
 
 
-# Links to subreddits, users and live threads — on reddit.com or root-relative — are
-# rewritten to the same path on this site (opened in-place, like the JS app's link
-# interception in app.js). Other root-relative links (e.g. /message/compose) only
-# exist on reddit.com, so they're pointed there.
+# Sub/user/live links map to this site; other root-relative links go to reddit.com.
 _LOCAL_PATH = r'/(?:r|u|user|live)/[^?#]*'
 _REDDIT_LINK_RE = re.compile(rf'^(?:https?://(?:www\.|old\.|new\.|np\.)?reddit\.com)?({_LOCAL_PATH})(?:\?([^#]*))?', re.I)
-# A subreddit search link (e.g. a sidebar's "filter by flair" links).
 _SUB_SEARCH_RE = re.compile(r'^/r/([A-Za-z0-9_]+)/search/?$', re.I)
-# Bare image links in comments/posts (e.g. a pasted preview.redd.it URL) render inline,
-# same as the JS markdown renderer: Reddit's own image hosts via the /api/img proxy.
 _INLINE_IMG_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
 _INLINE_IMG_EXT_RE = re.compile(r'\.(?:jpe?g|gif|png|webp|avif)(?:\?|$)', re.I)
 # Reddit renders a comment's giphy embed as a link to the giphy page.
 _GIPHY_PAGE_RE = re.compile(r'^https://giphy\.com/gifs/(?:[\w-]*-)?([A-Za-z0-9]+)/?$')
-# Marks third-party inline media, which templates swap for a plain link when the
-# visitor has "don't embed third-party media" on (template_helpers.md).
+# Marks third-party inline media for template_helpers.md to optionally linkify.
 EXTERNAL_MEDIA_CLASS = 'md-ext-media'
 
 
@@ -147,8 +137,7 @@ class _AllowlistHtmlSanitizer(HTMLParser):
 
 
 def sanitize_reddit_html(raw_html):
-    """Sanitize one of Reddit's pre-rendered *_html fields down to a small safe tag
-    allowlist. `raw_html` is expected already HTML-unescaped and SC_OFF/SC_ON-stripped."""
+    """Sanitize already-unescaped, SC-marker-stripped Reddit HTML."""
     if not raw_html:
         return ''
     parser = _AllowlistHtmlSanitizer()
@@ -160,13 +149,12 @@ def sanitize_reddit_html(raw_html):
     return parser.get_html()
 
 
-_SC_MARKER_RE = re.compile(r'<!--\s*SC_(?:OFF|ON)\s*-->')
+SC_MARKER_RE = re.compile(r'<!--\s*SC_(?:OFF|ON)\s*-->')
 
 
 def clean_reddit_html(raw_html):
-    """Unescape + strip Reddit's markdown-region markers + sanitize one of its
-    pre-rendered *_html fields, ready to render with `| safe`."""
+    """Unescape, strip SC_OFF/SC_ON markers and sanitize a Reddit *_html field."""
     if not raw_html:
         return ''
-    unescaped = _SC_MARKER_RE.sub('', html_lib.unescape(raw_html)).strip()
+    unescaped = SC_MARKER_RE.sub('', html_lib.unescape(raw_html)).strip()
     return sanitize_reddit_html(unescaped)

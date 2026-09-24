@@ -6,11 +6,7 @@ from helpers import log
 
 bp = Blueprint("passthrough", __name__)
 
-# Allowlist for the raw ".json" passthrough: only the same public content shapes rdvwr's
-# own endpoints already expose (subreddit feeds/about/wiki, post permalinks, user
-# profiles, search) — never arbitrary oauth.reddit.com paths like /api/v1/me.json or
-# /api/morechildren.json, which would let any visitor use the server's pooled OAuth
-# credentials as an open proxy into Reddit's authenticated API.
+# Only public content paths, so the pooled OAuth tokens can't be used as an open proxy.
 _JSON_PASSTHROUGH_RE = re.compile(
     r'^(?:'
     r'r/[A-Za-z0-9_+]{1,100}(?:/(?:hot|new|top|rising|controversial'
@@ -26,8 +22,7 @@ _JSON_PASSTHROUGH_RE = re.compile(
 
 @bp.before_app_request
 def _json_passthrough():
-    """Runs ahead of routing, so a ".json" URL never falls into one of the HTML page
-    routes (e.g. /user/<username>) that would otherwise also match it."""
+    """Runs before routing so ".json" URLs never hit the HTML page routes."""
     path = request.path.lstrip('/')
     if not path.endswith('.json') or path.startswith(('api/', 'static/')):
         return None

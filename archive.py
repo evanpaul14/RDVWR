@@ -52,8 +52,7 @@ def _backfill_comment_titles(comments):
 
 
 def _arctic_fetch(path, mapper, username, limit, before=None):
-    """Shared Arctic Shift archive fetch: builds the author/sort/limit/before params,
-    GETs `path`, and maps each raw item through `mapper` (skipping ones that raise)."""
+    """GET an author's newest items from `path`, mapped through `mapper` (failures skipped)."""
     params = {"author": username, "sort": "desc", "limit": limit}
     if before:
         params["before"] = before
@@ -79,8 +78,7 @@ def _fetch_archived_comments(username, limit, before=None):
 
 
 def _arc_cursor(items, limit):
-    """Next-page cursor for archived (Arctic Shift) listings: 'arc:<created_utc>'
-    of the oldest item, only offered when the page was full (may be more)."""
+    """'arc:<created_utc>' of the oldest item, only when the page was full."""
     if len(items) < limit:
         return None
     return f"arc:{items[-1]['created_utc']}"

@@ -4,7 +4,7 @@ from media_detection import process_post, _parse_awards, DISABLE_NSFW
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
-                     cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
+                     json_or_error, server_cache, validate_params, hydrate_linked_posts,
                      UpstreamError)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
@@ -46,15 +46,10 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     if comment_id:
         params["comment"] = comment_id
         params["context"] = 8
-    resp = reddit_get(
-        f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-        params=params, timeout=timeout)
-    if resp.status_code == 403:
-        state, _ = _subreddit_error_state(resp)
-        if state == "quarantined":
-            resp = reddit_get(
-                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-                quarantine=True, params=params, timeout=timeout)
+    url = f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json"
+    resp = reddit_get(url, params=params, timeout=timeout)
+    if resp.status_code == 403 and _subreddit_error_state(resp)[0] == "quarantined":
+        resp = reddit_get(url, quarantine=True, params=params, timeout=timeout)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     data     = resp.json()
@@ -65,14 +60,14 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
-    post["selftext"] = post_raw.get("selftext", "")   # full text in post view
+    post["selftext"] = post_raw.get("selftext", "")  # untruncated for the post view
     hydrate_linked_posts([post])
 
     author_fullnames = {}
 
     def parse_comment(c):
+        d = c["data"]
         if c["kind"] == "more":
-            d = c["data"]
             return {
                 "kind":     "more",
                 "id":       d.get("id", ""),
@@ -80,19 +75,13 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
                 "count":    d.get("count", 0),
                 "depth":    d.get("depth", 0),
             }
-        d       = c["data"]
-        replies = []
-        if d.get("replies") and isinstance(d["replies"], dict):
-            for r in d["replies"]["data"]["children"]:
-                parsed = parse_comment(r)
-                if parsed:
-                    replies.append(parsed)
         comment = _parse_comment_fields(d)
         author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
-        comment["replies"] = replies
+        if isinstance(d.get("replies"), dict):
+            comment["replies"] = [parse_comment(r) for r in d["replies"]["data"]["children"]]
         return comment
 
-    comments = [c for c in (parse_comment(c) for c in data[1]["data"]["children"]) if c]
+    comments = [parse_comment(c) for c in data[1]["data"]["children"]]
     avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
     return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
 
@@ -101,16 +90,10 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_comments(subreddit, post_id):
-    try:
-        comment_id = request.args.get('comment')
-        sort = request.args.get('sort', 'confidence')
-        with_avatars = request.args.get('avatars') == '1'
-        return cached_json(fetch_comments(subreddit, post_id, comment_id, sort, with_avatars=with_avatars),
-                           CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_comments(subreddit, post_id, request.args.get('comment'),
+                                                request.args.get('sort', 'confidence'),
+                                                with_avatars=request.args.get('avatars') == '1'),
+                         CACHE_TTL_FEED)
 
 
 def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_avatars=False):
@@ -157,12 +140,7 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_morechildren(subreddit, post_id):
-    try:
-        return cached_json(fetch_morechildren(post_id, request.args.get("children", ""),
-                                              request.args.get("sort", "confidence"),
-                                              with_avatars=request.args.get("avatars") == "1"),
-                           CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_morechildren(post_id, request.args.get("children", ""),
+                                                    request.args.get("sort", "confidence"),
+                                                    with_avatars=request.args.get("avatars") == "1"),
+                         CACHE_TTL_FEED)

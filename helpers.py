@@ -6,6 +6,7 @@ import time
 import secrets
 import logging
 import threading
+import requests
 from functools import wraps
 from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor
@@ -22,19 +23,21 @@ FEED_LIMIT           = 25
 COMMENTS_LIMIT       = 200
 STREAM_CHUNK_SIZE    = 65536
 
-DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
-# Personalized (cookie-backed) home feed is on by default; set to disable it entirely —
-# the frontend hides the Reddit-cookies settings UI and /api/home ignores any cookie sent.
-DISABLE_PERSONALIZED_HOME = os.environ.get('RDVWR_DISABLE_PERSONALIZED_HOME', '0').strip().lower() in ('1', 'true', 'yes', 'on')
-
-
 log = logging.getLogger(__name__)
 
-# Sharing cache/rate-limit state across processes (e.g. multiple gunicorn workers or
-# horizontally-scaled instances) requires an external store. Set REDIS_URL to opt in;
-# with it unset (the default, single-Pi deployment), everything stays in-process as
-# before. The OAuth device pool in reddit_client is NOT shared this way — each process
-# keeps its own, which is harmless (just more rotating identities).
+
+def _bool_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+DISABLE_DOWNLOADS = _bool_env('DISABLE_DOWNLOADS', False)
+# Hides the Reddit-cookies setting and makes /api/home ignore any cookie sent.
+DISABLE_PERSONALIZED_HOME = _bool_env('RDVWR_DISABLE_PERSONALIZED_HOME', False)
+
+# Opt-in shared cache store for multi-process deployments; unset keeps caches in-process.
 REDIS_URL = os.environ.get('REDIS_URL', '').strip()
 
 _redis_client = None
@@ -44,9 +47,7 @@ if REDIS_URL:
 
 
 def _redis_cache_encode(value):
-    """Cached values are either raw JSON bytes (server_cache) or plain JSON-able
-    Python objects (dict/str/None from the smaller route-level caches); tag which so
-    decode knows whether to json.loads it back."""
+    """Tag raw bytes (server_cache) vs JSON-able objects so decode can restore either."""
     if isinstance(value, bytes):
         return b'B' + value
     return b'J' + json.dumps(value).encode()
@@ -57,12 +58,13 @@ def _redis_cache_decode(raw):
         return raw[1:]
     return json.loads(raw[1:])
 
+
 SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
 FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
-SUB_SORTS    = FEED_SORTS - {'best'}   # sorts offered as a per-visitor default
+SUB_SORTS    = FEED_SORTS - {'best'}
 TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
 COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
 SEARCH_SORTS  = {'relevance', 'hot', 'top', 'new'}
@@ -71,17 +73,18 @@ LAYOUTS       = {'card', 'compact', 'minimal'}
 
 
 def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
-    """Reddit only honors the `t` (time-window) param for certain sorts (top/controversial
-    by default; some endpoints only support it for "top")."""
+    """Reddit only honors the `t` time window for some sorts."""
     if sort in sorts_with_time and t in TIME_FILTERS:
         params["t"] = t
 
 
-def _bool_env(name, default):
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+def listing_params(after='', limit=FEED_LIMIT, sort='', t=''):
+    """Paging params for a Reddit listing; `sort`/`t` only add the time window."""
+    params = {"limit": limit, "raw_json": 1}
+    add_time_param(params, sort, t)
+    if after:
+        params["after"] = after
+    return params
 
 
 def _enum_env(name, default, allowed):
@@ -94,11 +97,7 @@ def _enum_env(name, default, allowed):
     return default
 
 
-# Deployer-configurable defaults for the client-side settings a visitor would otherwise
-# only get from settings.js's own DEFAULTS. Each maps to the matching key in that file's
-# DEFAULTS object; anything a visitor changes in the settings panel is saved to their own
-# localStorage and always wins over these (see settings.js _load()). `redditCookies` isn't
-# here since it's a per-visitor credential, not a deployment-wide default.
+# Deployer overrides for settings.js DEFAULTS (same keys); a visitor's saved settings win.
 DEFAULT_SETTINGS = {
     'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', THEMES),
     'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', LAYOUTS),
@@ -119,11 +118,9 @@ DEFAULT_SETTINGS = {
 
 
 class UpstreamError(Exception):
-    """Raised by the shared fetch_* helpers in routes/ when Reddit (or another upstream)
-    answers with something other than the requested data. `state` optionally classifies
-    the failure (e.g. a subreddit's "quarantined"/"private"), for callers that branch on it.
-    The /api/* endpoints turn it into a JSON error via .response(); the server-rendered
-    noscript pages show .message instead."""
+    """Raised by fetch_* helpers when an upstream request fails. `state` optionally
+    classifies it (e.g. "quarantined"/"private"). /api/* returns .response(); noscript
+    pages show .message."""
 
     def __init__(self, message, status=502, state=None):
         super().__init__(message)
@@ -139,7 +136,6 @@ class UpstreamError(Exception):
 
     @classmethod
     def from_status(cls, status_code, not_found="Not found"):
-        """Generic error for a non-200 upstream response."""
         if status_code == 404:
             return cls(not_found, 404)
         return cls(f"Reddit returned {status_code}", status_code)
@@ -177,10 +173,21 @@ def hydrate_linked_posts(posts):
 
 
 def error_response(status=500, message="Upstream request failed"):
-    """Call from inside an `except` block: logs the traceback server-side and returns
-    an opaque JSON error, so exception text (upstream URLs, internals) never reaches clients."""
+    """Call from an `except` block: logs the traceback, returns an opaque JSON error."""
     log.exception("%s %s failed", request.method, request.path)
     return jsonify({"error": message}), status
+
+
+def json_or_error(fetch, ttl):
+    """Serve fetch()'s result as cacheable JSON, mapping failures to JSON errors."""
+    try:
+        return cached_json(fetch(), ttl)
+    except UpstreamError as e:
+        return e.response()
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Request timed out"}), 504
+    except Exception:
+        return error_response(500)
 
 
 def validate_params(**patterns):
@@ -194,19 +201,16 @@ def validate_params(**patterns):
             return f(*args, **kwargs)
         return wrapper
     return decorator
+
+
 _CACHE_MISS = object()
 
 
 class TTLCache:
-    """Thread-safe cache with a per-entry TTL and a size cap. When full, expired
-    entries are swept first; only if none have expired is the oldest-inserted entry
-    evicted (not true LRU, but keeps memory bounded predictably).
+    """Thread-safe TTL cache with a size cap. When full, expired entries are swept,
+    then the oldest-inserted entry is evicted.
 
-    In-process by default (one dict per worker). Pass `name=` to make an instance
-    share state via Redis instead, when REDIS_URL is set — needed for a cache to stay
-    coherent across multiple gunicorn workers or horizontally-scaled instances. Two
-    TTLCache instances with the same `name` share the same Redis-backed keyspace, so
-    `name` must be unique per logical cache (e.g. 'view', 'og', 'avatar')."""
+    Pass a unique `name` to back it with Redis when REDIS_URL is set."""
     SWEEP_INTERVAL = 30  # seconds; bounds the O(n) sweep cost when the cache stays full
 
     def __init__(self, max_size, name=None):
@@ -218,8 +222,7 @@ class TTLCache:
         self._prefix = f'ttlc:{name}:' if self._redis else None
 
     def get(self, key):
-        """Returns the cached value, or the _CACHE_MISS sentinel if absent/expired
-        (a cached value can itself legitimately be None, so plain None can't mean "miss")."""
+        """Return the value, or _CACHE_MISS (None is a valid cached value)."""
         if self._redis:
             try:
                 raw = self._redis.get(self._prefix + str(key))
@@ -260,41 +263,21 @@ class TTLCache:
             self._data.clear()
 
 
-# --- Same-site gate for /api/* ----------------------------------------------------
-# The frontend serves `<meta name="referrer" content="no-referrer">` (templates/index.html),
-# so browser-issued requests never carry a Referer, and plain <img>/<video src>/top-level-
-# navigation requests (media proxy, downloads) never carry Origin either — only JS fetch()
-# calls do. Sec-Fetch-Site is sent by all modern browsers on every request type regardless
-# of Referrer-Policy, so it's the primary signal; Origin/Referer are the fallback for the
-# rare browser that omits it. A request with none of the three is either a very old browser
-# or a non-browser client (curl, a script) — treated as disallowed either way.
-#
-# Rate limiting is handled at the edge (Vercel Firewall rate-limiting rules on the
-# deployed project), not here — see README "Rate limiting".
 SAME_SITE_VALUES = {'same-origin', 'same-site'}
 
 
 def is_same_site_request():
+    """Sec-Fetch-Site first; then the double-submit cookie (for browsers that strip
+    fetch metadata, e.g. Firefox resistFingerprinting); then Origin/Referer.
+    A request carrying none of these is treated as a non-browser client."""
     sec_fetch_site = request.headers.get('Sec-Fetch-Site')
     if sec_fetch_site is not None:
         return sec_fetch_site in SAME_SITE_VALUES
-    # Double-submit cookie fallback: app.js echoes the rdvwr_csrf cookie back as a
-    # header on every fetch() it makes (see static/app.js). Some browser privacy
-    # hardening (Firefox's privacy.resistFingerprinting) strips Sec-Fetch-Site,
-    # Origin, and Referer from every request, which would otherwise be
-    # indistinguishable from a non-browser client here. A cross-site page can't read
-    # this origin's cookie to forge the matching header, regardless of SameSite.
     csrf_cookie = request.cookies.get('rdvwr_csrf')
     csrf_header = request.headers.get('X-Rdvwr-Fetch')
     if csrf_cookie and csrf_header and secrets.compare_digest(csrf_cookie, csrf_header):
         return True
-    # Hostname-only comparison for the Origin/Referer fallback: a reverse proxy in
-    # front of Flask (e.g. nginx's `proxy_set_header Host $host;`) commonly strips
-    # the port from the Host header it forwards, while a browser's Origin/Referer
-    # always includes it — comparing full netlocs would then 403 every same-site
-    # request on a non-default port. The port isn't part of what this check is
-    # protecting against (a different origin's JS calling the API), so dropping it
-    # from the comparison doesn't weaken it.
+    # Compare hostnames only: reverse proxies often drop the port from Host.
     host = urlsplit(f'//{request.host}').hostname
     origin = request.headers.get('Origin')
     if origin is not None:
@@ -310,19 +293,18 @@ def cached_json(data, seconds):
     resp.headers['Cache-Control'] = f'public, max-age={seconds}'
     return resp
 
+
 _view_cache = TTLCache(500, name='view')
 
+
 def server_cache(ttl):
-    """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
-    request path+query, so identical requests (repeat visits, multiple tabs)
-    don't re-hit Reddit within the window."""
+    """Cache a view's 200 JSON body for `ttl` seconds, keyed by path+query."""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
             key = request.full_path
             hit = _view_cache.get(key)
             if hit is not _CACHE_MISS:
-                # Serve the stored JSON bytes as-is rather than re-serializing the payload.
                 return Response(hit, mimetype='application/json',
                                 headers={'Cache-Control': f'public, max-age={ttl}'})
             resp = f(*args, **kwargs)

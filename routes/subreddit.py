@@ -1,20 +1,22 @@
 """Subreddit feed, about/rules/moderators/widgets, duplicates, wiki, and multireddits."""
 import re
 import html as html_lib
-import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
 from media_detection import process_post, extract_posts, clean_url
-from reddit_html import clean_reddit_html
-from reddit_client import reddit_get
+from reddit_html import clean_reddit_html, SC_MARKER_RE
+from reddit_client import reddit_get, get_quarantine_session
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
-                     add_time_param, cached_json, error_response, server_cache, validate_params,
+                     listing_params, cached_json, json_or_error, server_cache, validate_params,
                      hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("subreddit", __name__)
 
 
 _WIDGET_KINDS = {"community-list", "calendar", "image", "textarea", "button", "menu"}
+# Widget kinds dropped when this list comes out empty.
+_WIDGET_CONTENT_KEYS = {"community-list": "items", "calendar": "events", "image": "images",
+                        "button": "buttons", "menu": "links"}
 
 
 def fetch_widgets(subreddit, timeout=10):
@@ -68,8 +70,7 @@ def fetch_widgets(subreddit, timeout=10):
                     "text": m.get("text", ""),
                     "url": m.get("url", ""),
                 } for m in w.get("data", []) if m.get("url")]
-            content_key = {"community-list": "items", "calendar": "events", "image": "images",
-                           "button": "buttons", "menu": "links"}.get(kind)
+            content_key = _WIDGET_CONTENT_KEYS.get(kind)
             if content_key is not None and not entry.get(content_key):
                 continue
             if kind == "textarea" and not entry.get("text", "").strip():
@@ -88,8 +89,7 @@ def get_widgets(subreddit):
     return cached_json({"widgets": fetch_widgets(subreddit)}, CACHE_TTL_SUBREDDIT)
 
 
-# Reddit's error responses for non-200 subreddit requests carry a "reason" field
-# identifying why access was blocked, distinct from a plain "doesn't exist" 404.
+# Keyed by the "reason" field of Reddit's error body.
 _SUBREDDIT_ERROR_MESSAGES = {
     "banned":      "This subreddit has been banned",
     "private":     "This subreddit is private",
@@ -97,8 +97,9 @@ _SUBREDDIT_ERROR_MESSAGES = {
     "gated":       "This subreddit requires content-warning acknowledgement",
 }
 
+
 def _subreddit_error_state(resp):
-    """Classify a non-200 subreddit response. Returns (state, message)."""
+    """(state, message) for a non-200 subreddit response."""
     try:
         body = resp.json() or {}
     except Exception:
@@ -116,29 +117,20 @@ def _subreddit_error_state(resp):
 
 
 def _subreddit_error(resp):
-    """Classify a non-200 subreddit response into an UpstreamError."""
     state, message = _subreddit_error_state(resp)
     status = 404 if state in ("banned", "not_found") else 403 if state != "error" else resp.status_code
     return UpstreamError(message, status, state)
 
 
 def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
-    """Quarantined subreddit listings are blocked for anonymous sessions even after
-    opt-in. Fall back: paginate the comments feed (accessible) to collect post IDs,
-    then batch-fetch those posts via /by_id/."""
-    from reddit_client import _get_quarantine_session
-    s = _get_quarantine_session()
+    """Quarantined listings stay blocked even after opt-in, but the comments feed
+    doesn't: collect post IDs from it, then batch-fetch those posts."""
+    s = get_quarantine_session()
     try:
         seen, ids, cursor = set(), [], after
-        for _ in range(4):          # up to 4 pages of comments (400 comments max)
-            params = {"limit": 100, "raw_json": 1}
-            if cursor:
-                params["after"] = cursor
-            rc = s.get(
-                f"https://www.reddit.com/r/{subreddit}/comments.json",
-                params=params,
-                timeout=10,
-            )
+        for _ in range(4):
+            rc = s.get(f"https://www.reddit.com/r/{subreddit}/comments.json",
+                       params=listing_params(after=cursor, limit=100), timeout=10)
             if not rc.ok:
                 break
             data = rc.json().get("data", {})
@@ -152,11 +144,8 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
                 break
         if not ids:
             return [], None
-        rb = s.get(
-            f"https://www.reddit.com/by_id/{','.join(ids[:target])}.json",
-            params={"raw_json": 1},
-            timeout=10,
-        )
+        rb = s.get(f"https://www.reddit.com/by_id/{','.join(ids[:target])}.json",
+                   params={"raw_json": 1}, timeout=10)
         if not rb.ok:
             return [], None
         return extract_posts(rb.json()["data"]), cursor
@@ -165,17 +154,16 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
         return [], None
 
 
+def _listing_url(subreddits, sort):
+    # oauth.reddit.com needs "+" percent-encoded, or it redirects to the HTML front page.
+    return f"https://www.reddit.com/r/{subreddits.replace('+', '%2B')}/{sort}.json"
+
+
 def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout=10):
     """A subreddit (or a+b combined) listing: {"posts", "after"}. Raises UpstreamError
-    (with .state set, see _subreddit_error_state) when Reddit refuses it."""
-    # A literal "+" in combined feeds (a+b) makes oauth.reddit.com redirect to the
-    # HTML front page; the percent-encoded form returns the merged listing.
-    url   = f"https://www.reddit.com/r/{subreddit.replace('+', '%2B')}/{sort}.json"
-    params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
-    if after:
-        params["after"] = after
-    resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=timeout)
+    with .state set when Reddit refuses it."""
+    resp = reddit_get(_listing_url(subreddit, sort), quarantine=bool(quarantine_opt_in),
+                      params=listing_params(after, sort=sort, t=t), timeout=timeout)
     if resp.status_code != 200:
         if quarantine_opt_in and _subreddit_error_state(resp)[0] == "quarantined":
             posts, fallback_after = _quarantine_fallback_posts(subreddit, after or None)
@@ -199,21 +187,13 @@ def get_posts(subreddit):
     sort = request.args.get("sort", "top")
     if sort not in FEED_SORTS:
         sort = "top"
-    try:
-        return cached_json(fetch_feed(subreddit, sort, request.args.get("t", ""),
-                                      request.args.get("after", ""),
-                                      bool(request.args.get("quarantine_opt_in", ""))), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timed out"}), 504
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_feed(subreddit, sort, request.args.get("t", ""),
+                                            request.args.get("after", ""),
+                                            bool(request.args.get("quarantine_opt_in", ""))), CACHE_TTL_FEED)
 
 
 def fetch_about(subreddit, timeout=10):
-    """A subreddit's header info. `sidebar` is the raw markdown the JS sidebar renders;
-    `sidebar_html` is Reddit's pre-rendered, sanitized copy for the noscript page."""
+    """Header info: `sidebar` is markdown for JS, `sidebar_html` sanitized HTML for noscript."""
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}/about.json",
         params={"raw_json": 1}, timeout=timeout)
@@ -240,12 +220,7 @@ def fetch_about(subreddit, timeout=10):
 @validate_params(subreddit=SUBREDDIT_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_about(subreddit):
-    try:
-        return cached_json(fetch_about(subreddit), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_about(subreddit), CACHE_TTL_FEED)
 
 
 def fetch_rules(subreddit, timeout=10):
@@ -294,12 +269,9 @@ def get_moderators(subreddit):
 
 def fetch_duplicates(subreddit, post_id, after='', timeout=10):
     """Other posts linking to the same URL: {"post" (the original), "posts", "after"}."""
-    params = {"raw_json": 1, "limit": 25}
-    if after:
-        params["after"] = after
     resp = reddit_get(
         f"https://old.reddit.com/r/{subreddit}/duplicates/{post_id}.json",
-        params=params, timeout=timeout)
+        params=listing_params(after=after, limit=25), timeout=timeout)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     data = resp.json()
@@ -317,20 +289,16 @@ def fetch_duplicates(subreddit, post_id, after='', timeout=10):
 @validate_params(subreddit=SUBREDDIT_RE, post_id=POST_ID_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_duplicates(subreddit, post_id):
-    try:
-        return cached_json(fetch_duplicates(subreddit, post_id, request.args.get("after", "")), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_duplicates(subreddit, post_id, request.args.get("after", "")),
+                         CACHE_TTL_FEED)
 
 
 WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
 
 
 def fetch_wiki(subreddit, page='index', timeout=10):
-    """A wiki page. `content_html` is Reddit's unsanitized HTML: the JS app runs it through
-    DOMPurify, and the noscript page through media_detection.sanitize_reddit_html."""
+    """A wiki page. `content_html` is unsanitized: callers must sanitize it (DOMPurify /
+    reddit_html.sanitize_reddit_html)."""
     if not WIKI_PAGE_RE.match(page):
         raise UpstreamError("Invalid page name", 400)
     resp = reddit_get(
@@ -341,10 +309,8 @@ def fetch_wiki(subreddit, page='index', timeout=10):
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Wiki page not found")
     d = resp.json()["data"]
-    raw_html = html_lib.unescape(d.get("content_html", ""))
-    raw_html = re.sub(r'<!--\s*SC_(?:OFF|ON)\s*-->', '', raw_html).strip()
     return {
-        "content_html":  raw_html,
+        "content_html":  SC_MARKER_RE.sub('', html_lib.unescape(d.get("content_html", ""))).strip(),
         "revision_date": d.get("revision_date"),
     }
 
@@ -354,20 +320,11 @@ def fetch_wiki(subreddit, page='index', timeout=10):
 @validate_params(subreddit=SUBREDDIT_RE)
 @server_cache(CACHE_TTL_SUBREDDIT)
 def get_wiki(subreddit, page='index'):
-    try:
-        return cached_json(fetch_wiki(subreddit, page), CACHE_TTL_SUBREDDIT)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_wiki(subreddit, page), CACHE_TTL_SUBREDDIT)
 
 
 def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     """A user multireddit's combined listing: {"posts", "after", "title"}."""
-    params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
-    if after:
-        params["after"] = after
     meta = reddit_get(
         f"https://www.reddit.com/api/multi/user/{username}/m/{multiname}.json",
         params={"raw_json": 1}, timeout=timeout)
@@ -378,10 +335,8 @@ def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     display = meta_data.get("display_name") or meta_data.get("name") or multiname
     if not subs:
         return {"posts": [], "after": None, "title": display}
-    combined = "+".join(subs[:100])
-    resp = reddit_get(
-        f"https://www.reddit.com/r/{combined}/{sort}.json",
-        params=params, timeout=timeout)
+    resp = reddit_get(_listing_url("+".join(subs[:100]), sort),
+                      params=listing_params(after, sort=sort, t=t), timeout=timeout)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
@@ -397,10 +352,5 @@ def get_multireddit(username, multiname):
     sort = request.args.get("sort", "hot")
     if sort not in FEED_SORTS:
         sort = "hot"
-    try:
-        return cached_json(fetch_multireddit(username, multiname, sort, request.args.get("t", ""),
-                                             request.args.get("after", "")), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_multireddit(username, multiname, sort, request.args.get("t", ""),
+                                                   request.args.get("after", "")), CACHE_TTL_FEED)

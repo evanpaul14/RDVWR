@@ -1,11 +1,6 @@
-"""Opt-in media proxy (PROXY_MEDIA=1): serves Reddit/Imgur/Giphy media through the
-server so the browser never contacts those CDNs directly.
-
-/api/m/<host>/<path> mirrors the upstream URL path-for-path, so relative URIs in HLS
-playlists (segments, alternate audio) resolve back through the proxy on their own.
-When enabled, JSON and SPA HTML responses have allowlisted absolute media URLs
-rewritten to that form in an after-request pass, which covers every route at once.
-"""
+"""Media proxy: /api/m/<host>/<path> mirrors the upstream path so relative HLS URIs
+resolve through it too. With PROXY_MEDIA=1, an after-request pass rewrites allowlisted
+media URLs in JSON/SPA HTML to point here, so the browser never hits those CDNs."""
 import re
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, current_app, request, Response
@@ -25,11 +20,9 @@ MEDIA_PROXY_MAX_REDIRECTS = 3
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
 
 _HOST_ALT = '|'.join(re.escape(h) for h in sorted(MEDIA_PROXY_HOSTS))
-# Matches a quoted URL, plus the object key it's the value of (if any). Only the start of
-# a string is rewritten, so links mid-way through text are left alone.
+# A quoted URL at the start of a string, plus its object key if any.
 _BODY_URL_RE     = re.compile(rb'(?:"(\w+)"\s*:\s*)?"https://(' + _HOST_ALT.encode() + rb')/')
-# Markdown/text fields: a body that is just an image URL must stay absolute so the
-# markdown renderer still autolinks it (it applies the proxy itself when rendering).
+# Markdown fields stay absolute so the renderer can autolink (it proxies them itself).
 _TEXT_KEYS       = frozenset({b'body', b'selftext', b'description', b'public_description',
                               b'sidebar', b'text', b'title', b'translated'})
 _PLAYLIST_URL_RE = re.compile(r'https://(' + _HOST_ALT + r')/')

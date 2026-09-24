@@ -15,7 +15,7 @@ bp = Blueprint("embeds", __name__)
 OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:image["\']|name=["\']twitter:image["\'])', re.I)
 OG_DESC_RE          = re.compile(r'<meta[^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])', re.I)
 _og_cache = TTLCache(1000, name='og')
-OG_CACHE_TTL = 365 * 86400  # effectively permanent; entries are evicted by size cap, not expiry
+OG_CACHE_TTL = 365 * 86400  # effectively permanent; the size cap evicts
 
 
 @bp.route("/api/translate")
@@ -42,14 +42,12 @@ OG_FAIL_CACHE_TTL = 600  # transient fetch failures are retried after 10 min
 def _ip_allowed(addr):
     if addr.version == 6 and addr.ipv4_mapped:
         addr = addr.ipv4_mapped
-    # is_global excludes private, loopback, link-local, CGNAT (100.64/10, Tailscale),
-    # 0.0.0.0/8 and other reserved ranges.
+    # is_global excludes private, loopback, link-local, CGNAT and reserved ranges.
     return addr.is_global and not addr.is_multicast
 
 
 def _resolve_ssrf_safe(hostname: str):
-    """Resolve hostname and verify every address it maps to is public. Returns an
-    IPv4 address string to connect to, or None if any address is disallowed."""
+    """An address to connect to (IPv4 preferred), or None unless every resolved address is public."""
     try:
         infos = socket.getaddrinfo(hostname, None)
         addrs = {ipaddress.ip_address(info[4][0].split('%', 1)[0]) for info in infos}
@@ -62,9 +60,7 @@ def _resolve_ssrf_safe(hostname: str):
 
 
 def _og_fetch(url):
-    """GET url, following up to OG_MAX_REDIRECTS redirects by hand so every hop is
-    re-checked against the SSRF allowlist. Returns the final open response, or None
-    if a hop is disallowed."""
+    """GET url, re-checking every redirect hop against the SSRF rules; None if one fails."""
     for _ in range(OG_MAX_REDIRECTS + 1):
         parsed = urlparse(url)
         hostname = parsed.hostname or ""
@@ -73,8 +69,7 @@ def _og_fetch(url):
         resolved_ip = _resolve_ssrf_safe(hostname)
         if not resolved_ip:
             return None
-        # For HTTP, connect directly to the resolved IP to prevent DNS rebinding TOCTOU.
-        # For HTTPS, SSL certificate validation prevents rebinding (cert won't match a spoofed IP).
+        # Pin plain HTTP to the checked IP against DNS rebinding; HTTPS is covered by cert validation.
         if parsed.scheme == "http":
             ip_host = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
             safe_netloc = parsed.netloc.replace(hostname, ip_host, 1)
@@ -115,7 +110,7 @@ def get_og_image():
         r = _og_fetch(url)
         if r is None:
             return jsonify({"error": "URL not allowed"}), 403
-        # Read only the first 32 KB — enough for <head> tags
+        # The first 32 KB is enough for <head>.
         chunk = next(r.iter_content(32768), b"")
         r.close()
         text = chunk.decode("utf-8", errors="ignore")
@@ -135,7 +130,8 @@ def get_og_image():
 
 _DEVVIT_URL_RE = re.compile(r'^https://www\.reddit\.com/r/[^/]+/comments/[^/]+/[^/]+/?$')
 _devvit_cache = TTLCache(200, name='devvit')
-DEVVIT_CACHE_TTL = 3600  # the embedded signedRequestContext JWT is only valid ~24h; keep this well under that
+DEVVIT_CACHE_TTL = 3600  # well under the ~24h life of the embedded signed context
+
 
 @bp.route("/api/devvit")
 def get_devvit_embed():
@@ -164,11 +160,8 @@ def get_devvit_embed():
                 result = {'embedded': False}
             else:
                 height = (init.get('postStyles') or {}).get('heightPixels', 512)
-                # The Devvit webview SDK reads its render context (post id, subreddit,
-                # signed auth token, poll/app state) from a JSON blob in the URL hash
-                # when there's no parent-frame postMessage handshake to supply it —
-                # forward what Reddit already embedded in the page so the app renders
-                # instead of failing with "Invalid poll payload. Open a valid trial post."
+                # Without Reddit's parent frame, the webview reads its context from the
+                # URL hash, so forward what Reddit embedded in the page.
                 bridge = {k: init[k] for k in (
                     'signedRequestContext', 'postData', 'webViewClientData',
                     'viewMode', 'appPermissionState',

@@ -6,6 +6,7 @@ import time
 import threading
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
+from media_detection import REDDIT_PREVIEW_HOSTS
 from reddit_client import SESSION, HEADERS
 from helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
                      cached_json, error_response, server_cache, log)
@@ -65,9 +66,12 @@ def get_redgifs_token():
 # ── RedGifs proxy ────────────────────────────────────────────────────────────
 
 def _redgifs_proxied(url):
-    if not url: return None
-    fname = url.rsplit("/", 1)[-1]
-    return f"/api/redgifs/media/{fname}"
+    return f"/api/redgifs/media/{url.rsplit('/', 1)[-1]}" if url else None
+
+
+def _redgifs_urls(urls):
+    return {"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}
+
 
 @bp.route("/api/redgifs/<gif_id>")
 def get_redgifs(gif_id):
@@ -79,8 +83,7 @@ def get_redgifs(gif_id):
             return jsonify({"error": "Not found"}), 404
         if resp.status_code != 200:
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
-        urls = resp.json()["gif"]["urls"]
-        return cached_json({"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}, 3600)
+        return cached_json(_redgifs_urls(resp.json()["gif"]["urls"]), 3600)
     except Exception:
         return error_response(500)
 
@@ -96,19 +99,13 @@ def get_redgifs_batch():
         if resp.status_code != 200:
             return jsonify({"error": f"RedGifs returned {resp.status_code}"}), resp.status_code
         gifs = resp.json().get("gifs") or []
-        result = {}
-        for gif in gifs:
-            gid = gif.get("id")
-            if not gid:
-                continue
-            urls = gif.get("urls", {})
-            result[gid] = {"hd": _redgifs_proxied(urls.get("hd")), "sd": _redgifs_proxied(urls.get("sd"))}
-        return cached_json(result, 3600)
+        return cached_json({g["id"]: _redgifs_urls(g.get("urls", {})) for g in gifs if g.get("id")}, 3600)
     except Exception:
         return error_response(500)
 
 
 REDGIFS_MEDIA_RE = re.compile(r'^[A-Za-z0-9_-]+-?(?:mobile|silent)?\.mp4$')
+
 
 @bp.route("/api/redgifs/media/<filename>")
 def proxy_redgifs_media(filename):
@@ -128,18 +125,16 @@ def proxy_redgifs_media(filename):
         resp_headers = {
             "Content-Type":  upstream.headers.get("Content-Type", "video/mp4"),
             "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=604800, immutable",
         }
         for h in ("Content-Length", "Content-Range"):
             if h in upstream.headers:
                 resp_headers[h] = upstream.headers[h]
-        resp_headers["Cache-Control"] = "public, max-age=604800, immutable"
         return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE),
                         status=upstream.status_code, headers=resp_headers)
     except Exception:
         return error_response(502)
 
-
-IMG_PROXY_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
 
 @bp.route("/api/img")
 def proxy_img():
@@ -148,7 +143,7 @@ def proxy_img():
         parsed = urlparse(url)
     except Exception:
         return ('', 400)
-    if parsed.scheme not in ('http', 'https') or parsed.hostname not in IMG_PROXY_HOSTS:
+    if parsed.scheme not in ('http', 'https') or parsed.hostname not in REDDIT_PREVIEW_HOSTS:
         return ('', 403)
     try:
         upstream = SESSION.get(url, headers={'Referer': 'https://www.reddit.com/'}, stream=True, timeout=20)
@@ -172,10 +167,8 @@ def _is_reddit_url(parsed):
 
 
 def resolve_reddit_url(url):
-    """Follow a reddit.com URL's redirects (e.g. a /r/<sub>/s/<token> share link) to where
-    it ends up. Redirects are followed by hand so a hop off reddit.com (e.g. an
-    outbound-link redirect) is returned instead of being requested server-side.
-    Raises ValueError for a non-reddit.com URL."""
+    """Final destination of a reddit.com URL (e.g. a /s/ share link). Stops at the first
+    hop off reddit.com rather than requesting it. ValueError for non-reddit URLs."""
     if not _is_reddit_url(urlparse(url)):
         raise ValueError("Only reddit.com URLs supported")
     for _ in range(RESOLVE_MAX_REDIRECTS):
@@ -283,9 +276,7 @@ def _scrape_imgur_album(album_id):
 
 
 def fetch_imgur_album(album_id):
-    """An Imgur album's images ([{"url", "width", "height", "description"}]), or [] when
-    they can't be found."""
-    # Official API if client ID is available (legacy support)
+    """An Imgur album's images ([{"url", "width", "height", "description"}]), or []."""
     if IMGUR_CLIENT_ID:
         try:
             resp = SESSION.get(
@@ -298,7 +289,6 @@ def fetch_imgur_album(album_id):
                     return imgs
         except Exception as e:
             log.warning("imgur API fetch failed album=%s: %s", album_id, e)
-    # Fall back to scraping the album page
     try:
         return _scrape_imgur_album(album_id) or []
     except Exception as e:

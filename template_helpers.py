@@ -1,6 +1,5 @@
-"""Jinja filters and globals for templates/ — mostly Python ports of the static/utils.js
-formatters, so the server-rendered noscript view formats things the same way the JS
-app does."""
+"""Jinja filters and globals — mostly ports of static/utils.js formatters so the
+noscript view matches the JS app."""
 import os
 import re
 import time
@@ -49,8 +48,7 @@ def fmtdatetime(utc):
 
 
 def usable_bg(hex_color):
-    """static/utils.js isUsableBg(): filters out unset/transparent/too-light flair
-    background colors."""
+    """static/utils.js isUsableBg(): rejects unset/transparent/too-light flair colors."""
     if not hex_color or hex_color == 'transparent':
         return False
     m = re.match(r'^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$', hex_color, re.I)
@@ -60,8 +58,7 @@ def usable_bg(hex_color):
     return 0.299 * r + 0.587 * g_ + 0.114 * b < 180
 
 
-# Matches render.js's bot detection for auto-collapsing comments: "bot" at the end of
-# the name, at its start, or next to a separator/digit (so not e.g. "Robotics").
+# render.js bot detection: "bot" at either end or beside a separator/digit (not "Robotics").
 _BOT_NAME_RE = re.compile(r'(?:^|[_\-\d])bot(?:[_\-\d]|$)|bot$', re.I)
 
 
@@ -73,9 +70,8 @@ _EXT_MEDIA_IMG_RE = re.compile(rf'(<a class="{EXTERNAL_MEDIA_CLASS}"[^>]*>)<img 
 
 
 def md(sanitized_html):
-    """Render one of the sanitized *_html fields (media_detection.sanitize_reddit_html).
-    Third-party inline media in it becomes a plain link when the visitor has "don't embed
-    third-party media" on, like the JS markdown renderer's _asLink."""
+    """Render a sanitized *_html field (reddit_html.clean_reddit_html), turning
+    third-party inline media into links when link_external_media is on."""
     html = sanitized_html or ''
     if get_pref('link_external_media'):
         html = _EXT_MEDIA_IMG_RE.sub(r'\1gif &#8599;</a>', html)
@@ -89,8 +85,7 @@ _IMAGE_DOMAIN_RE = re.compile(r'^i\.\w')
 
 
 def link_domain(p):
-    """The outside site a link post points to, for the footer's domain link (render.js
-    domainHtml), or None for self posts and Reddit-hosted media."""
+    """External domain for the footer link (render.js domainHtml), else None."""
     domain = p.get('domain') or ''
     url = p.get('url') or ''
     if p.get('is_self') or not domain or domain.startswith('self.') or domain.endswith('redd.it') \
@@ -100,8 +95,7 @@ def link_domain(p):
 
 
 def is_article(p):
-    """A link to an outside page rather than media this site can show inline; the card
-    layout draws these as a compact row with a thumbnail (render.js isCompact)."""
+    """Link to an outside page rather than inline media (render.js isCompact)."""
     if p.get('is_self') or p.get('crosspost_from') or p.get('linked_post') or not p.get('url'):
         return False
     if any(p.get(k) for k in _EMBED_KEYS) or p.get('gif_url') or len(p.get('gallery') or []) > 1:
@@ -130,9 +124,8 @@ def _host_in(url, hosts):
 
 
 def download_url(p):
-    """A plain-link download URL for a post's media, or None if it has none this site
-    can download (or downloads are disabled). Redgifs and Imgur-album downloads need
-    JS to resolve the media first, so they aren't offered."""
+    """Download link for a post's media, or None. Media that needs JS to resolve
+    first (redgifs, Imgur albums) isn't offered."""
     if DISABLE_DOWNLOADS or p.get('redgifs_id') or p.get('imgur_album_id'):
         return None
     if p.get('gallery'):
@@ -164,9 +157,7 @@ def current_url():
     return request.path + (f"?{qs}" if qs else '')
 
 
-# Reddit listings only page forwards (an `after` cursor), so the pager carries the
-# cursors of the pages already visited in a `prev` param: "next" pushes the current
-# page's cursor onto it, "previous" pops the last one back off.
+# Reddit only pages forwards, so visited cursors travel in `prev`: next pushes, previous pops.
 _CURSOR_RE = re.compile(r'^[\w\-.=]{1,200}$')
 _PREV_MAX = 40
 
@@ -194,11 +185,8 @@ def pager_urls(next_url):
 def register(app):
     for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md):
         app.add_template_filter(f)
-    for fn in (is_bot, link_domain, is_article, article_url):
+    for fn in (is_bot, link_domain, is_article, article_url, download_url, current_url, pager_urls):
         app.add_template_global(fn)
-    app.add_template_global(download_url)
-    app.add_template_global(current_url)
-    app.add_template_global(pager_urls)
 
     def asset_v(filename):
         try:

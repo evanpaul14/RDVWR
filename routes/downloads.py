@@ -1,9 +1,11 @@
 """Media download endpoints: single file, gallery zip, and reddit video+audio merge."""
+import io
 import os
 import re
 import shutil
 import tempfile
 import subprocess
+import zipfile
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
@@ -23,36 +25,43 @@ def _downloads_enabled(f):
     return wrapper
 
 
+def _safe_filename(raw, default):
+    name = re.sub(r'[^\w.\-]', '_', raw)[:128]
+    return re.sub(r'\.{2,}', '.', name).lstrip('.') or default
+
+
+def _url_allowed(url, hosts):
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    return parsed.scheme in ('http', 'https') and parsed.netloc in hosts
+
+
+def _attachment(filename):
+    return f'attachment; filename="{filename}"'
+
+
 # ── Generic media download proxy ─────────────────────────────────────────────
 
-DOWNLOAD_ALLOWED_HOSTS = frozenset({
-    'v.redd.it',
-    'i.redd.it',
-    'preview.redd.it',
-    'external-preview.redd.it',
-    'i.imgur.com',
-})
+GALLERY_ALLOWED_HOSTS  = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
+DOWNLOAD_ALLOWED_HOSTS = GALLERY_ALLOWED_HOSTS | {'v.redd.it', 'i.imgur.com'}
+_GALLERY_EXTS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4')
 
 
 @bp.route("/api/download")
 @_downloads_enabled
 def download_media():
     url = request.args.get('url', '').strip()
-    filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'media'))[:128]
-    filename = re.sub(r'\.{2,}', '.', filename).lstrip('.') or 'media'
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return jsonify({'error': 'Invalid URL'}), 400
-    if parsed.scheme not in ('http', 'https') or parsed.netloc not in DOWNLOAD_ALLOWED_HOSTS:
+    filename = _safe_filename(request.args.get('filename', 'media'), 'media')
+    if not _url_allowed(url, DOWNLOAD_ALLOWED_HOSTS):
         return jsonify({'error': 'URL not allowed'}), 400
     try:
         upstream = SESSION.get(url, stream=True, timeout=30)
         upstream.raise_for_status()
-        content_type = upstream.headers.get('Content-Type', 'application/octet-stream')
         resp_headers = {
-            'Content-Type': content_type,
-            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Content-Type': upstream.headers.get('Content-Type', 'application/octet-stream'),
+            'Content-Disposition': _attachment(filename),
         }
         if 'Content-Length' in upstream.headers:
             resp_headers['Content-Length'] = upstream.headers['Content-Length']
@@ -63,30 +72,20 @@ def download_media():
 
 # ── Gallery zip download ──────────────────────────────────────────────────────
 
-GALLERY_ALLOWED_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
-
 @bp.route("/api/download/gallery")
 @_downloads_enabled
 def download_gallery():
-    import io, zipfile
-
     urls_param = request.args.get('urls', '').strip()
-    _raw = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))
-    if len(_raw) > 20:
-        _sep = _raw.find('_', 20)
-        name = _raw[:_sep] if _sep != -1 else _raw
-    else:
-        name = _raw
+    name = re.sub(r'[^\w.\-]', '_', request.args.get('name', 'gallery'))
+    # Cut long names at the first word break after 20 chars.
+    sep = name.find('_', 20)
+    if sep != -1:
+        name = name[:sep]
     if not urls_param:
         return jsonify({'error': 'No URLs provided'}), 400
     urls = [u.strip() for u in urls_param.split(',') if u.strip()][:25]
-    for url in urls:
-        try:
-            parsed = urlparse(url)
-        except Exception:
-            return jsonify({'error': 'Invalid URL'}), 400
-        if parsed.scheme not in ('http', 'https') or parsed.netloc not in GALLERY_ALLOWED_HOSTS:
-            return jsonify({'error': 'URL not allowed'}), 400
+    if not all(_url_allowed(url, GALLERY_ALLOWED_HOSTS) for url in urls):
+        return jsonify({'error': 'URL not allowed'}), 400
 
     def _fetch(url):
         try:
@@ -94,11 +93,8 @@ def download_gallery():
                             headers={'Referer': 'https://www.reddit.com/'})
             if not r.ok:
                 return None
-            path = urlparse(url).path
-            ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
-            if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
-                ext = 'jpg'
-            return ext, r.content
+            ext = urlparse(url).path.rsplit('.', 1)[-1].lower()
+            return (ext if ext in _GALLERY_EXTS else 'jpg'), r.content
         except Exception as e:
             log.warning("gallery item download failed host=%s: %s", urlparse(url).hostname, e)
             return None
@@ -113,11 +109,10 @@ def download_gallery():
                 continue
             ext, content = result
             zf.writestr(f'{name}-{i:02d}.{ext}', content)
-    buf.seek(0)
-    data = buf.read()
+    data = buf.getvalue()
     return Response(data, status=200, headers={
         'Content-Type': 'application/zip',
-        'Content-Disposition': f'attachment; filename="{name}-gallery.zip"',
+        'Content-Disposition': _attachment(f'{name}-gallery.zip'),
         'Content-Length': str(len(data)),
     })
 
@@ -128,13 +123,8 @@ def download_gallery():
 @_downloads_enabled
 def download_reddit_video():
     hls_url  = request.args.get('hls', '').strip()
-    filename = re.sub(r'[^\w.\-]', '_', request.args.get('filename', 'video.mp4'))[:128]
-
-    try:
-        parsed = urlparse(hls_url)
-    except Exception:
-        return jsonify({'error': 'Invalid URL'}), 400
-    if parsed.scheme not in ('http', 'https') or parsed.netloc != 'v.redd.it':
+    filename = _safe_filename(request.args.get('filename', 'video.mp4'), 'video.mp4')
+    if not _url_allowed(hls_url, {'v.redd.it'}):
         return jsonify({'error': 'URL not allowed'}), 400
 
     tmpdir = tempfile.mkdtemp()
@@ -171,7 +161,7 @@ def download_reddit_video():
             status=200,
             headers={
                 'Content-Type': 'video/mp4',
-                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Disposition': _attachment(filename),
                 'Content-Length': str(size),
             }
         )

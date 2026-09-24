@@ -9,8 +9,7 @@ STATIC = Path(__file__).parent / 'static'
 LIBS = [
     {'pkg': 'marked',    'major': 12, 'file': 'marked.min.js',     'cdn_path': 'marked.min.js'},
     {'pkg': 'dompurify', 'major': 3,  'file': 'purify.min.js',     'cdn_path': 'dist/purify.min.js'},
-    # Regular (non-'light') build — Reddit's videos need alt-audio-track support,
-    # which the light build strips out entirely.
+    # Full build: the light one lacks the alt-audio tracks Reddit videos use.
     {'pkg': 'hls.js',    'major': 1,  'file': 'hls.min.js',        'cdn_path': 'dist/hls.min.js'},
 ]
 

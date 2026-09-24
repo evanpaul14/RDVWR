@@ -1,16 +1,9 @@
-"""Server-side data for the HTML page routes in routes/pages.py.
+"""Template context for routes/pages.py. Each build_* returns either {"redirect": url}
+or a dict with:
 
-Every page is templates/index.html, and the data fetched for it does two jobs:
-
-- JS hydration: the `initial_*` keys are injected as window.__INITIAL_*__ so the JS app
-  can draw the first view without a second round trip. feed.js, postview.js and
-  profile.js each check a few `_`-prefixed keys before trusting that data, so those
-  keys must keep matching what the JS expects.
-- The no-JS fallback: `ns_view` names the templates/noscript/<ns_view>.html partial
-  rendered inside <noscript>, and `page` holds that view's data.
-
-Each build_* function returns that template context as a dict (see _page), or
-{"redirect": url} when the page should send the browser elsewhere instead.
+- `initial_*`: JS hydration data (window.__INITIAL_*__); its `_`-prefixed keys must
+  match what feed.js/postview.js/profile.js check.
+- `ns_view` + `page`: the templates/noscript/<ns_view>.html partial and its data.
 """
 from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
@@ -24,7 +17,7 @@ from routes.search import fetch_search_posts, fetch_search_communities, fetch_se
 from routes.live import fetch_live_thread
 from reddit_html import sanitize_reddit_html
 
-SSR_TIMEOUT = 6   # shorter than the /api/* endpoints' — a page shouldn't hang on Reddit
+SSR_TIMEOUT = 6  # shorter than /api/* so a page doesn't hang on Reddit
 
 FEED_SORT_ORDER = ('best', 'hot', 'new', 'top', 'rising', 'controversial')
 TIMED_SORTS     = ('top', 'controversial')
@@ -43,8 +36,7 @@ def page_url(path, **params):
 
 
 def _attempt(fetch, *args, **kwargs):
-    """Call one of the shared fetch_* helpers. Returns (data, None) on success or
-    (None, UpstreamError) on failure, so a page can still render its error state."""
+    """(data, None) or (None, UpstreamError), so a page can render its error state."""
     try:
         return fetch(*args, timeout=SSR_TIMEOUT, **kwargs), None
     except UpstreamError as e:
@@ -76,8 +68,7 @@ def clean_time(t, default):
 # ── Feeds ─────────────────────────────────────────────────────────────────────
 
 def build_home(sort, t, after):
-    """Reddit's logged-out front page — what the JS app's home shows without a Reddit
-    session (the personalized feed needs cookies only JS can send)."""
+    """The logged-out front page (the personalized feed needs cookies only JS sends)."""
     feed, err = _attempt(fetch_frontpage, sort, t, after)
     return _page("home", "Home", {
         "nav": _feed_nav("/home", sort, t, feed and feed["after"]),
@@ -162,10 +153,8 @@ def _find_comment(comments, comment_id):
 
 
 def build_post(sub, post_id, comment_id='', sort='confidence', show_context=False, more_ids=''):
-    """A post and its comments. Mirrors the JS post view's thread modes:
-    - comment_id: just that comment's thread (show_context adds its parent comments);
-    - more_ids: the comments behind a "load more comments" stub (the JS app splices
-      these into the page; without JS they get a page of their own)."""
+    """A post and its comments. `comment_id` shows one thread (show_context adds its
+    parents); `more_ids` shows the comments behind a "load more" stub on their own page."""
     if more_ids:
         (data, err), (more, more_err) = parallel(
             lambda: _attempt(fetch_comments, sub, post_id, sort=sort),
@@ -207,8 +196,7 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 def build_profile(username, tab='overview', sort='new', t='all', after='', archive=False):
-    """A user profile. Tabs/sorts mirror the JS profile view (profile.js), which keeps
-    them in page state instead of the URL — here they're query params."""
+    """A user profile; profile.js's tabs/sorts become query params here."""
     if tab not in PROFILE_TABS:
         tab = 'overview'
     if sort not in PROFILE_SORTS[tab]:
@@ -220,8 +208,7 @@ def build_profile(username, tab='overview', sort='new', t='all', after='', archi
             return _attempt(fetch_user_posts, username, sort, t, after)
         if tab == 'comments':
             return _attempt(fetch_user_comments, username, sort, t, after)
-        # The Arctic Shift archive fallback is slow, so it's opt-in for page loads (the JS
-        # app runs it in the background instead); `archive` is the noscript opt-in link.
+        # The archive fallback is slow, so page loads only use it when asked (`archive`).
         return _attempt(fetch_user_overview, username, sort, t, after,
                         allow_archive=archive or after.startswith("arc:"))
 
@@ -258,8 +245,8 @@ def build_profile(username, tab='overview', sort='new', t='all', after='', archi
 # ── Search ────────────────────────────────────────────────────────────────────
 
 def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', after=''):
-    """Search results. `sub` restricts a post search to one subreddit; `scope` remembers
-    which subreddit the "r/<sub>" checkbox toggles, so it survives being unticked."""
+    """Search results. `sub` restricts to one subreddit; `scope` remembers which one
+    the "r/<sub>" toggle controls while it's unticked."""
     scope = scope or sub
     scoped = bool(sub) or 'flair:' in q
     if scoped or stype not in SEARCH_TYPES:
@@ -311,7 +298,6 @@ def build_live(thread_id, after=''):
 
 
 def build_message(title, message, link=None, link_label=None):
-    """A page that's just a message, e.g. one with no no-JS version (it reads the
-    visitor's localStorage) or a URL that doesn't exist."""
+    """A page that's just a message (no no-JS version, or not found)."""
     return _page("message", title, {"title": title, "message": message,
                                     "link": link, "link_label": link_label})

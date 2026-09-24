@@ -1,6 +1,5 @@
-"""HTML page routes. Every page is the SPA shell (templates/index.html) with its data
-fetched server-side: for the JS app's first render and for the no-JS fallback inside
-<noscript> (templates/noscript/). The per-page data lives in routes/page_data.py."""
+"""HTML page routes: the SPA shell with server-fetched data for hydration and the
+<noscript> fallback (built in routes/page_data.py)."""
 import re
 from flask import Blueprint, jsonify, redirect, render_template, request
 from helpers import (DISABLE_DOWNLOADS, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
@@ -16,12 +15,11 @@ from routes.page_data import (build_home, build_subreddit, build_multi, build_du
 bp = Blueprint("pages", __name__)
 
 _TOKEN_RE = re.compile(r'^[A-Za-z0-9]{1,20}$')
-# What the header search box accepts besides a search query (see _search_shortcut).
 _SEARCH_SHORTCUT_RE = re.compile(
     r'^/?(?:r/(?P<sub>[A-Za-z0-9_+]+)|u(?:ser)?/(?P<user>[A-Za-z0-9_-]+)(?:/m/(?P<multi>[A-Za-z0-9_]+))?)/?$', re.I)
 
 
-def _respond(ctx, status=200):
+def respond(ctx, status=200):
     if "redirect" in ctx:
         return redirect(ctx["redirect"])
     html = render_template("index.html", disable_downloads=DISABLE_DOWNLOADS, **ctx)
@@ -29,7 +27,7 @@ def _respond(ctx, status=200):
 
 
 def _not_found(message="There's nothing at this address."):
-    return _respond(build_message("Page not found", message, "/", "Go home"), 404)
+    return respond(build_message("Page not found", message, "/", "Go home"), 404)
 
 
 def _arg(name, default=''):
@@ -46,7 +44,7 @@ def _feed_sort(sort, default):
 @bp.route("/home", strict_slashes=False)
 @bp.route("/home/<sort>", strict_slashes=False)
 def home(sort='best'):
-    return _respond(build_home(_feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after')))
+    return respond(build_home(_feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after')))
 
 
 @bp.route("/r/<sub>", strict_slashes=False)
@@ -55,7 +53,7 @@ def subreddit(sub, sort=''):
     if not SUBREDDIT_RE.match(sub):
         return _not_found()
     default_sort = 'hot' if sub.lower() == 'popular' else get_pref('sub_sort')
-    return _respond(build_subreddit(sub, _feed_sort(sort, default_sort),
+    return respond(build_subreddit(sub, _feed_sort(sort, default_sort),
                                     clean_time(_arg('t'), get_pref('sub_time')), _arg('after'),
                                     bool(_arg('quarantine_opt_in'))))
 
@@ -75,7 +73,7 @@ def multireddit(username, multiname, sort='hot'):
         return _not_found()
     sort = _feed_sort(sort, 'hot')
     t = clean_time(_arg('t'), 'day' if sort in TIMED_SORTS else 'all')
-    return _respond(build_multi(username, multiname, sort, t, _arg('after')))
+    return respond(build_multi(username, multiname, sort, t, _arg('after')))
 
 
 # ── Posts ─────────────────────────────────────────────────────────────────────
@@ -91,14 +89,14 @@ def post(sub, post_id, slug='', comment_id=''):
     if sort not in COMMENT_SORTS:
         sort = get_pref('comment_sort')
     more = ','.join(i for i in _arg('more').split(',') if POST_ID_RE.match(i))
-    return _respond(build_post(sub, post_id, comment_id, sort, _arg('context') == '1', more))
+    return respond(build_post(sub, post_id, comment_id, sort, _arg('context') == '1', more))
 
 
 @bp.route("/r/<sub>/duplicates/<post_id>", strict_slashes=False)
 def duplicates(sub, post_id):
     if not SUBREDDIT_RE.match(sub) or not POST_ID_RE.match(post_id):
         return _not_found()
-    return _respond(build_duplicates(sub, post_id, _arg('after')))
+    return respond(build_duplicates(sub, post_id, _arg('after')))
 
 
 @bp.route("/r/<sub>/wiki", strict_slashes=False)
@@ -106,13 +104,12 @@ def duplicates(sub, post_id):
 def wiki(sub, page='index'):
     if not SUBREDDIT_RE.match(sub):
         return _not_found()
-    return _respond(build_wiki(sub, page.strip('/') or 'index'))
+    return respond(build_wiki(sub, page.strip('/') or 'index'))
 
 
 @bp.route("/r/<sub>/s/<token>", strict_slashes=False)
 def share_link(sub, token):
-    """Reddit's /r/<sub>/s/<token> share links only redirect to the real post — follow
-    that redirect here and land on this site's copy of wherever it points."""
+    """Resolve a Reddit share link and redirect to this site's copy of its target."""
     if not SUBREDDIT_RE.match(sub) or not _TOKEN_RE.match(token):
         return _not_found()
     reddit_url = f"https://www.reddit.com/r/{sub}/s/{token}"
@@ -124,7 +121,7 @@ def share_link(sub, token):
     local = target and local_reddit_path(target)
     if local and '/s/' not in local:
         return redirect(local)
-    return _respond(build_message("Shared link", "Couldn't work out where this shared link goes.",
+    return respond(build_message("Shared link", "Couldn't work out where this shared link goes.",
                                   target or reddit_url, "Open it on reddit.com"))
 
 
@@ -137,13 +134,12 @@ def share_link(sub, token):
 def profile(username, rest=''):
     if not USERNAME_RE.match(username):
         return _not_found()
-    return _respond(build_profile(username, _arg('tab', 'overview'), _arg('sort', 'new'),
+    return respond(build_profile(username, _arg('tab', 'overview'), _arg('sort', 'new'),
                                   clean_time(_arg('t'), 'all'), _arg('after'), _arg('archive') == '1'))
 
 
 def _search_shortcut(q):
-    """The header search box doubles as an address bar, like the JS app's: "r/<sub>",
-    "u/<user>" or "u/<user>/m/<multi>" go straight to that page."""
+    """Path for an "r/<sub>", "u/<user>" or "u/<user>/m/<multi>" query, else None."""
     m = _SEARCH_SHORTCUT_RE.match(q)
     if not m:
         return None
@@ -163,7 +159,7 @@ def search():
     sort = _arg('sort', 'relevance')
     sub = _arg('sub')
     scope = _arg('scope')
-    return _respond(build_search(
+    return respond(build_search(
         q, _arg('stype', 'posts'), sort if sort in SEARCH_SORTS else 'relevance',
         clean_time(_arg('t'), 'all'), sub if SUBREDDIT_RE.match(sub) else '',
         scope if SUBREDDIT_RE.match(scope) else '', _arg('after')))
@@ -173,21 +169,21 @@ def search():
 def live(thread_id):
     if not LIVE_ID_RE.match(thread_id):
         return _not_found()
-    return _respond(build_live(thread_id, _arg('after')))
+    return respond(build_live(thread_id, _arg('after')))
 
 
 # ── Pages with no no-JS version ───────────────────────────────────────────────
 
 @bp.route("/saved", strict_slashes=False)
 def saved():
-    return _respond(build_message(
+    return respond(build_message(
         "Saved", "Saved posts are kept in your browser's storage, which needs JavaScript."))
 
 
 @bp.route("/subscribed", strict_slashes=False)
 @bp.route("/subscribed/<sort>", strict_slashes=False)
 def subscribed(sort=''):
-    return _respond(build_message(
+    return respond(build_message(
         "Subscribed", "Your subscriptions are kept in your browser's storage, which needs JavaScript."))
 
 

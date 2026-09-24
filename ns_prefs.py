@@ -1,21 +1,12 @@
-"""Visitor preferences for the no-JS (noscript) fallback UI.
-
-The JS app keeps settings in localStorage (static/settings.js), which isn't available
-without JS, so the noscript UI stores the same preferences as plain cookies instead,
-set by the /settings form (routes/ns_settings.py). Every preference is declared once in
-PREFS below; anything not set by the visitor falls back to the deployment-wide
-DEFAULT_SETTINGS value, same as settings.js does.
-"""
+"""No-JS visitor preferences, stored as cookies (set by the /settings form).
+Unset preferences fall back to DEFAULT_SETTINGS, like settings.js."""
 from collections import namedtuple
 from flask import request
 from helpers import DEFAULT_SETTINGS, SUB_SORTS, TIME_FILTERS, COMMENT_SORTS, THEMES, LAYOUTS
 
 COOKIE_MAX_AGE = 31536000  # 1 year
 
-# cookie:   cookie name
-# default:  key into DEFAULT_SETTINGS, or None for an off-by-default preference with no
-#           deployment-wide default
-# allowed:  set of valid values for an enum preference; None for an on/off preference
+# default: DEFAULT_SETTINGS key (None = off). allowed: enum values (None = on/off).
 Pref = namedtuple('Pref', 'cookie default allowed')
 
 PREFS = {
@@ -36,7 +27,6 @@ def _default(pref):
 
 
 def get_pref(name):
-    """The current request's value for one preference."""
     pref = PREFS[name]
     raw = request.cookies.get(pref.cookie)
     if pref.allowed is None:
@@ -49,9 +39,7 @@ def all_prefs():
 
 
 def set_pref_cookie(resp, name, value):
-    """Store one preference on `resp`. `value` is a bool for on/off preferences or the
-    submitted string for enum ones; an invalid enum value clears the cookie (reverting
-    to the default)."""
+    """Store a preference; an invalid enum value clears the cookie (back to default)."""
     pref = PREFS[name]
     if pref.allowed is None:
         stored = '1' if value else '0'

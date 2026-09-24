@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
-                     add_time_param, cached_json, error_response, server_cache, validate_params,
+                     add_time_param, listing_params, cached_json, json_or_error, server_cache, validate_params,
                      hydrate_linked_posts, log, UpstreamError)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
@@ -14,11 +14,7 @@ bp = Blueprint("users", __name__)
 @bp.route("/api/posts/live-info")
 @server_cache(30)
 def get_posts_live_info():
-    """Arctic Shift's score/comment-count is a snapshot from whenever it first
-    crawled the post, which for recently-posted content is often just the
-    author's initial upvote. Lets the frontend lazily refresh archived post
-    cards with current numbers from Reddit, without blocking the initial
-    (already-slow) archived-feed response on it."""
+    """Current score/comment counts, to refresh archived cards whose snapshot is stale."""
     ids = [i for i in request.args.get("ids", "").split(",") if POST_ID_RE.match(i)][:100]
     if not ids:
         return jsonify({})
@@ -69,12 +65,7 @@ def fetch_user_about(username, timeout=10):
 @validate_params(username=USERNAME_RE)
 @server_cache(CACHE_TTL_FEED)
 def get_user_about(username):
-    try:
-        return cached_json(fetch_user_about(username), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_user_about(username), CACHE_TTL_FEED)
 
 
 @bp.route("/api/user/<username>/trophies")
@@ -114,44 +105,42 @@ def _archived(items, hydrate):
     return items, _arc_cursor(items, FEED_LIMIT)
 
 
+def _try_archive(username, fetch_archived):
+    try:
+        return fetch_archived(FEED_LIMIT)
+    except Exception as e:
+        log.warning("archived fallback failed for %s: %s", username, e)
+        return []
+
+
 def _fetch_listing_with_archive(username, after, do_live_request, parse_live_items,
                                 fetch_archived, hydrate=False):
-    """Shared control flow for a user's posts and comments listings: serve from Reddit's
-    live listing, transparently falling back to the Arctic Shift archive on 403/404 or
-    an empty result (both usually mean a suspended/shadowbanned/deleted account whose
-    data only survives in the archive). Returns (items, next_after, archived)."""
+    """Reddit's live listing, falling back to the Arctic Shift archive on 403/404 or an
+    empty first page (suspended/deleted accounts). Returns (items, next_after, archived)."""
     if after.startswith("arc:"):
         return (*_archived(fetch_archived(FEED_LIMIT, before=int(after[4:])), hydrate), True)
     resp = do_live_request()
     if resp.status_code in (403, 404):
-        try:
-            items = fetch_archived(FEED_LIMIT)
-            if items:
-                return (*_archived(items, hydrate), True)
-        except Exception as e:
-            log.warning("archived fallback failed for %s: %s", username, e)
+        items = _try_archive(username, fetch_archived)
+        if items:
+            return (*_archived(items, hydrate), True)
         raise UpstreamError(_PROFILE_GONE, 404)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
     items   = parse_live_items(listing)
     if not items and not after:
-        try:
-            archived = fetch_archived(FEED_LIMIT)
-            if archived:
-                return (*_archived(archived, hydrate), True)
-        except Exception as e:
-            log.warning("archived fallback failed for %s: %s", username, e)
+        archived = _try_archive(username, fetch_archived)
+        if archived:
+            return (*_archived(archived, hydrate), True)
     if hydrate:
         hydrate_linked_posts(items)
     return items, listing.get("after"), False
 
 
 def _listing_params(sort, t, after):
-    params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
+    params = {**listing_params(after=after), "sort": sort}
     add_time_param(params, sort, t, sorts_with_time=("top",))
-    if after:
-        params["after"] = after
     return params
 
 
@@ -186,13 +175,8 @@ def fetch_user_comments(username, sort='new', t='', after='', timeout=10):
 
 
 def _user_listing_endpoint(fetch, username):
-    try:
-        return cached_json(fetch(username, request.args.get("sort", "new"), request.args.get("t", ""),
-                                 request.args.get("after", "")), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch(username, request.args.get("sort", "new"), request.args.get("t", ""),
+                                       request.args.get("after", "")), CACHE_TTL_FEED)
 
 
 @bp.route("/api/user/<username>/posts")
@@ -209,15 +193,19 @@ def get_user_comments_api(username):
     return _user_listing_endpoint(fetch_user_comments, username)
 
 
-def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
-    """A user's mixed posts+comments feed: {"items": [{"type", "data"}], "after"}, plus
-    "archived": True when served from the Arctic Shift archive.
+def _archived_overview(username):
+    try:
+        items, next_after = _fetch_archived_overview(username)
+    except Exception as e:
+        log.warning("archived overview fallback failed for %s: %s", username, e)
+        return None
+    return {"items": items, "after": next_after, "archived": True} if items else None
 
-    allow_archive=False skips the Arctic Shift fallback entirely (which does
-    two sequential slow third-party API calls) and just reports the failure,
-    so a caller that can't afford to block on it — namely SSR page injection —
-    gets a fast answer and leaves the archive fetch to a later, non-blocking
-    client-side request instead."""
+
+def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
+    """A user's mixed feed: {"items": [{"type", "data"}], "after"}, plus "archived".
+    allow_archive=False skips the slow archive fallback (for SSR, where the client
+    fetches it later instead)."""
     if after.startswith("arc:"):
         items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
         return {"items": items, "after": next_after, "archived": True}
@@ -226,13 +214,9 @@ def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_
         f"https://www.reddit.com/user/{username}/overview.json",
         params=_listing_params(sort, t, after), timeout=timeout)
     if resp.status_code in (403, 404):
-        if allow_archive:
-            try:
-                items, next_after = _fetch_archived_overview(username)
-                if items:
-                    return {"items": items, "after": next_after, "archived": True}
-            except Exception as e:
-                log.warning("archived overview fallback failed for %s: %s", username, e)
+        archived = _archived_overview(username) if allow_archive else None
+        if archived:
+            return archived
         raise UpstreamError(_PROFILE_GONE, 404)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
@@ -252,12 +236,9 @@ def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_
             items.append({"type": "comment", "data": _normalize_comment(d)})
     hydrate_linked_posts([i["data"] for i in items if i["type"] == "post"])
     if not items and not after and allow_archive:
-        try:
-            arc_items, next_after = _fetch_archived_overview(username)
-            if arc_items:
-                return {"items": arc_items, "after": next_after, "archived": True}
-        except Exception as e:
-            log.warning("archived overview fallback failed for %s: %s", username, e)
+        archived = _archived_overview(username)
+        if archived:
+            return archived
     return {"items": items, "after": listing.get("after")}
 
 

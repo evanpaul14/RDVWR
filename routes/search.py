@@ -1,9 +1,8 @@
 """Post, community, and user search plus subreddit autocomplete."""
-import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
-from helpers import (CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
+from helpers import (CACHE_TTL_FEED, SEARCH_SORTS, listing_params, json_or_error, server_cache,
                      hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("search", __name__)
@@ -46,12 +45,10 @@ def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='
     if sort not in SEARCH_SORTS:
         sort = "relevance"
     url    = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
-    params = {"q": q, "sort": sort, "t": t, "limit": FEED_LIMIT, "raw_json": 1,
+    params = {"q": q, "sort": sort, "t": t, **listing_params(after=after),
               "include_over_18": int(nsfw and not DISABLE_NSFW)}
     if sub:
         params["restrict_sr"] = 1
-    if after:
-        params["after"] = after
     resp = reddit_get(url, params=params, timeout=timeout)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
@@ -67,25 +64,15 @@ def search_posts():
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({"error": "Missing query"}), 400
-    try:
-        return cached_json(fetch_search_posts(
-            q, request.args.get("sort", "relevance"), request.args.get("t", "all"),
-            request.args.get("sub", ""), request.args.get("nsfw", "0") == "1",
-            request.args.get("after", "")), CACHE_TTL_FEED)
-    except UpstreamError as e:
-        return e.response()
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timed out"}), 504
-    except Exception:
-        return error_response(500)
+    return json_or_error(lambda: fetch_search_posts(
+        q, request.args.get("sort", "relevance"), request.args.get("t", "all"),
+        request.args.get("sub", ""), request.args.get("nsfw", "0") == "1",
+        request.args.get("after", "")), CACHE_TTL_FEED)
 
 
 def _search_things(q, kind, after, timeout):
-    """Raw `data` dicts of one kind (t5 subreddits / t2 users) from Reddit's search,
-    plus the next-page cursor."""
-    params = {"q": q, "limit": FEED_LIMIT, "raw_json": 1, "type": {"t5": "sr", "t2": "user"}[kind]}
-    if after:
-        params["after"] = after
+    """(raw `data` dicts of one kind — t5 subreddits / t2 users, next cursor)."""
+    params = {**listing_params(after), "q": q, "type": {"t5": "sr", "t2": "user"}[kind]}
     resp = reddit_get("https://www.reddit.com/search.json", params=params, timeout=timeout)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
@@ -119,8 +106,7 @@ def fetch_search_users(q, after='', timeout=10):
 
 
 def _best_effort_search(fetch, key):
-    """Community/user search answers an empty result instead of an error, so the JS
-    search page just shows "none found"."""
+    """Empty result instead of an error, so the search page shows "none found"."""
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify({key: [], "after": None})
