@@ -1942,8 +1942,15 @@ body.nsfw-blur .nsfw-media-wrap.revealed .nsfw-content { filter:none; transform:
 .feed-list { max-width:720px; margin:0 auto; padding:20px 20px 80px; display:flex; flex-direction:column; gap:14px; }
 .minimal-mode .feed-list { gap:0; }
 .ns-pv-wrap.pv-wrap { padding-top:20px; }
-.ns-next { max-width:720px; margin:4px auto 24px; padding:0 20px; }
-.feed-list .ns-next { padding:0; margin:0; }
+/* Prev/next page buttons (the JS app infinite-scrolls instead); styled like .state-continue-btn. */
+.ns-pager { max-width:720px; margin:4px auto 32px; padding:0 20px; display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+.ns-page-btn {
+  display:inline-block; background:transparent; border:1px solid var(--b2); color:var(--tx3);
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  padding:10px 24px; border-radius:4px; text-decoration:none;
+  transition:border-color .15s, color .15s;
+}
+.ns-page-btn:hover { border-color:var(--ac); color:var(--ac); }
 /* Search input/button live in .search-wrap without the JS shell's #subreddit-input id. */
 .search-wrap input[type="text"] { flex:1; background:transparent; border:none; outline:none; font-family:var(--mono); font-size:13px; color:var(--tx); padding:10px 4px; min-width:0; }
 .search-wrap input[type="text"]::placeholder { color:var(--tx3); }
@@ -2066,7 +2073,7 @@ details.comment:not([open]) > .comment-replies { display:none; }
   .ns-search-form { order:1; flex-basis:100%; }
   .ns-settings-btn { margin-left:auto; }
   .feed-list { padding:14px 12px 80px; }
-  .ns-next { padding:0 12px; }
+  .ns-pager { padding:0 12px; }
   .ns-about-panel { padding:12px 12px 0; }
   .ns-settings-wrap { padding:18px 12px 60px; }
 }
