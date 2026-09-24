@@ -191,7 +191,7 @@
   {%- set src = (g0.thumb or g0.url) if g0 else (src_post.thumb_url or src_post.preview_img) -%}
   {%- if src -%}
     <a class="{{ cls }}" href="{{ href }}"{% if href.startswith('http') %} target="_blank" rel="noopener"{% endif %}><img loading="lazy" src="{{ src }}" alt=""{% if p.is_spoiler or (p.over_18 and ns.nsfw_blur) %} class="ns-thumb-veiled"{% endif %}>
-      {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge">{{ src_post.gallery | length }}</span>{% endif -%}
+      {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>{{ src_post.gallery | length }}</span>{% endif -%}
     </a>
   {%- endif -%}
 {%- endmacro %}
