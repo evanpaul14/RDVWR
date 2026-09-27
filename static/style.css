@@ -1433,7 +1433,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   .pv-open { font-size:10px; letter-spacing:0; }
 
   /* ── Post view content ── */
-  .pv-wrap { padding:20px 16px calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .pv-wrap { padding:20px 16px calc(110px + env(safe-area-inset-bottom, 0px)); }
   .pv-title { font-size:18px; }
   /* Cap video height so it doesn't eat the whole screen */
   .pv-media video { max-height:min(640px, 60vh); }
