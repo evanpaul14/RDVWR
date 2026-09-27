@@ -1,4 +1,4 @@
-import { escHtml, evictMap, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
+import { escHtml, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -94,21 +94,6 @@ export function linkifyReddit(text) {
       (m, skip, slash, user) => skip ? skip : `[u/${user}](/user/${user})`);
 }
 
-const _xlateCache = new Map();
-const XLATE_CACHE_MAX = 500;
-export async function xlateText(text) {
-  if (!text?.trim()) return null;
-  const key = text.trim().slice(0, 1000);
-  if (_xlateCache.has(key)) return _xlateCache.get(key);
-  const r = await fetch(`/api/translate?text=${encodeURIComponent(key)}`);
-  const d = await r.json();
-  const detected = (d.matches || []).find(m => m['detected-language'])?.['detected-language'] || '';
-  const result = { detected, translated: d.responseData?.translatedText || '' };
-  evictMap(_xlateCache, XLATE_CACHE_MAX);
-  _xlateCache.set(key, result);
-  return result;
-}
-
 export function waitForMdLibs() { return _loadMdLibs(); }
 
 // Nests chained bare-caret superscripts (^a^b^c -> a<sup>b<sup>c</sup></sup>), matching Reddit's scoping.
@@ -147,58 +132,6 @@ export function renderMd(text) {
       return `<sup>${_nestSup(inner)}</sup>`;
     });
   return DOMPurify.sanitize(marked.parse(processed), { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] });
-}
-
-// Titles with no characters outside Latin script (incl. accented Latin and
-// typographic punctuation like smart quotes/em dashes) are never worth a
-// translate round-trip — skips the network call for the vast majority of posts.
-const _NON_LATIN_RE = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿऀ-ॿ฀-๿぀-ヿ㐀-鿿가-힣豈-﫿]/;
-
-export async function translatePost(p, container) {
-  const titleEl = container.querySelector('.pv-title');
-  if (!titleEl) return;
-  if (!_NON_LATIN_RE.test(p.title || '')) return;
-  const titleRes = await xlateText(p.title);
-  if (!titleRes || !titleRes.detected || titleRes.detected.toLowerCase().startsWith('en')) return;
-  if (!titleRes.translated || titleRes.translated === p.title) return;
-
-  const origTitle = p.title;
-  const origBody  = p.selftext || '';
-
-  titleEl.textContent = titleRes.translated;
-
-  const bodyEl = container.querySelector('.pv-body');
-  let bodyRes = null;
-  let mdTranslated = null;
-  let mdOrig = null;
-  if (bodyEl && origBody.trim()) {
-    bodyRes = await xlateText(origBody);
-    mdOrig = renderMd(origBody);
-    if (bodyRes?.translated && bodyRes.translated !== origBody) {
-      mdTranslated = renderMd(bodyRes.translated);
-      bodyEl.innerHTML = mdTranslated;
-    }
-  }
-
-  const bar = document.createElement('div');
-  bar.className = 'xlate-bar';
-  bar.innerHTML = `<span class="xlate-label">Translated from ${titleRes.detected}</span><button class="xlate-btn">View original</button>`;
-  titleEl.after(bar);
-
-  const xlateBtn = bar.querySelector('.xlate-btn');
-  let showingTranslation = true;
-  xlateBtn.addEventListener('click', () => {
-    showingTranslation = !showingTranslation;
-    if (showingTranslation) {
-      titleEl.textContent = titleRes.translated;
-      if (bodyEl && mdTranslated) bodyEl.innerHTML = mdTranslated;
-      xlateBtn.textContent = 'View original';
-    } else {
-      titleEl.textContent = origTitle;
-      if (bodyEl && mdOrig != null) bodyEl.innerHTML = mdOrig;
-      xlateBtn.textContent = 'View translated';
-    }
-  });
 }
 
 // ── Crosspost embed ───────────────────────────────────────────────────────────
