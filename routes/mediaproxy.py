@@ -31,7 +31,7 @@ _BODY_URL_RE     = re.compile(rb'(?:"(\w+)"\s*:\s*)?"https://(' + _HOST_ALT.enco
 # Markdown/text fields: a body that is just an image URL must stay absolute so the
 # markdown renderer still autolinks it (it applies the proxy itself when rendering).
 _TEXT_KEYS       = frozenset({b'body', b'selftext', b'description', b'public_description',
-                              b'sidebar', b'text', b'title', b'translated'})
+                              b'sidebar', b'text', b'title'})
 _PLAYLIST_URL_RE = re.compile(r'https://(' + _HOST_ALT + r')/')
 _REWRITE_TYPES   = ('application/json', 'text/html')
 

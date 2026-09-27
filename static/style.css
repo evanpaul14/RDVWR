@@ -1161,14 +1161,6 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 ::-webkit-scrollbar-thumb:hover { background:var(--b2); }
 
 /* ── Cross-post banner ───────────────────────────────────────────────────── */
-.xlate-bar {
-  display:flex; align-items:center; gap:8px;
-  font-family:var(--mono); font-size:10px; color:var(--tx3); letter-spacing:.03em;
-  margin-bottom:12px;
-}
-.xlate-label { opacity:.7; }
-.xlate-btn { background:none; border:none; padding:0; cursor:pointer; font-family:var(--mono); font-size:10px; letter-spacing:.03em; color:var(--tx3); transition:color .15s; }
-.xlate-btn:hover { color:var(--ac); }
 .crosspost-embed {
   margin:0 16px 4px;
   border:1px solid var(--b); border-radius:6px; overflow:hidden;

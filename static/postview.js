@@ -3,7 +3,7 @@ import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
-import { renderCommentTree, renderMd, translatePost, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
+import { renderCommentTree, renderMd, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
 const _PV_DL_HOSTS = new Set(['v.redd.it','i.redd.it','preview.redd.it','external-preview.redd.it','i.imgur.com']);
@@ -399,7 +399,6 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
     initGifImages(pvContent);
     initCommentAvatars(pvContent, data.avatar_prefetch);
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
-    translatePost(p, pvContent).catch(() => {});
   } catch {
     pvContent.innerHTML = errState('Network error', 'post');
   }

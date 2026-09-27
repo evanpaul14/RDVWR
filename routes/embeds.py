@@ -1,4 +1,4 @@
-"""Link-preview (og:image), Devvit custom-post embeds, and translation."""
+"""Link-preview (og:image) and Devvit custom-post embeds."""
 import re
 import json
 import socket
@@ -7,7 +7,7 @@ import html as html_lib
 from urllib.parse import urljoin, urlparse, urlunparse
 from flask import Blueprint, jsonify, request, make_response
 from reddit_client import SESSION, HEADERS, _get_device, recent_user_agent
-from helpers import TTLCache, _CACHE_MISS, cached_json, error_response, log
+from helpers import TTLCache, _CACHE_MISS, cached_json, log
 
 bp = Blueprint("embeds", __name__)
 
@@ -16,22 +16,6 @@ OG_IMAGE_RE         = re.compile(r'<meta[^>]+(?:property=["\']og:image["\']|name
 OG_DESC_RE          = re.compile(r'<meta[^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])[^>]*content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property=["\']og:description["\']|name=["\'](?:twitter:description|description)["\'])', re.I)
 _og_cache = TTLCache(1000, name='og')
 OG_CACHE_TTL = 365 * 86400  # effectively permanent; entries are evicted by size cap, not expiry
-
-
-@bp.route("/api/translate")
-def translate_text():
-    text = request.args.get("text", "").strip()
-    if not text:
-        return jsonify({"error": "Missing text"}), 400
-    try:
-        r = SESSION.get(
-            "https://api.mymemory.translated.net/get",
-            params={"q": text[:1000], "langpair": "autodetect|en"},
-            timeout=8)
-        r.raise_for_status()
-        return jsonify(r.json())
-    except Exception:
-        return error_response(502)
 
 
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
