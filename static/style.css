@@ -1956,8 +1956,16 @@ a.community-card, a.user-card { text-decoration:none; color:inherit; }
 .ns-sort-divider { border-left:1px solid var(--b); margin:8px 4px; }
 /* Link standing in for the JS search's "only r/<sub>" checkbox. */
 a.scope-check-label { text-decoration:none; }
-.ns-checkbox { width:12px; height:12px; border:1px solid var(--b2); border-radius:2px; flex-shrink:0; }
+.ns-checkbox {
+  width:12px; height:12px; border:1px solid var(--b2); border-radius:2px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
 .ns-checkbox.checked { background:var(--ac); border-color:var(--ac); }
+.ns-checkbox.checked::after {
+  content:''; width:6px; height:4px; margin-top:-1px;
+  border:2px solid var(--bg); border-top:0; border-right:0;
+  transform:rotate(-45deg);
+}
 /* Inline "about community" disclosures standing in for the JS slide-out sidebar panel. */
 .ns-about-panel { max-width:720px; margin:0 auto; padding:12px 20px 0; display:flex; flex-direction:column; gap:8px; }
 .ns-about { border:1px solid var(--b); border-radius:6px; padding:0 14px; }
