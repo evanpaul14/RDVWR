@@ -1,0 +1,490 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RDVWR Ad</title>
+<style>
+@font-face{font-family:'DM Sans';font-weight:300 700;src:url(fonts/dm-sans-1.woff2) format('woff2')}
+@font-face{font-family:'Instrument Serif';font-style:italic;src:url(fonts/instrument-serif-1.woff2) format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:400 800;src:url(fonts/jetbrains-mono-5.woff2) format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-weight:400 800;src:url(fonts/jetbrains-mono-4.woff2) format('woff2')}
+:root{--bg:#060607;--ac:#4a9eff;--up:#ff6b35;--tx:#ececec;--tx3:#8a8a8a;
+  --serif:'Instrument Serif',Georgia,serif;--mono:'JetBrains Mono',monospace;--sans:'DM Sans',system-ui,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--tx);font-family:var(--sans)}
+#stage{position:absolute;inset:0;overflow:hidden;background:var(--bg)}
+#cam{position:absolute;inset:0;transform-origin:50% 50%}
+.scene{position:absolute;inset:0;visibility:hidden;overflow:hidden}
+.abs{position:absolute}
+.serif{font-family:var(--serif);font-style:italic;font-weight:400;letter-spacing:-.01em}
+.mono{font-family:var(--mono);text-transform:uppercase;letter-spacing:.22em}
+.glow{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+/* browser window */
+.win{position:absolute;border-radius:14px;overflow:hidden;background:#0c0c0c;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 40px 120px rgba(0,0,0,.75),0 0 80px rgba(74,158,255,.12)}
+.win .bar{height:40px;background:#161617;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #232325}
+.win .dot{width:11px;height:11px;border-radius:50%;background:#333}
+.win .dot:nth-child(1){background:#ff5f57}.win .dot:nth-child(2){background:#febc2e}.win .dot:nth-child(3){background:#28c840}
+.win .url{margin-left:18px;flex:1;height:24px;border-radius:7px;background:#0d0d0e;border:1px solid #242426;
+  font:500 12px var(--mono);color:#9a9a9a;display:flex;align-items:center;padding:0 12px;letter-spacing:.02em}
+.win .url b{color:var(--ac);font-weight:600}
+.win .vp{position:absolute;top:40px;left:0;right:0;bottom:0;overflow:hidden}
+.win .vp img{position:absolute;left:0;top:0;width:100%}
+.card{position:absolute;border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 30px 70px rgba(0,0,0,.7)}
+.card img{display:block;width:100%}
+.phone{position:absolute;width:300px;height:640px;border-radius:46px;background:#000;padding:11px;
+  box-shadow:0 0 0 2px #2a2a2c,0 0 0 5px #0e0e0f,0 50px 110px rgba(0,0,0,.8)}
+.phone .scr{width:100%;height:100%;border-radius:36px;overflow:hidden;position:relative}
+.phone .scr img{width:100%;display:block}
+.phone .isl{position:absolute;top:22px;left:50%;width:92px;height:26px;margin-left:-46px;background:#000;border-radius:20px;z-index:2}
+.chip{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.14);background:rgba(20,20,22,.8);
+  border-radius:999px;padding:12px 22px;font:500 17px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#d8d8d8;
+  backdrop-filter:blur(8px)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--ac);box-shadow:0 0 12px var(--ac)}
+#grain{position:absolute;inset:-100px;pointer-events:none;opacity:.07;mix-blend-mode:overlay;z-index:50}
+#vig{position:absolute;inset:0;pointer-events:none;z-index:49;
+  background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 55%,rgba(0,0,0,.65) 100%)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:48;mix-blend-mode:screen}
+#sweep{position:absolute;top:-20%;height:140%;width:340px;z-index:47;pointer-events:none;opacity:0;
+  background:linear-gradient(90deg,transparent,rgba(74,158,255,.0) 10%,rgba(120,185,255,.55) 50%,rgba(74,158,255,0) 90%,transparent);
+  filter:blur(18px);transform:skewX(-14deg)}
+.bars{position:absolute;inset:0;z-index:46;pointer-events:none}
+.bars div{position:absolute;left:0;right:0;height:0;background:#000}
+/* grid floor */
+#floor{position:absolute;left:-50%;width:200%;top:52%;height:120%;transform-origin:50% 0;
+  background-image:linear-gradient(rgba(74,158,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(74,158,255,.35) 1px,transparent 1px);
+  background-size:90px 90px;-webkit-mask-image:linear-gradient(to bottom,transparent,#000 25%,#000 55%,transparent)}
+.word{position:absolute;white-space:nowrap}
+.stat{position:absolute;width:500px}
+.stat .n{font:italic 400 200px/1 var(--serif);color:#fff;letter-spacing:-.03em}
+.stat .n sup{font-size:.45em;color:var(--ac);vertical-align:.9em;margin-left:4px}
+.stat .l{font:500 17px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:#bdbdbd;margin-top:10px}
+.stat .row{display:flex;align-items:center;gap:14px;margin-top:18px;font:500 15px var(--mono);color:#9a9a9a}
+.stat .row .t{width:118px;letter-spacing:.06em}
+.stat .row .v{width:110px;text-align:right;letter-spacing:.02em}
+.stat .track{flex:1;height:10px;border-radius:6px;background:rgba(255,255,255,.06);overflow:hidden}
+.stat .fill{height:100%;border-radius:6px;width:0}
+.stat .row.me .fill{background:linear-gradient(90deg,#2d7ff0,#7cc0ff);box-shadow:0 0 18px rgba(74,158,255,.8)}
+.stat .row.me{color:#e8f2ff}
+.stat .row.them .fill{background:#4a4a4f}
+.logo{font:800 190px var(--mono);letter-spacing:.14em;color:var(--ac);text-shadow:0 0 60px rgba(74,158,255,.55)}
+.logo span{display:inline-block}
+.toggle{position:absolute;display:flex;border-radius:999px;border:1px solid #2e2e32;background:#121214;padding:5px;
+  font:600 16px var(--mono);letter-spacing:.14em}
+.toggle div{position:relative;z-index:1;padding:12px 26px;color:#8d8d8d}
+.toggle .knob{position:absolute;z-index:0;top:5px;bottom:5px;border-radius:999px;background:var(--ac);box-shadow:0 0 24px rgba(74,158,255,.7);padding:0}
+</style></head><body>
+<div id="stage"><div id="cam">
+
+<!-- ============ S0 INTRO ============ -->
+<div class="scene" id="s0">
+  <div class="glow" id="s0g1" style="width:1100px;height:800px;left:410px;top:140px;background:rgba(74,158,255,.22)"></div>
+  <div class="glow" id="s0g2" style="width:600px;height:600px;left:1200px;top:500px;background:rgba(255,107,53,.12)"></div>
+  <div style="position:absolute;inset:0;perspective:700px"><div id="floor"></div></div>
+  <div id="s0txt" class="abs" style="left:0;right:0;top:250px;text-align:center">
+    <div style="overflow:hidden;height:250px"><div id="s0l1" class="serif" style="font-size:230px;line-height:250px">Reddit,</div></div>
+    <div style="overflow:hidden;height:250px;margin-top:-30px"><div id="s0l2" class="serif" style="font-size:230px;line-height:250px;
+      background:linear-gradient(90deg,#7cc0ff,#4a9eff 40%,#fff);-webkit-background-clip:text;color:transparent">minus the weight.</div></div>
+  </div>
+  <div id="s0tag" class="mono abs" style="left:0;right:0;top:880px;text-align:center;font-size:20px;color:#9fb8d8"></div>
+</div>
+
+<!-- ============ S1 FEED ============ -->
+<div class="scene" id="s1">
+  <div class="glow" style="width:1200px;height:900px;left:700px;top:100px;background:rgba(74,158,255,.18)"></div>
+  <div id="s1wrap" style="position:absolute;inset:0;perspective:2200px">
+    <div class="card" id="s1c1" style="width:330px"><img src="a/c_Landscape_1.jpg"></div>
+    <div class="card" id="s1c2" style="width:300px"><img src="a/c_Space_2.jpg"></div>
+    <div class="win" id="s1win" style="width:760px;height:940px">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">rdvwr.app/<b>r/Astronomy</b></span></div>
+      <div class="vp"><img id="s1feed" src="a/astro_tall.jpg" style="width:720px;left:20px"></div>
+    </div>
+    <div class="card" id="s1c3" style="width:280px"><img src="a/c_aww_2.jpg"></div>
+    <div class="card" id="s1c4" style="width:420px"><img src="a/c_article_technology_1.jpg"></div>
+  </div>
+  <div class="abs" style="left:110px;top:330px">
+    <div style="overflow:hidden;height:190px"><div id="s1h1" class="serif" style="font-size:170px;line-height:190px">Every feed.</div></div>
+    <div style="overflow:hidden;height:190px"><div id="s1h2" class="serif" style="font-size:170px;line-height:190px;color:var(--ac)">Zero clutter.</div></div>
+    <div id="s1sub" class="mono" style="font-size:18px;color:#a8a8a8;margin-top:28px">Subreddits · Search · Profiles · Wikis</div>
+  </div>
+</div>
+
+<!-- ============ S2 FORMATS ============ -->
+<div class="scene" id="s2">
+  <div id="s2wall" style="position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d"></div>
+  <div class="abs" style="inset:0;background:radial-gradient(ellipse 48% 40% at 50% 50%,rgba(6,6,7,.93),rgba(6,6,7,.55) 60%,rgba(6,6,7,.15))"></div>
+  <div id="s2kicker" class="mono abs" style="left:0;right:0;top:360px;text-align:center;font-size:20px;color:var(--ac)">Every format, native</div>
+  <div id="s2words" class="abs" style="left:0;right:0;top:400px;height:260px;text-align:center"></div>
+  <div id="s2dots" class="abs" style="left:0;right:0;top:690px;display:flex;justify-content:center;gap:12px"></div>
+</div>
+
+<!-- ============ S3 COMPACT ============ -->
+<div class="scene" id="s3">
+  <div class="glow" style="width:1100px;height:900px;left:780px;top:120px;background:rgba(74,158,255,.16)"></div>
+  <div class="abs" style="left:110px;top:300px;white-space:nowrap">
+    <div style="overflow:hidden;height:170px"><div id="s3h1" class="serif" style="font-size:132px;line-height:170px">Big and bold.</div></div>
+    <div style="overflow:hidden;height:170px"><div id="s3h2" class="serif" style="font-size:132px;line-height:170px;color:var(--ac)">Or dense.</div></div>
+    <div id="s3sub" class="mono" style="font-size:18px;color:#a8a8a8;margin-top:26px;line-height:1.7">Card &amp; compact layouts<br>images, articles, text posts</div>
+  </div>
+  <div class="toggle" id="s3tog" style="left:110px;top:760px"><span class="knob" id="s3knob"></span><div>Card</div><div>Compact</div></div>
+  <div id="s3wrap" style="position:absolute;inset:0;perspective:2400px">
+    <div class="win" id="s3w1" style="width:760px;height:900px">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url" id="s3url">rdvwr.app/<b>r/CozyPlaces</b></span></div>
+      <div class="vp">
+        <img id="s3card" src="a/feed_cozy.jpg" style="width:760px">
+        <div id="s3cmpw" style="position:absolute;left:0;right:0;top:0;height:0;overflow:hidden;box-shadow:0 2px 0 var(--ac),0 10px 40px rgba(74,158,255,.5)">
+          <img id="s3cmp" src="a/compact_technology.jpg" style="width:760px">
+        </div>
+      </div>
+    </div>
+    <div class="win" id="s3w2" style="width:720px;height:820px">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">rdvwr.app/<b>r/explainlikeimfive</b></span></div>
+      <div class="vp"><img src="a/compact_explainlikeimfive.jpg" style="width:720px;top:-10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ S4 THREADS ============ -->
+<div class="scene" id="s4">
+  <div class="glow" style="width:1000px;height:900px;left:100px;top:100px;background:rgba(74,158,255,.14)"></div>
+  <div id="s4wrap" style="position:absolute;inset:0;perspective:2000px">
+    <div class="win" id="s4win" style="width:1000px;height:1000px">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">rdvwr.app/<b>r/explainlikeimfive/comments/…</b></span></div>
+      <div class="vp"><img id="s4img" src="a/post_text.jpg" style="width:1000px"></div>
+      <div id="s4spot" class="abs" style="left:0;right:0;top:40px;bottom:0;pointer-events:none"></div>
+    </div>
+  </div>
+  <div class="abs" style="left:1210px;top:330px;width:640px">
+    <div style="overflow:hidden;height:180px"><div id="s4h1" class="serif" style="font-size:160px;line-height:180px">Threads,</div></div>
+    <div style="overflow:hidden;height:180px"><div id="s4h2" class="serif" style="font-size:160px;line-height:180px;color:var(--ac)">untangled.</div></div>
+    <div id="s4sub" class="mono" style="font-size:18px;color:#a8a8a8;margin-top:26px;line-height:1.7">Nested comments · collapsible<br>keyboard nav with J / K</div>
+  </div>
+</div>
+
+<!-- ============ S5 SPEED ============ -->
+<div class="scene" id="s5">
+  <div style="position:absolute;inset:0;perspective:700px"><div id="floor5" style="position:absolute;left:-50%;width:200%;top:62%;height:120%;transform-origin:50% 0;transform:rotateX(72deg);
+    background-image:linear-gradient(rgba(74,158,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(74,158,255,.22) 1px,transparent 1px);background-size:90px 90px;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,#000 25%,#000 50%,transparent)"></div></div>
+  <div class="glow" style="width:1400px;height:500px;left:260px;top:260px;background:rgba(74,158,255,.13)"></div>
+  <div class="abs" style="left:0;right:0;top:110px;text-align:center">
+    <div id="s5k" class="mono" style="font-size:19px;color:var(--ac)">vs. reddit.com — home feed, median of 3 runs</div>
+    <div id="s5h" class="serif" style="font-size:120px;line-height:1.1;margin-top:8px">Featherweight.</div>
+  </div>
+  <div class="stat" id="st0" style="left:130px;top:430px"><div class="n"><span class="num">4</span><sup>×</sup></div><div class="l">faster load</div>
+    <div class="row me"><span class="t">RDVWR</span><span class="track"><span class="fill" data-w=".254"></span></span><span class="v">1087 ms</span></div>
+    <div class="row them"><span class="t">reddit.com</span><span class="track"><span class="fill" data-w="1"></span></span><span class="v">4278 ms</span></div></div>
+  <div class="stat" id="st1" style="left:710px;top:430px"><div class="n"><span class="num">32</span><sup>×</sup></div><div class="l">less data</div>
+    <div class="row me"><span class="t">RDVWR</span><span class="track"><span class="fill" data-w=".031"></span></span><span class="v">182 KB</span></div>
+    <div class="row them"><span class="t">reddit.com</span><span class="track"><span class="fill" data-w="1"></span></span><span class="v">5.9 MB</span></div></div>
+  <div class="stat" id="st2" style="left:1290px;top:430px"><div class="n"><span class="num">10</span></div><div class="l">requests, not 104</div>
+    <div class="row me"><span class="t">RDVWR</span><span class="track"><span class="fill" data-w=".096"></span></span><span class="v">10</span></div>
+    <div class="row them"><span class="t">reddit.com</span><span class="track"><span class="fill" data-w="1"></span></span><span class="v">104</span></div></div>
+</div>
+
+<!-- ============ S6 EVERYWHERE ============ -->
+<div class="scene" id="s6">
+  <div class="glow" id="s6glow" style="width:1400px;height:800px;left:260px;top:180px;background:rgba(255,255,255,.10)"></div>
+  <div id="s6bg" style="position:absolute;inset:0;perspective:2000px">
+    <div class="win" id="s6dark" style="width:1440px;height:900px;left:240px;top:150px">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">rdvwr.app/<b>r/CozyPlaces</b></span></div>
+      <div class="vp" style="background:#0c0c0c"><img src="a/feed_cozy.jpg" style="width:720px;left:360px"></div>
+      <div class="vp" id="s6lightvp" style="background:#f2f2f2"><img src="a/feed_light.jpg" style="width:720px;left:360px"></div>
+      <div id="s6edge" class="abs" style="top:40px;width:6px;height:1080px;margin-top:-110px;border-radius:3px;background:#bfe0ff;
+        box-shadow:0 0 18px 4px rgba(74,158,255,.9),0 0 60px 12px rgba(74,158,255,.5)"></div>
+      <div id="s6lab1" class="chip abs" style="right:40px;top:80px">Dark</div>
+      <div id="s6lab2" class="chip abs" style="left:40px;top:80px;background:rgba(255,255,255,.9);color:#111;border-color:rgba(0,0,0,.15)">Light</div>
+    </div>
+  </div>
+  <div id="s6shade" class="abs" style="inset:0;background:linear-gradient(to bottom,rgba(6,6,7,.2),rgba(6,6,7,.0) 40%,rgba(6,6,7,.85))"></div>
+  <div class="phone" id="p1"><div class="scr"><img src="a/mobile_astro.jpg"></div><div class="isl"></div></div>
+  <div class="phone" id="p3"><div class="scr"><img src="a/mobile_cozy_light.jpg"></div><div class="isl"></div></div>
+  <div class="phone" id="p2"><div class="scr"><img src="a/mobile_post_light.jpg"></div><div class="isl"></div></div>
+  <div class="abs" style="left:0;right:0;top:40px;text-align:center;white-space:nowrap">
+    <span style="display:inline-block;overflow:hidden;height:140px;vertical-align:top;margin:0 14px"><span id="s6a" class="serif" style="display:inline-block;font-size:112px;line-height:140px">Dark.</span></span>
+    <span style="display:inline-block;overflow:hidden;height:140px;vertical-align:top;margin:0 14px"><span id="s6b" class="serif" style="display:inline-block;font-size:112px;line-height:140px;color:#fff;text-shadow:0 0 40px rgba(255,255,255,.55)">Light.</span></span>
+    <span style="display:inline-block;overflow:hidden;height:140px;vertical-align:top;margin:0 14px"><span id="s6c" class="serif" style="display:inline-block;font-size:112px;line-height:140px;color:var(--ac)">Any screen.</span></span>
+  </div>
+  <div id="s6chip" class="abs" style="left:0;right:0;top:960px;text-align:center"><span class="chip"><i></i>Even works without JavaScript</span></div>
+</div>
+
+<!-- ============ S7 END ============ -->
+<div class="scene" id="s7">
+  <div id="s7wall" style="position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d"></div>
+  <div class="abs" style="inset:0;background:radial-gradient(ellipse 60% 55% at 50% 50%,rgba(6,6,7,.95),rgba(6,6,7,.8) 60%,rgba(6,6,7,.55))"></div>
+  <div class="glow" id="s7g" style="width:1200px;height:500px;left:360px;top:220px;background:rgba(74,158,255,.25)"></div>
+  <div class="abs" style="left:0;right:0;top:270px;text-align:center">
+    <div class="logo" id="s7logo"><span>R</span><span>D</span><span>V</span><span>W</span><span>R</span></div>
+    <div id="s7tag" class="serif" style="font-size:78px;margin-top:6px">Reddit, beautifully read.</div>
+    <div id="s7chips" style="display:flex;justify-content:center;gap:16px;margin-top:46px">
+      <span class="chip"><i></i>No account required</span><span class="chip"><i></i>Open source</span><span class="chip"><i></i>Self-hostable</span>
+    </div>
+    <div id="s7url" class="mono" style="font-size:18px;color:#8fa6c4;margin-top:44px;letter-spacing:.16em;text-transform:none">github.com/evanpaul14/RDVWR</div>
+  </div>
+</div>
+
+</div>
+<div id="sweep"></div>
+<div class="bars"><div id="barT" style="top:0"></div><div id="barB" style="bottom:0"></div></div>
+<div id="flash"></div>
+<div id="vig"></div>
+<canvas id="grain" width="1024" height="1024"></canvas>
+</div>
+
+<script>
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const P = (t, a, b) => clamp((t - a) / (b - a));
+const eOutExpo = x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x);
+const eInExpo = x => x <= 0 ? 0 : Math.pow(2, 10 * x - 10);
+const eInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eInOutQuint = x => x < .5 ? 16 * x ** 5 : 1 - Math.pow(-2 * x + 2, 5) / 2;
+const eOutBack = x => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const eOutCubic = x => 1 - Math.pow(1 - x, 3);
+function rnd(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+// scene windows [start, end]
+const SC = { s0: [0, 2.0], s1: [2.0, 4.5], s2: [4.5, 6.5], s3: [6.5, 8.5], s4: [8.5, 10.5], s5: [10.5, 12.5], s6: [12.5, 14.0], s7: [14.0, 15.51] };
+const CUTS = [2.0, 4.5, 6.5, 8.5, 10.5, 12.5, 14.0];
+
+// ---------- build card walls ----------
+const MEDIA = ['c_Astronomy_1','c_CozyPlaces_2','c_Landscape_0','c_Space_1','c_aww_1','c_Astronomy_3','c_Landscape_2','c_CozyPlaces_4',
+  'c_Space_0','c_aww_3','c_article_space_1','c_Landscape_1','c_Astronomy_2','c_CozyPlaces_3','c_Space_2','c_aww_2'];
+const TEXT = ['c_text_AskHistorians_2','c_text_explainlikeimfive_1','c_article_science_0','c_article_technology_1','c_text_AskHistorians_3',
+  'c_article_technology_2','c_text_explainlikeimfive_2','c_article_science_1','c_text_TrueOffMyChest_4'];
+const SIZES = {}; // natural aspect (h/w), filled on load
+function buildWall(host, cols, colW, gap, seed, perCol) {
+  const r = rnd(seed); const out = [];
+  for (let c = 0; c < cols; c++) {
+    const col = document.createElement('div'); col.className = 'abs';
+    col.style.cssText = `left:${(c - (cols - 1) / 2) * (colW + gap) - colW / 2}px;top:0;width:${colW}px`;
+    let y = 0; const items = [];
+    for (let i = 0; i < perCol; i++) {
+      const useText = r() < .38; const pool = useText ? TEXT : MEDIA;
+      const name = pool[Math.floor(r() * pool.length)];
+      const d = document.createElement('div'); d.className = 'card'; d.style.width = colW + 'px';
+      d.style.left = '0'; d.style.top = y + 'px';
+      d.innerHTML = `<img src="a/${name}.jpg">`;
+      col.appendChild(d); items.push({ d, name });
+      y += colW * (SIZES[name] || 1) + gap;
+    }
+    host.appendChild(col); out.push({ col, h: y });
+  }
+  return out;
+}
+let wall2, wall7;
+
+// ---------- intro text ----------
+const TAG = 'RDVWR — a minimal Reddit viewer';
+const GLYPHS = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789/<>#*+=';
+
+// ---------- S2 words ----------
+const WORDS = [['Galleries.', '#fff'], ['HLS video.', '#fff'], ['Articles.', '#fff'], ['Text posts.', '#fff']];
+WORDS.forEach((w, i) => {
+  const d = document.createElement('div'); d.className = 'word serif';
+  d.style.cssText = `left:0;right:0;top:0;font-size:230px;line-height:260px;color:${w[1]}`;
+  d.textContent = w[0]; d.id = 'w' + i; $('s2words').appendChild(d);
+  const dot = document.createElement('div');
+  dot.style.cssText = 'width:44px;height:4px;border-radius:2px;background:rgba(255,255,255,.18)'; dot.id = 'wd' + i; $('s2dots').appendChild(dot);
+});
+
+// ---------- grain ----------
+const gctx = $('grain').getContext('2d');
+(function () { const img = gctx.createImageData(1024, 1024); const r = rnd(7);
+  for (let i = 0; i < img.data.length; i += 4) { const v = r() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  gctx.putImageData(img, 0, 0); })();
+
+function show(id, t) { const [a, b] = SC[id]; const on = t >= a && t < b; $(id).style.visibility = on ? 'visible' : 'hidden'; return on; }
+function reveal(el, t, a, dur = .55, dist = 110) { // mask-rise text reveal
+  const k = eOutExpo(P(t, a, a + dur)); el.style.transform = `translateY(${(1 - k) * dist}%)`; el.style.opacity = k > 0 ? 1 : 0;
+}
+function fadeUp(el, t, a, dur = .5, dy = 24) { const k = eOutCubic(P(t, a, a + dur)); el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px)`; }
+function exitOut(el, t, a, dur = .3) { const k = eInExpo(P(t, a, a + dur)); return k; }
+
+// ---------- render ----------
+function render(t) {
+  // global camera: beat pulse (120 bpm) after intro, slow push
+  const beat = (t % .5) / .5; const pulse = t > 2 && t < 12.5 ? Math.exp(-beat * 9) : 0;
+  $('cam').style.transform = `scale(${1 + pulse * .008})`;
+  // grain jitter
+  const r = rnd(Math.floor(t * 60) + 11); $('grain').style.transform = `translate(${-r() * 100}px,${-r() * 100}px)`;
+  // transitions: sweep + flash
+  let fl = 0, sw = -1;
+  for (const c of CUTS) { const d = t - c; if (d > -.18 && d < .35) { fl = Math.max(fl, d < 0 ? eInExpo(P(d, -.18, 0)) * .25 : (1 - eOutCubic(P(d, 0, .35))) * .35); }
+    if (d > -.28 && d < .28) sw = (d + .28) / .56; }
+  if (t > 13.95 && t < 14.4) fl = Math.max(fl, (1 - eOutCubic(P(t, 14.0, 14.4))) * .9);
+  $('flash').style.opacity = fl;
+  $('sweep').style.opacity = sw >= 0 ? Math.sin(sw * Math.PI) : 0;
+  $('sweep').style.left = lerp(-500, 2300, eInOut(clamp(sw))) + 'px';
+  // letterbox bars at start and end
+  const bh = t < .6 ? lerp(540, 0, eInOutQuint(P(t, 0, .6))) : t > 15.1 ? lerp(0, 540, eInOutQuint(P(t, 15.1, 15.5))) : 0;
+  $('barT').style.height = bh + 'px'; $('barB').style.height = bh + 'px';
+
+  // ===== S0 =====
+  if (show('s0', t)) {
+    $('floor').style.transform = `rotateX(76deg) translateY(${(t * 180) % 90}px)`;
+    $('floor').style.opacity = eOutCubic(P(t, .1, 1));
+    reveal($('s0l1'), t, .15, .7); reveal($('s0l2'), t, .55, .7);
+    const out = eInExpo(P(t, 1.55, 2.0));
+    $('s0txt').style.transform = `scale(${1 + .02 * t + out * .9})`; $('s0txt').style.filter = `blur(${out * 24}px)`; $('s0txt').style.opacity = 1 - out;
+    // decode tag
+    const k = P(t, .9, 1.5); const n = Math.floor(k * TAG.length); const rr = rnd(Math.floor(t * 30));
+    let s = TAG.slice(0, n); for (let i = n; i < Math.min(TAG.length, n + 6) && k > 0; i++) s += TAG[i] === ' ' ? ' ' : GLYPHS[Math.floor(rr() * GLYPHS.length)];
+    $('s0tag').textContent = s; $('s0tag').style.opacity = 1 - out;
+    $('s0g1').style.transform = `scale(${.8 + .3 * eOutCubic(P(t, 0, 2))})`;
+    $('s0g2').style.transform = `translate(${-t * 120}px,${-t * 40}px)`;
+  }
+
+  // ===== S1 FEED =====
+  if (show('s1', t)) {
+    const u = t - 2.0, L = 2.5;
+    const inn = eOutExpo(P(u, 0, .9)), out = eInExpo(P(u, 2.15, 2.5));
+    const ry = lerp(-34, -14, inn) - out * 20, rx = lerp(18, 6, inn);
+    $('s1win').style.left = '1010px'; $('s1win').style.top = '70px';
+    $('s1win').style.transform = `translate3d(${(1 - inn) * 500 + out * -300}px,${(1 - inn) * 200}px,${(1 - inn) * -600 + out * 900}px) rotateY(${ry}deg) rotateX(${rx}deg) rotateZ(${(1 - inn) * 6}deg)`;
+    $('s1win').style.opacity = 1 - out;
+    const sc = eInOut(P(u, .35, 2.4)); $('s1feed').style.transform = `translateY(${-sc * 2300}px)`;
+    const cards = [['s1c1', 860, 120, -300, -10, .9], ['s1c2', 1640, 90, -200, 8, 1.2], ['s1c3', 1600, 560, 250, -7, 1.6], ['s1c4', 820, 800, 150, 5, 1.35]];
+    cards.forEach(([id, x, y, z, rz, sp], i) => {
+      const k = eOutExpo(P(u, .1 + i * .08, 1.1 + i * .08));
+      const el = $(id); el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.style.transform = `translate3d(0,${(1 - k) * 700 - u * 90 * sp - out * 600}px,${z}px) rotateY(-14deg) rotateZ(${rz * (1 - k * .6)}deg)`;
+      el.style.opacity = k * (1 - out);
+    });
+    reveal($('s1h1'), t, 2.12, .6); reveal($('s1h2'), t, 2.32, .6); fadeUp($('s1sub'), t, 2.6, .5);
+    [$('s1h1'), $('s1h2'), $('s1sub')].forEach(e => { if (out > 0) { e.style.opacity = 1 - out; e.style.filter = `blur(${out * 12}px)`; } else e.style.filter = 'none'; });
+  }
+
+  // ===== S2 FORMATS =====
+  if (show('s2', t)) {
+    const u = t - 4.5;
+    const inn = eOutExpo(P(u, 0, .8)), out = eInExpo(P(u, 1.7, 2.0));
+    $('s2wall').style.transform = `translate(-50%,-50%) perspective(1600px) rotateX(${lerp(48, 30, inn)}deg) rotateZ(${lerp(-24, -16, inn)}deg) scale(${lerp(1.5, 1.05, inn) + out * .5}) translateZ(${out * 300}px)`;
+    $('s2wall').style.opacity = 1 - out;
+    wall2.forEach((c, i) => { const dir = i % 2 ? 1 : -1; const off = (u * 260 + i * 140) * dir;
+      c.col.style.transform = `translateY(${-c.h / 2 + off}px)`; });
+    $('s2kicker').style.opacity = eOutCubic(P(u, .05, .4)) * (1 - out);
+    const wi = Math.floor(clamp(u, 0, 1.999) / .5);
+    WORDS.forEach((w, i) => {
+      const el = $('w' + i); const a = i * .5; const k = eOutExpo(P(u, a, a + .3)); const o = i < 3 ? eInExpo(P(u, a + .38, a + .5)) : out;
+      el.style.opacity = u >= a ? (1 - o) : 0;
+      el.style.transform = `translateY(${(1 - k) * 80 - o * 60}px) scale(${lerp(1.18, 1, k)})`;
+      el.style.filter = `blur(${(1 - k) * 14 + o * 14}px)`;
+      $('wd' + i).style.background = i <= wi ? 'var(--ac)' : 'rgba(255,255,255,.18)';
+      $('wd' + i).style.boxShadow = i === wi ? '0 0 14px var(--ac)' : 'none';
+    });
+    $('s2dots').style.opacity = 1 - out;
+  }
+
+  // ===== S3 COMPACT =====
+  if (show('s3', t)) {
+    const u = t - 6.5;
+    const inn = eOutExpo(P(u, 0, .8)), out = eInExpo(P(u, 1.7, 2.0));
+    reveal($('s3h1'), t, 6.55, .6); reveal($('s3h2'), t, 7.05, .6); fadeUp($('s3sub'), t, 6.8, .5); fadeUp($('s3tog'), t, 6.7, .5);
+    [$('s3h1'), $('s3h2'), $('s3sub'), $('s3tog')].forEach(e => { if (out > 0) e.style.opacity = 1 - out; });
+    // toggle knob moves at 0.5
+    const kk = eInOutQuint(P(u, .45, .7)); const w1 = 106, w2 = 150;
+    $('s3knob').style.left = lerp(5, 5 + w1, kk) + 'px'; $('s3knob').style.width = lerp(w1, w2, kk) + 'px';
+    const [lab1, lab2] = $('s3tog').querySelectorAll('div'); lab1.style.color = kk < .5 ? '#fff' : '#8d8d8d'; lab2.style.color = kk >= .5 ? '#fff' : '#8d8d8d';
+    // window 1: card -> compact shutter wipe
+    const w = eInOutQuint(P(u, .5, .95));
+    $('s3cmpw').style.height = (w * 860) + 'px';
+    $('s3card').style.transform = `translateY(${-w * 120}px) scale(${1 - w * .04})`; $('s3card').style.filter = `brightness(${1 - w * .6})`;
+    $('s3url').innerHTML = w < .5 ? 'rdvwr.app/<b>r/CozyPlaces</b>' : 'rdvwr.app/<b>r/technology</b>';
+    $('s3cmp').style.transform = `translateY(${-eInOut(P(u, 1.0, 1.9)) * 120}px)`;
+    const shift = eInOutQuint(P(u, 1.0, 1.4));
+    $('s3w1').style.left = '900px'; $('s3w1').style.top = '90px';
+    $('s3w1').style.transform = `translate3d(${(1 - inn) * 700 - shift * 60 + out * -200}px,${(1 - inn) * 120}px,${(1 - inn) * -500 + out * 800}px) rotateY(${lerp(-30, -12, inn) - shift * 6}deg) rotateX(${lerp(12, 4, inn)}deg)`;
+    $('s3w1').style.opacity = 1 - out;
+    $('s3w2').style.left = '1230px'; $('s3w2').style.top = '300px';
+    $('s3w2').style.transform = `translate3d(${(1 - shift) * 800 + out * -100}px,${(1 - shift) * 80}px,${-120 + out * 700}px) rotateY(-16deg) rotateX(4deg) rotateZ(${(1 - shift) * 5}deg) scale(.8)`;
+    $('s3w2').style.opacity = shift * (1 - out);
+  }
+
+  // ===== S4 THREADS =====
+  if (show('s4', t)) {
+    const u = t - 8.5;
+    const inn = eOutExpo(P(u, 0, .8)), out = eInExpo(P(u, 1.7, 2.0));
+    $('s4win').style.left = '120px'; $('s4win').style.top = '40px';
+    $('s4win').style.transform = `translate3d(${(1 - inn) * -600 + out * 200}px,${(1 - inn) * 100}px,${(1 - inn) * -500 + out * 700}px) rotateY(${lerp(30, 12, inn)}deg) rotateX(${lerp(10, 3, inn)}deg)`;
+    $('s4win').style.opacity = 1 - out;
+    const sc = eInOut(P(u, .45, 1.9)); $('s4img').style.transform = `translateY(${-sc * 300}px) scale(${1 + sc * .08})`; $('s4img').style.transformOrigin = '50% 30%';
+    // spotlight travelling down the comment tree
+    const sy = lerp(260, 700, eInOut(P(u, .6, 1.9)));
+    $('s4spot').style.background = `radial-gradient(ellipse 520px 170px at 470px ${sy}px,rgba(74,158,255,.10),rgba(0,0,0,0) 70%),linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) ${sy - 230}px,rgba(0,0,0,0) ${sy + 230}px,rgba(0,0,0,0))`;
+    reveal($('s4h1'), t, 8.6, .6); reveal($('s4h2'), t, 8.8, .6); fadeUp($('s4sub'), t, 9.05, .5);
+    [$('s4h1'), $('s4h2'), $('s4sub')].forEach(e => { if (out > 0) e.style.opacity = 1 - out; });
+  }
+
+  // ===== S5 SPEED =====
+  if (show('s5', t)) {
+    const u = t - 10.5; const out = eInExpo(P(u, 1.72, 2.0));
+    $('floor5').style.transform = `rotateX(72deg) translateY(${(u * 140) % 90}px)`;
+    fadeUp($('s5k'), t, 10.5, .4); reveal($('s5h'), t, 10.52, .5, 40);
+    const targets = [4, 32, 10];
+    ['st0', 'st1', 'st2'].forEach((id, i) => {
+      const a = .25 + i * .14; const k = eOutExpo(P(u, a, a + .6)); const el = $(id);
+      el.style.opacity = k * (1 - out); el.style.transform = `translateY(${(1 - k) * 80 - out * 40}px)`;
+      const c = eOutCubic(P(u, a, a + 1.0)); el.querySelector('.num').textContent = Math.max(1, Math.round(c * targets[i]));
+      el.querySelectorAll('.fill').forEach((f, j) => { const kk = eOutExpo(P(u, a + .2 + j * .12, a + 1.1 + j * .12)); f.style.width = (kk * parseFloat(f.dataset.w) * 100) + '%'; });
+    });
+    $('s5h').style.opacity = 1 - out; $('s5k').style.opacity = Math.min(parseFloat($('s5k').style.opacity || 1), 1 - out);
+  }
+
+  // ===== S6 EVERYWHERE =====
+  if (show('s6', t)) {
+    const u = t - 12.5;
+    const inn = eOutExpo(P(u, 0, .45)), out = eInExpo(P(u, 1.3, 1.5));
+    const back = eInOutQuint(P(u, .78, 1.12)); // window recedes as phones arrive
+    $('s6dark').style.transform = `translate3d(0,${(1 - inn) * 120 + back * 70}px,${(1 - inn) * -500 - back * 380}px) rotateX(${(1 - inn) * 18 + back * 14}deg) scale(${lerp(.9, .92, inn)})`;
+    $('s6dark').style.opacity = inn * lerp(1, .8, back) * (1 - out);
+    const wp = eInOutQuint(P(u, .08, .5)); // diagonal wipe dark -> light
+    const x = lerp(-260, 1700, wp);
+    $('s6lightvp').style.clipPath = `polygon(-400px 0,${x + 200}px 0,${x - 200}px 1000px,-400px 1000px)`;
+    $('s6edge').style.left = (x - 3) + 'px'; $('s6edge').style.transform = 'rotate(21.8deg)';
+    $('s6edge').style.opacity = wp > 0 && wp < 1 ? 1 : 0;
+    $('s6lab1').style.opacity = eOutCubic(P(u, .02, .2)) * (1 - eOutCubic(P(u, .3, .45)));
+    $('s6lab2').style.opacity = eOutCubic(P(u, .15, .35)) * (1 - back);
+    $('s6glow').style.opacity = wp * (1 - back * .6);
+    $('s6shade').style.opacity = back;
+    const ph = [['p1', 520, -9, .86], ['p2', 810, 0, .78], ['p3', 1100, 9, .92]];
+    ph.forEach(([id, xx, rz, d], i) => {
+      const k = eOutBack(P(u, d, d + .45)); const el = $(id);
+      el.style.left = xx + 'px'; el.style.top = (i === 1 ? 300 : 360) + 'px'; el.style.zIndex = i === 1 ? 3 : 2;
+      el.style.transform = `translateY(${(1 - k) * 900 - u * 20 + out * 200}px) rotate(${rz * k}deg) scale(${i === 1 ? 1.06 : 1})`;
+      el.style.opacity = u > d ? (1 - out) : 0;
+    });
+    reveal($('s6a'), t, 12.52, .5, 110); reveal($('s6b'), t, 12.78, .5, 110); reveal($('s6c'), t, 13.28, .5, 110);
+    [$('s6a'), $('s6b'), $('s6c')].forEach(e => { if (out > 0) e.style.opacity = 1 - out; });
+    const kc = eOutBack(P(u, 1.0, 1.28)); $('s6chip').style.opacity = clamp(kc) * (1 - out); $('s6chip').style.transform = `translateY(${(1 - kc) * 40}px) scale(${lerp(.8, 1, kc)})`;
+  }
+
+  // ===== S7 END =====
+  if (show('s7', t)) {
+    const u = t - 14.0;
+    $('s7wall').style.transform = `translate(-50%,-50%) perspective(1600px) rotateX(34deg) rotateZ(-14deg) scale(${1.25 - u * .06})`;
+    $('s7wall').style.opacity = eOutCubic(P(u, 0, .6)) * .9;
+    wall7.forEach((c, i) => { const dir = i % 2 ? 1 : -1; c.col.style.transform = `translateY(${-c.h / 2 + (u * 60 + i * 100) * dir}px)`; });
+    const spans = $('s7logo').querySelectorAll('span');
+    spans.forEach((s, i) => { const k = eOutExpo(P(u, .02 + i * .045, .5 + i * .045));
+      s.style.transform = `translateY(${(1 - k) * -120}px) scale(${lerp(1.8, 1, k)})`; s.style.opacity = k; s.style.filter = `blur(${(1 - k) * 18}px)`; });
+    $('s7logo').style.letterSpacing = lerp(.4, .14, eOutExpo(P(u, 0, 1.2))) + 'em';
+    fadeUp($('s7tag'), t, 14.3, .6, 30);
+    $('s7chips').querySelectorAll('.chip').forEach((c, i) => { const k = eOutBack(P(u, .55 + i * .08, .95 + i * .08));
+      c.style.opacity = clamp(k); c.style.transform = `translateY(${(1 - k) * 30}px) scale(${lerp(.85, 1, k)})`; });
+    fadeUp($('s7url'), t, 14.8, .5, 16);
+    $('s7g').style.opacity = .6 + .4 * Math.sin(u * 3);
+  }
+}
+
+window.ready = (async () => {
+  await document.fonts.ready;
+  const names = [...MEDIA, ...TEXT];
+  await Promise.all(names.map(n => new Promise(res => { const im = new Image(); im.onload = () => { SIZES[n] = im.naturalHeight / im.naturalWidth; res(); }; im.onerror = res; im.src = `a/${n}.jpg`; })));
+  wall2 = buildWall($('s2wall'), 7, 330, 26, 3, 8);
+  wall7 = buildWall($('s7wall'), 7, 300, 24, 9, 7);
+  await Promise.all([...document.images].map(im => im.complete ? im.decode().catch(() => {}) : new Promise(r => { im.onload = im.onerror = r; })));
+  render(0); return true;
+})();
+window.render = render;
+</script>
+</body></html>
