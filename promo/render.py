@@ -1,16 +1,19 @@
 """Render the RDVWR promo (index.html) to rdvwr_ad.mp4, frame by frame.
 
-    python promo/audio.py    # writes promo/ad_audio.wav
-    python promo/render.py   # writes promo/rdvwr_ad.mp4
+    python promo/audio.py               # writes promo/ad_audio.wav (shared soundtrack)
+    python promo/render.py              # promo/index.html -> promo/rdvwr_ad.mp4
+    python promo/render.py <dir>        # promo/<dir>/index.html -> promo/<dir>/rdvwr_<dir>.mp4
 
 Needs: playwright, imageio-ffmpeg (numpy + scipy for audio.py).
 Each frame calls window.render(t) in the page, so output is deterministic.
 """
-import asyncio, functools, http.server, os, subprocess, threading, time
+import asyncio, functools, http.server, os, subprocess, sys, threading, time
 import imageio_ffmpeg
 from playwright.async_api import async_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+PAGE_DIR = sys.argv[1].strip('/') if len(sys.argv) > 1 else ''
+OUT = os.path.join(HERE, PAGE_DIR, f"rdvwr_{PAGE_DIR.replace('-', '_')}.mp4" if PAGE_DIR else 'rdvwr_ad.mp4')
 FPS = 60
 STRETCH = 1.1           # play the 15.5 s timeline 10% slower; keep in sync with audio.py
 DUR = 15.5 * STRETCH
@@ -36,11 +39,11 @@ async def main():
         '-i', os.path.join(HERE, 'ad_audio.wav'),
         '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
         '-movflags', '+faststart', '-c:a', 'aac', '-b:a', '192k', '-shortest',
-        os.path.join(HERE, 'rdvwr_ad.mp4')], stdin=subprocess.PIPE)
+        OUT], stdin=subprocess.PIPE)
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME if os.path.exists(CHROME) else None)
         pg = await b.new_page(viewport={'width': 1920, 'height': 1080})
-        await pg.goto(f'http://127.0.0.1:{srv.server_address[1]}/index.html')
+        await pg.goto(f'http://127.0.0.1:{srv.server_address[1]}/{PAGE_DIR + "/" if PAGE_DIR else ""}index.html')
         await pg.evaluate('window.ready')
         t0 = time.time()
         for f in range(int(FPS * DUR)):
