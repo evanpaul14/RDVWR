@@ -11,7 +11,9 @@ import imageio_ffmpeg
 from playwright.async_api import async_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FPS, DUR = 60, 15.5
+FPS = 60
+STRETCH = 1.1           # play the 15.5 s timeline 10% slower; keep in sync with audio.py
+DUR = 15.5 * STRETCH
 CHROME = os.environ.get('CHROME', '/opt/pw-browsers/chromium-1194/chrome-linux/chrome')
 
 
@@ -42,7 +44,7 @@ async def main():
         await pg.evaluate('window.ready')
         t0 = time.time()
         for f in range(int(FPS * DUR)):
-            await pg.evaluate(f'render({f / FPS})')
+            await pg.evaluate(f'render({f / FPS / STRETCH})')
             ff.stdin.write(await pg.screenshot(type='jpeg', quality=95))
             if f % 150 == 0:
                 print(f, round(time.time() - t0, 1), flush=True)
