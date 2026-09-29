@@ -1600,3 +1600,51 @@ class TestJoinSubreddit:
                 html = app.test_client().get('/r/test', environ_base=self.LOCAL).get_data(as_text=True)
                 assert 'action="/actions/subscribe"' in html and 'value="sub"' in html and '>join<' in html
             assert 'action="/actions/subscribe"' not in app.test_client().get('/r/test').get_data(as_text=True)
+
+
+class TestCommenting:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+    NEW = {'id': 'zzz111', 'author': 'someone', 'body': 'hello', 'body_html': '<div class="md"><p>hello</p></div>',
+           'score': 1, 'created_utc': 1700000000, 'likes': True}
+
+    def _reddit(self):
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'json': {'errors': [], 'data': {'things': [{'kind': 't1', 'data': self.NEW}]}}}
+        return resp
+
+    def test_comment_posts_and_returns_normalized_comment(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
+            r = app.test_client().post('/api/comment', json={'parent': 't3_abc', 'text': '  hello  '},
+                                       environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200
+        cm = r.get_json()['comment']
+        assert cm['id'] == 'zzz111' and cm['author'] == 'someone' and cm['likes'] is True and cm['replies'] == []
+        assert post.call_args.args[0] == 'https://oauth.reddit.com/api/comment'
+        assert post.call_args.kwargs['data']['thing_id'] == 't3_abc' and post.call_args.kwargs['data']['text'] == 'hello'
+
+    def test_comment_validation_and_reddit_errors(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        cl = app.test_client()
+        err = MagicMock(ok=True, status_code=200)
+        err.json.return_value = {'json': {'errors': [['THREAD_LOCKED', 'That thread is locked.', 'parent']]}}
+        with a, b, c:
+            for bad in ({'parent': 't2_abc', 'text': 'x'}, {'parent': 't3_abc', 'text': '   '},
+                        {'parent': 't3_abc', 'text': 'x' * 10001}):
+                assert cl.post('/api/comment', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+            with patch.object(reddit_actions.cffi_requests, 'post', return_value=err):
+                r = cl.post('/api/comment', json={'parent': 't3_abc', 'text': 'x'}, environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 400 and 'locked' in r.get_json()['error']
+            assert cl.post('/api/comment', json={'parent': 't3_abc', 'text': 'x'},
+                           environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+
+    def test_noscript_form_comment_redirects_back(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()):
+            r = app.test_client().post('/actions/comment', data={'parent': 't1_abc', 'text': 'hi', 'next': '/r/x/comments/y'},
+                                       environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 302 and r.headers['Location'] == '/r/x/comments/y'

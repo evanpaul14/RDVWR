@@ -3,6 +3,16 @@
 
 {% import 'noscript/macros/posts.html' as posts with context %}
 
+{% macro comment_form(parent, label='comment') -%}
+  {%- if account_active() -%}
+  <form class="comment-form" method="post" action="/actions/comment">
+    <input type="hidden" name="parent" value="{{ parent }}"><input type="hidden" name="next" value="{{ current_url() }}">
+    <textarea name="text" rows="3" maxlength="10000" required placeholder="Write a {{ label }}&hellip;"></textarea>
+    <div class="comment-form-row"><button type="submit">{{ label }}</button></div>
+  </form>
+  {%- endif -%}
+{%- endmacro %}
+
 {# Deeper replies continue on the comment's own page, like the JS app. #}
 {% set THREAD_MAX_DEPTH = 4 %}
 
@@ -38,6 +48,7 @@
       </summary>
       <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
       {{ posts.vote_form('t1_' ~ c.id, c.likes) }}
+      {%- if account_active() and not deleted %}<details class="ns-reply"><summary>reply</summary>{{ comment_form('t1_' ~ c.id, 'reply') }}</details>{% endif %}
       {%- if c.replies -%}
         <div class="comment-replies">
           {%- if depth >= THREAD_MAX_DEPTH -%}

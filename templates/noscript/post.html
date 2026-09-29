@@ -13,6 +13,7 @@
       {% for s, label in COMMENT_SORT_LABELS %}{{ ui.sort_link(label, page.sort_links[s], s == page.comment_sort) }}{% endfor %}
     </div>
     <div class="pv-comments-area">
+      {{ comments.comment_form('t3_' ~ page.post.id) }}
       {% if page.comments %}
         <div class="pv-comments">
           {% if page.thread_link %}<div class="thread-banner"><a href="{{ page.thread_link }}">&larr; View full thread</a></div>{% endif %}

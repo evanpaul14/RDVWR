@@ -1,5 +1,7 @@
 import { state } from './state.js';
 import { initVotes, accountActive } from './vote.js';
+import { initCommenting } from './comment.js';
+import { renderCommentTree } from './render.js';
 import { settings, saveSettings, personalizedHomeMode, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
 import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
@@ -1152,6 +1154,7 @@ function updateFeedsActive(route) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initVotes(fmtNum);
+initCommenting(renderCommentTree);
 applySettings();
 state.currentCommentSort = settings.commentSort;
 updateFeedsBtn();

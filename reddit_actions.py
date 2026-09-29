@@ -49,3 +49,12 @@ def vote(fullname, direction):
 def subscribe(subreddit, join):
     """Join (join=True) or leave a single subreddit."""
     _post('/api/subscribe', {'action': 'sub' if join else 'unsub', 'sr_name': subreddit})
+
+
+def comment(parent, text):
+    """Reply to a post (t3_) or comment (t1_). Returns Reddit's raw data for the new comment."""
+    body = _post('/api/comment', {'thing_id': parent, 'text': text})
+    try:
+        return body['json']['data']['things'][0]['data']
+    except (KeyError, IndexError, TypeError):
+        raise ActionError("Reddit didn't return the new comment.")

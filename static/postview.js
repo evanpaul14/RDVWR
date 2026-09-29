@@ -3,6 +3,8 @@ import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
+import { accountActive } from './vote.js';
+import { commentFormHtml } from './comment.js';
 import { renderCommentTree, renderMd, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
@@ -196,8 +198,9 @@ function buildCommentsHtml(data, commentId) {
     const target = findComment(data.comments, commentId);
     if (target) rootComments = [target];
   }
-  if (!rootComments.length) return '<div class="state" style="padding:40px 0"><div class="state-icon">∅</div><div class="state-title">No comments yet</div></div>';
-  return `<div class="pv-comments">${threadBanner}${renderCommentTree(rootComments, 0, p.subreddit, p.id, p.author)}</div>`;
+  const box = accountActive() && !commentId ? commentFormHtml('t3_' + p.id) : '';
+  if (!rootComments.length) return box + '<div class="state" style="padding:40px 0"><div class="state-icon">∅</div><div class="state-title">No comments yet</div></div>';
+  return `${box}<div class="pv-comments">${threadBanner}${renderCommentTree(rootComments, 0, p.subreddit, p.id, p.author)}</div>`;
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────
