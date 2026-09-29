@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { initVotes, accountActive } from './vote.js';
-import { loadAccount, initAccountLink } from './account.js';
+import { loadAccount, leaveAccount, initAccountLink } from './account.js';
 import { initCommenting } from './comment.js';
 import { initSubmit } from './submit.js';
 import { renderCommentTree } from './render.js';
@@ -119,7 +119,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'saved') state.savedMode = false;
-  if (route.type !== 'account') state.accountMode = false;
+  if (route.type !== 'account') { state.accountMode = false; leaveAccount(); }
   if (!['home', 'subscribed', 'post'].includes(route.type)) state.subsMode = false;
   if (route.type !== 'post') { updateSubscribeBtn(route); updateFeedsActive(route); }
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
