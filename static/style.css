@@ -2105,3 +2105,11 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-form button[type="submit"]:hover { border-color:var(--ac); }
 .comment-form-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
 .ns-reply > summary { cursor:pointer; font-family:var(--mono); font-size:10px; color:var(--tx3); }
+
+/* New post modal (only available while logged in to Reddit via localhost) */
+.submit-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300; }
+.submit-modal { position:fixed; z-index:301; top:12vh; left:50%; transform:translateX(-50%); width:min(560px, calc(100vw - 32px)); display:flex; flex-direction:column; gap:10px; padding:16px; background:var(--bg2); border:1px solid var(--b2); border-radius:10px; box-shadow:var(--shadow-dropdown); }
+.submit-title { font-family:var(--serif); font-size:20px; color:var(--tx); }
+.submit-kind { display:flex; gap:14px; font-size:13px; color:var(--tx2); }
+.submit-row { display:flex; align-items:center; gap:8px; }
+.submit-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }

@@ -1,0 +1,16 @@
+{# The no-JS new-post form (routes/actions.py submit_page). Text or link posts only. #}
+<div class="ns-settings-wrap">
+  <h1 class="ns-settings-title">New post</h1>
+  {% if page.error %}<p class="ns-note" role="alert">{{ page.error }}</p>{% endif %}
+  <form class="ns-settings-form" method="post" action="/submit">
+    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Subreddit</strong></span>
+      <input class="settings-input" name="sub" value="{{ page.form.sub }}" placeholder="r/" required pattern="(r/)?[A-Za-z0-9_]{1,50}"></label>
+    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Title</strong></span>
+      <input class="settings-input" name="title" value="{{ page.form.title }}" maxlength="300" required></label>
+    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Type</strong></span>
+      <select class="settings-select" name="kind"><option value="self"{% if page.form.kind != 'link' %} selected{% endif %}>Text</option><option value="link"{% if page.form.kind == 'link' %} selected{% endif %}>Link</option></select></label>
+    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Text or link</strong><small>For a link post, put the full URL here.</small></span>
+      <textarea class="settings-input settings-textarea" name="body" rows="8" maxlength="40000">{{ page.form.body }}</textarea></label>
+    <div class="ns-settings-actions"><button type="submit">Post</button><a class="ns-settings-cancel" href="/">Cancel</a></div>
+  </form>
+</div>

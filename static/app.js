@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { initVotes, accountActive } from './vote.js';
 import { initCommenting } from './comment.js';
+import { initSubmit } from './submit.js';
 import { renderCommentTree } from './render.js';
 import { settings, saveSettings, personalizedHomeMode, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
@@ -1155,6 +1156,7 @@ function updateFeedsActive(route) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initVotes(fmtNum);
 initCommenting(renderCommentTree);
+initSubmit({ getSub: () => state.currentSub, navigate });
 applySettings();
 state.currentCommentSort = settings.commentSort;
 updateFeedsBtn();

@@ -58,3 +58,15 @@ def comment(parent, text):
         return body['json']['data']['things'][0]['data']
     except (KeyError, IndexError, TypeError):
         raise ActionError("Reddit didn't return the new comment.")
+
+
+def submit(subreddit, title, text=None, url=None):
+    """Create a text post (`text`, may be empty) or a link post (`url`) in a single subreddit.
+    Returns the new post's Reddit URL. Flair, images and video aren't supported."""
+    data = {'sr': subreddit, 'title': title, 'kind': 'link' if url else 'self', 'resubmit': 'true'}
+    data.update({'url': url} if url else {'text': text or ''})
+    body = _post('/api/submit', data, timeout=20)
+    try:
+        return body['json']['data']['url']
+    except (KeyError, TypeError):
+        raise ActionError("Reddit didn't confirm the post; check your profile before retrying.")
