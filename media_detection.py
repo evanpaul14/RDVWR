@@ -227,11 +227,16 @@ def process_post(p):
 
     # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
+    embed_height = None
     if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
         sec       = p.get("secure_media_embed") or {}
         media_url = clean_url(sec.get("media_domain_url", ""))
         if media_url:
             embed_url = media_url
+            # Tweets are portrait-ish and vary in height; a 16:9 frame cuts them off.
+            oembed = (p.get("secure_media") or {}).get("oembed") or {}
+            if "twitter" in (oembed.get("provider_name") or "").lower() or "twitter" in media_url:
+                embed_height = int(sec.get("height") or oembed.get("height") or 0) or 600
 
     imgur_album_id = None
     if not redgifs_id and not is_video and not youtube_id:
@@ -328,6 +333,7 @@ def process_post(p):
         "tiktok_id":      tiktok_id,
         "streamable_id":  streamable_id,
         "embed_url":      embed_url,
+        "embed_height":   embed_height,
         "redgifs_id":     redgifs_id,
         "redgifs_fallback_url": redgifs_fallback_url,
         "redgifs_fallback_hls": redgifs_fallback_hls,
