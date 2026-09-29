@@ -107,7 +107,7 @@ DEFAULT_SETTINGS = {
     'subSort':           _enum_env('RDVWR_DEFAULT_SUB_SORT', 'hot', SUB_SORTS),
     'subTime':           _enum_env('RDVWR_DEFAULT_SUB_TIME', 'day', TIME_FILTERS),
     'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence', COMMENT_SORTS),
-    'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed'}),
+    'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed', 'popular'}),
     'personalizedHome':  _bool_env('RDVWR_DEFAULT_PERSONALIZED_HOME', True),
     'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
     'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
