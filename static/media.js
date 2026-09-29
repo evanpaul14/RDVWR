@@ -608,7 +608,7 @@ export function mediaHtml(p, full = false) {
   } else if (p.streamable_id) {
     html = `<div class="${vc}"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
   } else if (p.embed_url) {
-    html = `<div class="${vc}"><iframe src="${escHtml(p.embed_url)}" allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+    html = `<div class="${vc}"><iframe src="${escHtml(p.embed_url)}"${p.embed_height ? ` style="aspect-ratio:auto;height:${+p.embed_height}px"` : ''} allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   } else if (p.gif_url) {
     html = p.gif_is_video
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
