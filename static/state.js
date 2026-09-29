@@ -37,6 +37,8 @@ export const state = {
 
   // Profile
   profileMode: false,
+  accountMode: false,
+  accountTab: 'posts',
   profileTab: 'posts',
   profileSort: 'new',
   profileTime: 'all',

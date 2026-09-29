@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { initVotes, accountActive } from './vote.js';
+import { loadAccount, initAccountLink } from './account.js';
 import { initCommenting } from './comment.js';
 import { initSubmit } from './submit.js';
 import { renderCommentTree } from './render.js';
@@ -118,6 +119,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'saved') state.savedMode = false;
+  if (route.type !== 'account') state.accountMode = false;
   if (!['home', 'subscribed', 'post'].includes(route.type)) state.subsMode = false;
   if (route.type !== 'post') { updateSubscribeBtn(route); updateFeedsActive(route); }
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
@@ -187,6 +189,12 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       state.searchMode = false;
       state.profileMode = false;
       await loadWikiPage(route.sub, route.page);
+      break;
+    case 'account':
+      closePostView();
+      closeSidebar();
+      state.duplicatesMode = false;
+      await loadAccount(route.tab);
       break;
     case 'saved':
       closePostView();
@@ -299,6 +307,8 @@ function retryFeedLoad() {
     if (state.searchType === 'communities') loadCommunityResults(state.searchQuery);
     else if (state.searchType === 'users')  loadUserResults(state.searchQuery);
     else loadSearchResults(state.searchQuery, state.searchSort, state.searchTime);
+  } else if (state.accountMode) {
+    loadAccount(state.accountTab);
   } else if (state.profileMode) {
     loadProfileTab(state.profileUser, state.profileTab, state.profileSort, state.profileTime);
   } else if (state.multiMode) {
@@ -1166,6 +1176,7 @@ function updateFeedsActive(route) {
 initVotes(fmtNum);
 initCommenting(renderCommentTree);
 initSubmit({ getSub: () => state.currentSub, navigate });
+initAccountLink();
 applySettings();
 state.currentCommentSort = settings.commentSort;
 updateFeedsBtn();

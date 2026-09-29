@@ -1913,3 +1913,63 @@ class TestImageCommentFinishes:
         placeholder = {'name': 't1_c1', 'body': '*Processing img abc...*'}
         with patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', return_value=MockResponse({'data': {'children': []}})):
             assert reddit_actions._finished_comment(placeholder, tries=3) == placeholder
+
+
+class TestAccountPage:
+    LOCAL, SAME = TestVoting.LOCAL, TestVoting.SAME
+
+    def _ok(self, body=None):
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = body or {}
+        return resp
+
+    def test_edit_and_delete_post_to_reddit(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._ok()) as post:
+            cl = app.test_client()
+            assert cl.post('/api/account/edit', json={'id': 't1_abc', 'text': ' new '}, environ_base=self.LOCAL, headers=self.SAME).status_code == 200
+            assert post.call_args.args[0] == 'https://oauth.reddit.com/api/editusertext'
+            assert post.call_args.kwargs['data']['thing_id'] == 't1_abc' and post.call_args.kwargs['data']['text'] == 'new'
+            assert cl.post('/api/account/delete', json={'id': 't3_abc'}, environ_base=self.LOCAL, headers=self.SAME).status_code == 200
+            assert post.call_args.args[0] == 'https://oauth.reddit.com/api/del'
+            for bad in ({'id': 't5_abc', 'text': 'x'}, {'id': 't1_abc', 'text': ' '}):
+                assert cl.post('/api/account/edit', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+
+    def test_only_for_local_logged_in_requests(self, tmp_path):
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c:
+            cl = app.test_client()
+            for path in ('/api/account', '/api/account/posts', '/account'):
+                assert cl.get(path, environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+            assert cl.post('/api/account/delete', json={'id': 't3_abc'}, environ_base=self.LOCAL,
+                           headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
+        assert app.test_client().get('/account', environ_base=self.LOCAL).status_code == 404   # login disabled
+
+    def test_avatar_upload_and_removal(self, tmp_path):
+        import io
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._ok({'errors': []})) as post:
+            cl = app.test_client()
+            r = cl.post('/api/account/avatar', data={'file': (io.BytesIO(b'png'), 'me.png', 'image/png')},
+                        environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 200 and post.call_args.args[0] == 'https://oauth.reddit.com/r/u_someone/api/upload_sr_img'
+            assert post.call_args.kwargs['data']['upload_type'] == 'icon' and post.call_args.kwargs['multipart'] is not None
+            r = cl.post('/api/account/avatar', data={'file': (io.BytesIO(b'gif'), 'me.gif', 'image/gif')},
+                        environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 415
+            assert cl.post('/api/account/avatar/remove', environ_base=self.LOCAL, headers=self.SAME).status_code == 200
+            assert post.call_args.args[0].endswith('/r/u_someone/api/delete_sr_icon')
+
+    def test_page_lists_items_with_full_post_text(self, tmp_path):
+        from routes import page_data
+        a, b, c = TestVoting()._login(tmp_path)
+        posts = {'posts': [{'id': 'p1', 'title': 'Mine', 'subreddit': 'test', 'score': 3, 'num_comments': 1,
+                            'created_utc': 0, 'is_self': True, 'selftext': 'cut…'}], 'after': None}
+        with a, b, c, patch.object(page_data, 'fetch_user_about', return_value={'name': 'someone', 'icon': '', 'karma_post': 1,
+                                                                                 'karma_comment': 2, 'created_utc': 0}), \
+                patch.object(page_data, 'fetch_user_posts', return_value=posts), \
+                patch.object(page_data, 'fetch_full_texts', return_value={'t3_p1': 'the whole text'}):
+            html = app.test_client().get('/account', environ_base=self.LOCAL).get_data(as_text=True)
+        assert 'Mine' in html and 'the whole text' in html and 'value="t3_p1"' in html and '/auth/reddit/logout' in html

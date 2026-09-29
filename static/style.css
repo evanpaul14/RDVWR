@@ -2151,3 +2151,35 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-attach:hover { color:var(--tx); }
 .submit-modal [hidden] { display:none !important; }
 .ns-settings-row--field { flex-direction:column; align-items:stretch; cursor:default; }
+
+/* Account page: the logged-in Reddit account's own profile (JS: account.js, no-JS: noscript/account.html) */
+.account-link { color:var(--tx2); }
+.acct-panel, .acct-list, .acct-tabs { max-width:720px; margin:0 auto; padding:0 20px; box-sizing:border-box; }
+.acct-panel { padding-top:14px; padding-bottom:6px; }
+.acct-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:6px 0; }
+.acct-row form { margin:0; }
+.acct-row .settings-action-btn { text-decoration:none; }
+label.settings-action-btn { cursor:pointer; }
+.acct-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
+.acct-tabs { display:flex; gap:2px; border-bottom:1px solid var(--b); padding-top:6px; }
+.acct-list { display:flex; flex-direction:column; padding-bottom:20px; }
+.acct-item { padding:12px 0; border-bottom:1px solid var(--b); display:flex; flex-direction:column; gap:4px; }
+.acct-item-title { color:var(--tx); font-size:15px; text-decoration:none; }
+.acct-item-title:hover { color:var(--ac); }
+.acct-item-meta { font-family:var(--mono); font-size:10px; color:var(--tx3); }
+.acct-item-meta a { color:var(--tx2); text-decoration:none; }
+.acct-item-meta a:hover { color:var(--ac); }
+.acct-item-text { font-size:13px; line-height:1.5; color:var(--tx2); white-space:pre-wrap; overflow-wrap:anywhere; max-height:9em; overflow:hidden; }
+.acct-item-text[hidden] { display:none; }
+.acct-edit { display:flex; flex-direction:column; gap:8px; margin:4px 0; }
+.acct-edit textarea, .acct-manage textarea { width:100%; box-sizing:border-box; font-family:var(--sans); font-size:14px; line-height:1.5; height:auto; word-break:normal; }
+.acct-manage { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.acct-manage details { font-family:var(--mono); font-size:10px; }
+.acct-manage details[open] { flex-basis:100%; }
+.acct-manage summary { cursor:pointer; color:var(--tx3); }
+.acct-manage summary:hover, .acct-link:hover { color:var(--tx); }
+.acct-manage form { display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:6px; }
+.acct-link { background:none; border:none; padding:0; cursor:pointer; font-family:var(--mono); font-size:10px; color:var(--tx3); }
+.acct-danger, .acct-link.acct-danger { color:#ff6b6b; }
+.acct-danger:hover { border-color:#ff6b6b; }
+.acct-more { display:block; margin:0 auto 24px; }

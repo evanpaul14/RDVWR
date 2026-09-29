@@ -3,7 +3,7 @@ Every call needs a request the login may be used for (a local one, see
 reddit_login.request_token) and raises ActionError otherwise."""
 import json
 import time
-from curl_cffi import requests as cffi_requests
+from curl_cffi import CurlMime, requests as cffi_requests
 import reddit_login
 from reddit_client import PROXIES, reddit_get
 
@@ -17,13 +17,23 @@ class ActionError(Exception):
         self.status = status
 
 
-def _post(path, data=None, *, json_body=None, timeout=15):
-    """POST to Reddit's API as the account: form `data`, or `json_body` for the few JSON endpoints."""
+def _post(path, data=None, *, json_body=None, timeout=15, raw=False):
+    """POST to Reddit's API as the account: form `data`, or `json_body` for the few JSON endpoints.
+    A `_file` entry in `data` (filename, mimetype, bytes) makes it a multipart upload; `raw` sends
+    `data` as is, for the older endpoints that don't take api_type."""
     token = reddit_login.request_token()
     if not token:
         raise ActionError('Not logged in to Reddit.', 401)
-    body = {'json': {**json_body, 'api_type': 'json', 'raw_json': 1}} if json_body is not None else \
-           {'data': {**data, 'api_type': 'json', 'raw_json': 1}}
+    if json_body is not None:
+        body = {'json': {**json_body, 'api_type': 'json', 'raw_json': 1}}
+    else:
+        data = dict(data) if raw else {**data, 'api_type': 'json', 'raw_json': 1}
+        upload = data.pop('_file', None)
+        body = {'data': data}
+        if upload:
+            mime = CurlMime()
+            mime.addpart(name='file', filename=upload[0], content_type=upload[1], data=upload[2])
+            body['multipart'] = mime
     try:
         r = cffi_requests.post(API + path, headers={'Authorization': f'Bearer {token}'},
                                impersonate='chrome131', proxies=PROXIES, timeout=timeout, **body)
@@ -53,6 +63,34 @@ def vote(fullname, direction):
 def subscribe(subreddit, join):
     """Join (join=True) or leave a single subreddit."""
     _post('/api/subscribe', {'action': 'sub' if join else 'unsub', 'sr_name': subreddit})
+
+
+def edit(fullname, text):
+    """Replace the text of one of the account's own text posts (t3_) or comments (t1_)."""
+    _post('/api/editusertext', {'thing_id': fullname, 'text': text})
+
+
+def delete(fullname):
+    """Delete one of the account's own posts or comments."""
+    _post('/api/del', {'id': fullname})
+
+
+def _profile_icon(path, **fields):
+    """Send a profile-picture change to the account's own profile (its user subreddit, u_<name>)."""
+    body = _post(f'/r/u_{reddit_login.username()}/api/{path}', fields, raw=True)
+    errs = body.get('errors') if isinstance(body, dict) else None
+    if errs:
+        raise ActionError(f"Reddit refused the picture: {errs[0] if isinstance(errs[0], str) else ' '.join(map(str, errs[0]))}", 400)
+
+
+def set_avatar(filename, mimetype, blob):
+    """Upload a new profile picture (JPEG or PNG)."""
+    _profile_icon('upload_sr_img', upload_type='icon', name='icon', img_type='png' if mimetype == 'image/png' else 'jpg',
+                  _file=(filename, mimetype, blob))
+
+
+def remove_avatar():
+    _profile_icon('delete_sr_icon')
 
 
 def comment(parent, text, media_id=None):

@@ -22,6 +22,8 @@ from routes.comments import fetch_comments, fetch_morechildren
 from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments
 from routes.search import fetch_search_posts, fetch_search_communities, fetch_search_users
 from routes.live import fetch_live_thread
+from routes.account import fetch_full_texts
+import reddit_login
 from reddit_html import sanitize_reddit_html
 
 SSR_TIMEOUT = 6   # shorter than the /api/* endpoints' — a page shouldn't hang on Reddit
@@ -96,6 +98,25 @@ def build_subscribed(sort, t, after):
     return _page("home", "Subscribed", {
         "nav": _feed_nav("/subscribed", sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err or sub_err,
+    })
+
+
+def build_account(tab, after):
+    """The logged-in account's own profile: its posts or comments, with edit/delete controls
+    (routes/account.py) and the profile-picture and sign-out forms."""
+    name = reddit_login.username()
+    tab = tab if tab in ('posts', 'comments') else 'posts'
+    about, _ = _attempt(fetch_user_about, name)
+    data, err = _attempt(fetch_user_posts if tab == 'posts' else fetch_user_comments, name, 'new', '', after)
+    items = data[tab] if data else []
+    full = {}   # listings cut post text short; the edit boxes need all of it
+    if tab == 'posts' and items:
+        full, _ = _attempt(fetch_full_texts, [f"t3_{p['id']}" for p in items if p.get('is_self')])
+    return _page("account", "Your profile", {
+        "username": name, "about": about, "tab": tab, "error": err, "full_texts": full or {},
+        "tab_links": [(t, page_url("/account", tab=t if t != 'posts' else '')) for t in ('posts', 'comments')],
+        "items": items,
+        "next_url": page_url("/account", tab=tab if tab != 'posts' else '', after=data["after"]) if data and data["after"] else None,
     })
 
 
