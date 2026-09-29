@@ -20,19 +20,16 @@ const avatarInner = (icon, cls) => icon
   ? `<img class="${cls}" src="${escHtml(icon)}" alt="" data-onerror="hide">`
   : `<span class="${cls} acct-avatar-letter">${escHtml((me() || '?')[0].toUpperCase())}</span>`;
 
-/** The header link to the account page: just the profile picture. */
+/** The header link to the account page: a generic profile icon (the real picture is on the page itself). */
 export function initAccountLink() {
   const link = document.getElementById('account-btn');
   if (!link || !accountActive()) return;
-  link.innerHTML = avatarInner('', 'acct-avatar');
+  link.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
   link.hidden = false;
-  fetchAbout().then(d => setAvatars(d?.icon));
 }
 
-/** Show `icon` everywhere the account's picture appears (header, profile page). */
+/** Show `icon` as the account's picture on the profile page. */
 function setAvatars(icon) {
-  const link = document.getElementById('account-btn');
-  if (link) link.innerHTML = avatarInner(icon, 'acct-avatar');
   const big = feed.querySelector('.acct-avatar-slot');
   if (big) big.innerHTML = avatarInner(icon, 'acct-avatar acct-avatar-lg');
 }
