@@ -162,9 +162,9 @@ const _gifObserver = new IntersectionObserver((entries) => {
 // Animated <img> gifs (giphy embeds in comments) have no play/pause API and decode
 // every frame forever once loaded, even off-screen — a thread with many gif reactions
 // tanks scroll performance. Drop the src when scrolled away and restore it on return.
-// These <img> tags have no reserved size, so dropping the src collapses them — done
-// on a short delay (cancelled if the gif re-enters view first) so a quick scroll pass
-// doesn't collapse-and-reflow the thread out from under the reader.
+// These <img> tags have no reserved size, so dropping the src would collapse them —
+// the rendered size is pinned first, and the unload is delayed (cancelled if the gif
+// re-enters view first) so a quick scroll pass doesn't reflow the thread.
 const _imgGifUnloadTimers = new WeakMap();
 const _IMG_GIF_UNLOAD_DELAY = 1500;
 const _imgGifObserver = new IntersectionObserver((entries) => {
@@ -173,11 +173,18 @@ const _imgGifObserver = new IntersectionObserver((entries) => {
     if (entry.isIntersecting) {
       const t = _imgGifUnloadTimers.get(img);
       if (t) { clearTimeout(t); _imgGifUnloadTimers.delete(img); }
-      if (!img.src && img.dataset.gifSrc) img.src = img.dataset.gifSrc;
+      if (!img.src && img.dataset.gifSrc) {
+        // Keep the pinned size until the gif has decoded, so it doesn't collapse mid-reload.
+        img.addEventListener('load', () => { img.style.width = img.style.height = ''; }, { once: true });
+        img.src = img.dataset.gifSrc;
+      }
     } else if (img.src && !_imgGifUnloadTimers.has(img)) {
       _imgGifUnloadTimers.set(img, setTimeout(() => {
         _imgGifUnloadTimers.delete(img);
         if (img.src) {
+          // Pin the rendered size so removing the src doesn't collapse the img and shift the thread.
+          const r = img.getBoundingClientRect();
+          if (r.width && r.height) { img.style.width = `${r.width}px`; img.style.height = `${r.height}px`; }
           img.dataset.gifSrc = img.src;
           img.removeAttribute('src');
         }
