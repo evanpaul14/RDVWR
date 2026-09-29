@@ -3,7 +3,7 @@ import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
-import { accountActive } from './vote.js';
+import { accountActive, voteCtlHtml } from './vote.js';
 import { commentFormHtml } from './comment.js';
 import { renderCommentTree, renderMd, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
@@ -371,7 +371,9 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
         ${renderAwards(p.awards)}
       </div>` : `
       <div class="pv-meta">
-        <span class="up">▲ ${fmtNum(p.score)}</span>
+        ${accountActive()
+          ? voteCtlHtml('t3_' + p.id, p.likes, p.score, `<span class="up vote-score">${fmtNum(p.score)}</span>`)
+          : `<span class="up">▲ ${fmtNum(p.score)}</span>`}
         <span>${p.upvote_ratio}% upvoted</span>
         <a class="meta-item link" href="/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>

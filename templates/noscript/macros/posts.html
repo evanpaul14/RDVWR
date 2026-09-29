@@ -304,7 +304,7 @@
   {%- if b | trim %}<div class="post-meta-top" style="margin-bottom:10px">{{ b }}</div>{% endif %}
   <h1 class="pv-title{{ ' is-italic' if p.is_self }}">{{ p.title }}</h1>
   <div class="pv-meta">
-    <span class="up">&#9650; {{ p.score | fmtnum }}</span>
+    <span class="up">&#9650; {{ p.score | fmtnum }}</span>{{ vote_form('t3_' ~ p.id, p.likes) }}
     {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
     <a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>
     <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>{% endif %}</span>
