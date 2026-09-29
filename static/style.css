@@ -1594,6 +1594,7 @@ a.comment-time:hover { color:var(--ac); }
   transition:color .15s,background .15s;
 }
 .settings-btn:hover { color:var(--tx2); background:var(--bg3); }
+.settings-btn[hidden] { display:none; }
 
 /* ── Settings panel ──────────────────────────────────────────────────────── */
 .settings-overlay {
