@@ -17,6 +17,9 @@ const subInput    = document.getElementById('subreddit-input');
 const pvSubInput  = document.getElementById('pv-subreddit-input');
 const mainOpen    = document.getElementById('main-open');
 
+// Logged in, the app does everything itself, so there's no "open on Reddit" link.
+mainOpen.hidden = accountActive();
+
 export function setMainOpen(href) { mainOpen.href = href || '#'; }
 
 mainOpen.addEventListener('click', e => {

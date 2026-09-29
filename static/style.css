@@ -932,6 +932,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   transition:color .15s;
 }
 .main-open:hover { color:var(--ac); }
+.main-open[hidden] { display:none; }
 .pv-open {
   font-family:var(--mono); font-size:11px; color:var(--tx3);
   text-decoration:none; letter-spacing:.04em; white-space:nowrap;
