@@ -19,6 +19,7 @@ import time
 from curl_cffi import requests as cffi_requests
 from flask import has_request_context, request
 import reddit_client
+import reddit_owner
 from reddit_client import PROXIES
 
 log = logging.getLogger(__name__)
@@ -93,8 +94,13 @@ _FORWARD_HEADERS = ('X-Forwarded-For', 'X-Real-IP', 'Forwarded')
 
 
 def is_local_request():
-    """True only for a request straight from this machine (not via a reverse proxy)."""
-    if not has_request_context() or any(h in request.headers for h in _FORWARD_HEADERS):
+    """True for a request straight from this machine (not via a reverse proxy), or one from a
+    browser that holds the owner cookie (reddit_owner.py)."""
+    if not has_request_context():
+        return False
+    if reddit_owner.is_owner():
+        return True
+    if any(h in request.headers for h in _FORWARD_HEADERS):
         return False
     try:
         return ipaddress.ip_address(request.remote_addr or '').is_loopback
