@@ -21,6 +21,7 @@ def filter_nsfw(posts):
 
 YOUTUBE_RE      = re.compile(r'(?:youtube\.com/watch.*?[?&]v=|youtu\.be/|youtube\.com/shorts/)([a-zA-Z0-9_-]{11})')
 REDGIFS_RE      = re.compile(r'redgifs\.com/(?:watch|ifr|embed)/([a-zA-Z0-9]+)|redgifs\.com[^"]*[?&]id=([a-zA-Z0-9]+)', re.I)
+TWEET_RE        = re.compile(r'(?:twitter|x)\.com/\w+/status/(\d+)', re.I)
 TIKTOK_RE       = re.compile(r'tiktok\.com/player/v1/(\d+)', re.I)
 VREDDDIT_RE     = re.compile(r'(https://v\.redd\.it/[^/?]+)')
 GIFV_RE         = re.compile(r'\.gifv$', re.I)
@@ -228,6 +229,7 @@ def process_post(p):
     # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
     embed_height = None
+    tweet_id = None
     if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
         sec       = p.get("secure_media_embed") or {}
         media_url = clean_url(sec.get("media_domain_url", ""))
@@ -237,6 +239,9 @@ def process_post(p):
             oembed = (p.get("secure_media") or {}).get("oembed") or {}
             if "twitter" in (oembed.get("provider_name") or "").lower() or "twitter" in media_url:
                 embed_height = int(sec.get("height") or oembed.get("height") or 0) or 600
+                m = TWEET_RE.search(p.get("url", ""))
+                if m:
+                    tweet_id = m.group(1)
 
     imgur_album_id = None
     if not redgifs_id and not is_video and not youtube_id:
@@ -334,6 +339,7 @@ def process_post(p):
         "streamable_id":  streamable_id,
         "embed_url":      embed_url,
         "embed_height":   embed_height,
+        "tweet_id":       tweet_id,
         "redgifs_id":     redgifs_id,
         "redgifs_fallback_url": redgifs_fallback_url,
         "redgifs_fallback_hls": redgifs_fallback_hls,
