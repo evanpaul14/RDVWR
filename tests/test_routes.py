@@ -1896,7 +1896,7 @@ class TestMediaAndFlair:
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(posting, 'fetch_flairs', return_value={'flairs': [{'id': 'aaaaaaaa-1', 'text': 'News', 'editable': False}], 'required': True}):
             html = app.test_client().get('/submit?sub=test&title=Keep', environ_base=self.LOCAL).get_data(as_text=True)
-        assert 'value="aaaaaaaa-1"' in html and 'Choose a flair' in html and 'value="Keep"' in html and 'enctype="multipart/form-data"' in html
+        assert 'value="aaaaaaaa-1"' in html and 'required' in html and 'No flair' not in html and 'value="Keep"' in html and 'enctype="multipart/form-data"' in html
 
 
 class TestImageCommentFinishes:

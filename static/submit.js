@@ -6,24 +6,25 @@ import { accountActive } from './vote.js';
 const MODAL = `
 <div class="submit-overlay" id="submit-overlay"></div>
 <form class="submit-modal" id="submit-modal" role="dialog" aria-modal="true" aria-label="New post">
-  <div class="submit-title">New post</div>
-  <input name="sub" class="settings-input" placeholder="r/subreddit" autocomplete="off" required>
-  <input name="title" class="settings-input" placeholder="Title" maxlength="300" required>
-  <div class="submit-flair" hidden>
-    <select name="flair_id" class="settings-select"></select>
-    <input name="flair_text" class="settings-input" placeholder="Custom flair text" maxlength="64" hidden>
-  </div>
-  <div class="submit-kind">
-    <label><input type="radio" name="kind" value="self" checked> Text</label>
-    <label><input type="radio" name="kind" value="link"> Link</label>
-    <label><input type="radio" name="kind" value="media"> Image / video</label>
+  <div class="submit-head"><span class="submit-title">New post</span><button type="button" class="submit-x" data-close aria-label="Close">✕</button></div>
+  <label class="submit-field"><span class="submit-label">Community</span>
+    <span class="submit-prefixed"><span aria-hidden="true">r /</span><input name="sub" class="settings-input" placeholder="subreddit" autocomplete="off" autocapitalize="off" spellcheck="false" required></span></label>
+  <label class="submit-field"><span class="submit-label">Title</span>
+    <input name="title" class="settings-input" maxlength="300" required></label>
+  <div class="submit-field submit-flair" hidden><span class="submit-label">Flair</span><div class="chips" data-flair-chips></div>
+    <input name="flair_text" class="settings-input" placeholder="Custom flair text" maxlength="64" hidden></div>
+  <div class="seg" role="radiogroup" aria-label="Post type">
+    <label><input type="radio" name="kind" value="self" checked><span>Text</span></label>
+    <label><input type="radio" name="kind" value="link"><span>Link</span></label>
+    <label><input type="radio" name="kind" value="media"><span>Image / video</span></label>
   </div>
   <textarea name="body" class="settings-input settings-textarea" rows="7" maxlength="40000" placeholder="Text (optional)"></textarea>
-  <div class="submit-media" hidden>
+  <label class="file-drop submit-media" hidden>
     <input type="file" name="files" accept="image/*,video/mp4,video/quicktime" multiple>
-    <div class="submit-media-hint">One image or video, or several images for a gallery.</div>
-  </div>
-  <div class="submit-row"><button type="submit" class="settings-action-btn">Post</button><button type="button" class="settings-action-btn" data-close>Cancel</button><span class="submit-msg" role="status"></span></div>
+    <span class="file-drop-title">Choose images or a video</span>
+    <span class="file-drop-hint">One image or video, or several images for a gallery. Drop them here or click.</span>
+  </label>
+  <div class="submit-row"><button type="submit" class="submit-go">Post</button><button type="button" class="settings-action-btn" data-close>Cancel</button><span class="submit-msg" role="status"></span></div>
 </form>`;
 
 async function jsonOrError(res, what) {
@@ -49,7 +50,9 @@ export function initSubmit({ getSub, navigate }) {
     const form = root.querySelector('#submit-modal');
     const msg = form.querySelector('.submit-msg');
     const flairBox = form.querySelector('.submit-flair');
-    const flairSel = form.elements.flair_id;
+    const chipsBox = form.querySelector('[data-flair-chips]');
+    const flairId = () => form.elements.flair_id?.value || '';
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     let flairs = [], flairRequired = false, flairFor = '';
 
     async function loadFlairs() {
@@ -61,14 +64,16 @@ export function initSubmit({ getSub, navigate }) {
         const data = await jsonOrError(await fetch(`/api/r/${encodeURIComponent(sub)}/flairs`), 'Flair lookup');
         if (flairFor !== sub) return;
         flairs = data.flairs; flairRequired = data.required;
-        flairSel.innerHTML = `<option value="">${flairRequired ? 'Choose a flair (required)' : 'No flair'}</option>` +
-          flairs.map(f => `<option value="${f.id}">${(f.text || '(blank)').replace(/</g, '&lt;')}</option>`).join('');
+        const chip = (id, text, style = '', on = false) =>
+          `<label class="chip"><input type="radio" name="flair_id" value="${esc(id)}"${on ? ' checked' : ''}><span${style ? ` style="${esc(style)}"` : ''}>${esc(text)}</span></label>`;
+        chipsBox.innerHTML = (flairRequired ? '' : chip('', 'No flair', '', true)) +
+          flairs.map(f => chip(f.id, f.text || '(blank)', f.background ? `background:${f.background};color:${f.text_color === 'light' ? '#fff' : '#111'}` : '')).join('');
         flairBox.hidden = !flairs.length;
         syncFlairText();
       } catch { flairBox.hidden = true; }
     }
     function syncFlairText() {
-      const f = flairs.find(x => x.id === flairSel.value);
+      const f = flairs.find(x => x.id === flairId());
       form.elements.flair_text.hidden = !f?.editable;
       form.elements.flair_text.value = f?.editable ? f.text : '';
     }
@@ -86,12 +91,27 @@ export function initSubmit({ getSub, navigate }) {
       form.elements.body.rows = kind === 'link' ? 2 : 7;
     };
     form.addEventListener('change', e => {
-      if (e.target === flairSel) syncFlairText();
+      if (e.target.name === 'flair_id') syncFlairText();
+      else if (e.target.name === 'files') showFiles();
       else if (e.target.name === 'kind') syncKind();
     });
     form.elements.sub.addEventListener('change', loadFlairs);
     root.querySelector('#submit-overlay').addEventListener('click', close);
-    form.querySelector('[data-close]').addEventListener('click', close);
+    form.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+
+    const drop = form.querySelector('.file-drop');
+    const showFiles = () => {
+      const files = [...form.elements.files.files];
+      drop.querySelector('.file-drop-title').textContent = !files.length ? 'Choose images or a video'
+        : files.length === 1 ? files[0].name : `${files.length} files selected`;
+    };
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('over');
+      if (e.dataTransfer.files.length) { form.elements.files.files = e.dataTransfer.files; showFiles(); }
+    });
     form.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 
     form.addEventListener('submit', async e => {
@@ -113,11 +133,11 @@ export function initSubmit({ getSub, navigate }) {
             media.push(await jsonOrError(await fetch('/api/upload', { method: 'POST', body: fd }), 'Upload'));
           }
         }
-        if (flairRequired && !flairSel.value) throw new Error('This subreddit requires a flair.');
+        if (flairRequired && !flairId()) throw new Error('This subreddit requires a flair.');
         msg.textContent = 'Posting…';
         const data = await jsonOrError(await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sub: form.elements.sub.value, title: form.elements.title.value, kind, media,
-            body: form.elements.body.value, flair_id: flairSel.value, flair_text: form.elements.flair_text.value }) }), 'Post');
+            body: form.elements.body.value, flair_id: flairId(), flair_text: form.elements.flair_text.value }) }), 'Post');
         close();
         navigate(data.path);
       } catch (err) {
