@@ -13,14 +13,28 @@ const ctxInfo    = document.getElementById('ctx-info');
 const subInput   = document.getElementById('subreddit-input');
 const pvSubInput = document.getElementById('pv-subreddit-input');
 
+const PENCIL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
 const me = () => window.__REDDIT_LOGIN__?.username;
 
-/** The header link to the account page. */
+const avatarInner = (icon, cls) => icon
+  ? `<img class="${cls}" src="${escHtml(icon)}" alt="" data-onerror="hide">`
+  : `<span class="${cls} acct-avatar-letter">${escHtml((me() || '?')[0].toUpperCase())}</span>`;
+
+/** The header link to the account page: just the profile picture. */
 export function initAccountLink() {
   const link = document.getElementById('account-btn');
   if (!link || !accountActive()) return;
-  link.textContent = `u/${me()}`;
+  link.innerHTML = avatarInner('', 'acct-avatar');
   link.hidden = false;
+  fetchAbout().then(d => setAvatars(d?.icon));
+}
+
+/** Show `icon` everywhere the account's picture appears (header, profile page). */
+function setAvatars(icon) {
+  const link = document.getElementById('account-btn');
+  if (link) link.innerHTML = avatarInner(icon, 'acct-avatar');
+  const big = feed.querySelector('.acct-avatar-slot');
+  if (big) big.innerHTML = avatarInner(icon, 'acct-avatar acct-avatar-lg');
 }
 
 async function api(path, body) {
@@ -33,12 +47,19 @@ async function api(path, body) {
 
 function panelHtml() {
   return `<div class="acct-panel">
-    <div class="acct-row">
-      <span class="submit-label">Profile picture</span>
-      <label class="settings-action-btn">Change<input type="file" data-acct-avatar accept="image/jpeg,image/png" hidden></label>
-      <button type="button" class="settings-action-btn" data-acct-avatar-remove>Remove</button>
-      <a class="settings-action-btn" href="/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">Public profile</a>
-      <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+    <div class="acct-row acct-head">
+      <div class="acct-avatar-wrap">
+        <span class="acct-avatar-slot">${avatarInner('', 'acct-avatar acct-avatar-lg')}</span>
+        <button type="button" class="acct-pencil" data-acct-pencil aria-label="Change profile picture" aria-haspopup="menu" aria-expanded="false">${PENCIL}</button>
+        <div class="acct-menu" role="menu" hidden>
+          <label class="acct-menu-item" role="menuitem">Upload new picture<input type="file" data-acct-avatar accept="image/jpeg,image/png" hidden></label>
+          <button type="button" class="acct-menu-item" role="menuitem" data-acct-avatar-remove>Remove picture</button>
+        </div>
+      </div>
+      <div class="acct-head-links">
+        <a class="settings-action-btn" href="/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">Public profile</a>
+        <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+      </div>
     </div>
     <div class="acct-msg" role="status"></div>
   </div>`;
@@ -76,8 +97,8 @@ async function fetchAbout() {
 }
 
 function renderAbout(d) {
-  document.getElementById('ctx-icon-wrap').innerHTML = d?.icon
-    ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" data-onerror="hide">` : '';
+  document.getElementById('ctx-icon-wrap').innerHTML = '';
+  setAvatars(d?.icon);
   document.getElementById('ctx-title').textContent = `u/${me()}`;
   document.getElementById('ctx-stats').innerHTML = d
     ? `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}` : '';
@@ -133,6 +154,13 @@ feed.addEventListener('click', async e => {
     }
     return;
   }
+  const menu = feed.querySelector('.acct-menu');
+  const pencil = e.target.closest('[data-acct-pencil]');
+  if (menu) {
+    menu.hidden = pencil ? !menu.hidden : true;
+    feed.querySelector('[data-acct-pencil]')?.setAttribute('aria-expanded', String(!menu.hidden));
+  }
+  if (pencil) return;
   const moreBtn = e.target.closest('[data-acct-more]');
   if (moreBtn) { moreBtn.disabled = true; loadItems(state.accountTab, moreBtn.dataset.acctMore); return; }
 

@@ -8,22 +8,29 @@
     <span>{{ about.karma_post | fmtnum }}</span> post karma &middot; <span>{{ about.karma_comment | fmtnum }}</span> comment karma
     {%- if about.created_utc %} &middot; joined {{ about.created_utc | fmtdate }}{% endif -%}
   {%- endset %}
-  {{ ui.ctx_header('u/' ~ about.name, stats, about.icon) }}
+  {{ ui.ctx_header('u/' ~ about.name, stats) }}
 {% else %}
   {{ ui.ctx_header('u/' ~ page.username) }}
 {% endif %}
 
 <div class="acct-panel">
-  <form class="acct-row" method="post" action="/actions/account/avatar" enctype="multipart/form-data">
-    <input type="hidden" name="next" value="{{ next }}">
-    <span class="submit-label">Profile picture</span>
-    <input class="file-input" type="file" name="file" accept="image/jpeg,image/png">
-    <button class="settings-action-btn" type="submit">Upload</button>
-    <button class="settings-action-btn" type="submit" name="remove" value="1" formnovalidate>Remove</button>
-  </form>
-  <div class="acct-row">
-    <a class="settings-action-btn" href="/user/{{ page.username }}">Public profile</a>
-    <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+  <div class="acct-row acct-head">
+    <div class="acct-avatar-wrap">
+      {% if about and about.icon %}<img class="acct-avatar acct-avatar-lg" src="{{ about.icon }}" alt="">{% else %}<span class="acct-avatar acct-avatar-lg acct-avatar-letter">{{ page.username[0] | upper }}</span>{% endif %}
+      <details class="acct-avatar-menu">
+        <summary class="acct-pencil" aria-label="Change profile picture"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></summary>
+        <form class="acct-menu" method="post" action="/actions/account/avatar" enctype="multipart/form-data">
+          <input type="hidden" name="next" value="{{ next }}">
+          <input class="file-input" type="file" name="file" accept="image/jpeg,image/png">
+          <button class="settings-action-btn" type="submit">Upload new picture</button>
+          <button class="settings-action-btn" type="submit" name="remove" value="1" formnovalidate>Remove picture</button>
+        </form>
+      </details>
+    </div>
+    <div class="acct-head-links">
+      <a class="settings-action-btn" href="/user/{{ page.username }}">Public profile</a>
+      <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+    </div>
   </div>
 </div>
 
