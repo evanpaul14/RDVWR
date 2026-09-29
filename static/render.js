@@ -4,6 +4,7 @@ import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
 import { votingEnabled, voteCtlHtml } from './vote.js';
+import { replyBtnHtml } from './comment.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -481,6 +482,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
         ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
+      ${isDeleted ? '' : replyBtnHtml(c.id)}
       ${repliesHtml}
     </div>`;
   }).join('');

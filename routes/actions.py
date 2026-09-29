@@ -1,4 +1,4 @@
-"""Actions as the logged-in Reddit account (voting, joining subreddits). Like login, these only answer
+"""Actions as the logged-in Reddit account (voting, joining subreddits, commenting). Like login, these only answer
 requests from the server's own machine while logged in (404 otherwise), and need a
 same-site request. /api/* is for the JS app; /actions/* are the no-JS form equivalents."""
 import re
@@ -6,6 +6,7 @@ from flask import Blueprint, abort, jsonify, redirect, request
 from helpers import SUBREDDIT_RE, is_same_site_request, safe_next
 import reddit_actions
 import reddit_login
+from routes.comments import _parse_comment_fields
 
 bp = Blueprint("actions", __name__)
 
@@ -68,4 +69,35 @@ def api_subscribe():
 def form_subscribe():
     _require_account()
     err = _do_subscribe(request.form.get('sub', ''), request.form.get('action', ''))
+    return err if err else redirect(safe_next(request.form.get('next')))
+
+
+_COMMENT_MAX = 10000
+
+
+def _do_comment(parent, text):
+    """Post a comment; returns (data, None) or (None, (message, status))."""
+    text = (text or '').strip()
+    if not _FULLNAME_RE.match(parent or '') or not text or len(text) > _COMMENT_MAX:
+        return None, ('Invalid comment', 400)
+    try:
+        return reddit_actions.comment(parent, text), None
+    except reddit_actions.ActionError as e:
+        return None, (str(e), e.status)
+
+
+@bp.route("/api/comment", methods=["POST"])
+def api_comment():
+    _require_account()
+    body = request.get_json(silent=True) or {}
+    data, err = _do_comment(str(body.get('parent', '')), str(body.get('text', '')))
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+    return jsonify({"comment": {**_parse_comment_fields(data), "likes": data.get("likes", True)}}), 200
+
+
+@bp.route("/actions/comment", methods=["POST"])
+def form_comment():
+    _require_account()
+    _, err = _do_comment(request.form.get('parent', ''), request.form.get('text', ''))
     return err if err else redirect(safe_next(request.form.get('next')))
