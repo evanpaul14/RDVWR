@@ -2114,3 +2114,10 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .submit-row { display:flex; align-items:center; gap:8px; }
 .submit-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
 .submit-modal .settings-input { width:100%; box-sizing:border-box; }
+.submit-flair { display:flex; gap:8px; }
+.submit-flair .settings-select { flex:1; }
+.submit-media { display:flex; flex-direction:column; gap:4px; color:var(--tx2); font-size:13px; }
+.submit-media-hint { font-family:var(--mono); font-size:10px; color:var(--tx3); }
+.comment-attach { font-family:var(--mono); font-size:10px; color:var(--tx3); cursor:pointer; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.comment-attach:hover { color:var(--tx); }
+.submit-modal [hidden] { display:none !important; }

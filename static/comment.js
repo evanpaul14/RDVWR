@@ -6,8 +6,10 @@ import { accountActive } from './vote.js';
 /** A comment box; `parent` is the fullname being replied to (t3_ post or t1_ comment). */
 export function commentFormHtml(parent, label = 'comment') {
   return `<form class="comment-form" data-parent="${parent}">
-    <textarea name="text" rows="3" maxlength="10000" placeholder="Write a ${label}…" required></textarea>
-    <div class="comment-form-row"><button type="submit">${label}</button><span class="comment-form-msg" role="status"></span></div>
+    <textarea name="text" rows="3" maxlength="10000" placeholder="Write a ${label}…"></textarea>
+    <div class="comment-form-row"><button type="submit">${label}</button>
+      <label class="comment-attach" title="Attach an image or GIF">📎 <span class="comment-attach-name">image</span><input type="file" name="image" accept="image/*" hidden></label>
+      <span class="comment-form-msg" role="status"></span></div>
   </form>`;
 }
 
@@ -41,17 +43,30 @@ function insertComment(form, comment, renderTree) {
 async function submitForm(form, renderTree) {
   const ta = form.elements.text;
   const text = ta.value.trim();
+  const file = form.elements.image.files[0];
   const msg = form.querySelector('.comment-form-msg');
-  if (!text || form.dataset.busy) return;
+  if ((!text && !file) || form.dataset.busy) return;
   form.dataset.busy = '1';
-  msg.textContent = 'Posting…';
+  msg.textContent = file ? 'Uploading…' : 'Posting…';
   try {
+    let media_id;
+    if (file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const up = await fetch('/api/upload', { method: 'POST', body: fd });
+      const upData = await up.json().catch(() => ({}));
+      if (!up.ok) throw new Error(upData.error || `Upload failed (HTTP ${up.status})`);
+      media_id = upData.asset_id;
+      msg.textContent = 'Posting…';
+    }
     const res = await fetch('/api/comment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parent: form.dataset.parent, text }) });
+      body: JSON.stringify({ parent: form.dataset.parent, text, media_id }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     insertComment(form, data.comment, renderTree);
     ta.value = '';
+    form.elements.image.value = '';
+    form.querySelector('.comment-attach-name').textContent = 'image';
     msg.textContent = '';
     if (form.dataset.parent.startsWith('t1_')) form.remove();
   } catch (err) {
@@ -75,6 +90,10 @@ export function initCommenting(renderTree) {
     actions.insertAdjacentHTML('afterend', commentFormHtml(btn.dataset.replyTo, 'reply'));
     actions.nextElementSibling.elements.text.focus();
   }, true);
+  document.addEventListener('change', e => {
+    const input = e.target.closest?.('.comment-form input[type="file"]');
+    if (input) input.closest('.comment-attach').querySelector('.comment-attach-name').textContent = input.files[0]?.name || 'image';
+  });
   document.addEventListener('submit', e => {
     const form = e.target.closest?.('.comment-form[data-parent]');
     if (!form) return;

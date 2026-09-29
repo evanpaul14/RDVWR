@@ -5,10 +5,10 @@
 
 {% macro comment_form(parent, label='comment') -%}
   {%- if account_active() -%}
-  <form class="comment-form" method="post" action="/actions/comment">
+  <form class="comment-form" method="post" action="/actions/comment" enctype="multipart/form-data">
     <input type="hidden" name="parent" value="{{ parent }}"><input type="hidden" name="next" value="{{ current_url() }}">
-    <textarea name="text" rows="3" maxlength="10000" required placeholder="Write a {{ label }}&hellip;"></textarea>
-    <div class="comment-form-row"><button type="submit">{{ label }}</button></div>
+    <textarea name="text" rows="3" maxlength="10000" placeholder="Write a {{ label }}&hellip;"></textarea>
+    <div class="comment-form-row"><button type="submit">{{ label }}</button><label class="comment-attach">image or GIF <input type="file" name="image" accept="image/*"></label></div>
   </form>
   {%- endif -%}
 {%- endmacro %}
