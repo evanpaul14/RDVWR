@@ -2113,3 +2113,4 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .submit-kind { display:flex; gap:14px; font-size:13px; color:var(--tx2); }
 .submit-row { display:flex; align-items:center; gap:8px; }
 .submit-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
+.submit-modal .settings-input { width:100%; box-sizing:border-box; }
