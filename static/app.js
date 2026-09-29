@@ -126,7 +126,9 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
       closePostView();
       closeSidebar();
       state.searchMode = false;
-      if (subscribedIsHome()) {
+      if (popularIsHome()) {
+        navigate('/r/popular', { replace: true });
+      } else if (subscribedIsHome()) {
         await loadSubscribed(route.sort || 'best', route.time || 'all', route.after || null, '/home');
       } else {
         state.subsMode = false;
@@ -985,7 +987,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
     ${window.__DISABLE_PERSONALIZED_HOME__ ? '' : `
     <label class="settings-row" id="s-personalized-home-row"${_hasHomeCredential() ? '' : ' style="display:none"'}><span class="settings-label">Personalized home feed</span>${chk('s-personalized-home', settings.personalizedHome)}</label>
-    <label class="settings-row" id="s-home-feed-row"${_hasHomeCredential() && settings.personalizedHome ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed']], settings.homeFeed || 'personalized')}</label>
+    <label class="settings-row" id="s-home-feed-row"${_hasHomeCredential() && settings.personalizedHome ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed'],['popular','Popular']], settings.homeFeed || 'personalized')}</label>
     <label class="settings-row settings-row--stack"><span class="settings-label">Reddit cookies <span class="settings-hint">(for personalised home feed — open reddit.com, F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, then paste below)</span></span><textarea class="settings-input settings-textarea" id="s-reddit-cookies" spellcheck="false" autocomplete="off" placeholder="loid=…; token_v2=…; session_tracker=…">${escHtml(settings.redditCookies || '')}</textarea></label>`}
   </div>
   <div class="settings-section">
@@ -1126,6 +1128,11 @@ function subscribedIsHome() {
   return getSubs().length > 0 && (!personalizedHomeActive() || settings.homeFeed === 'subscribed');
 }
 
+/** Popular picked as the home feed in settings (only offered alongside a personalized home). */
+function popularIsHome() {
+  return personalizedHomeActive() && settings.homeFeed === 'popular';
+}
+
 function personalizedHomeActive() {
   return !!personalizedHomeMode();
 }
@@ -1138,7 +1145,7 @@ function updateFeedsBtn() {
   if (menu) feedsBtn.setAttribute('aria-haspopup', 'menu');
   else { feedsBtn.removeAttribute('aria-haspopup'); setFeedsMenuOpen(false); }
   // Popular and the separate subscribed feed only exist alongside a personalized home feed.
-  feedsDropdown.querySelector('.feeds-item[data-feed="/r/popular"]').hidden = !menu;
+  feedsDropdown.querySelector('.feeds-item[data-feed="/r/popular"]').hidden = !menu || settings.homeFeed === 'popular';
   // No separate subscribed entry when it's already what Home shows.
   feedsDropdown.querySelector('.feeds-item[data-feed="/subscribed"]').hidden = !menu || settings.homeFeed === 'subscribed';
 }

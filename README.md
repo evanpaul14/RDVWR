@@ -134,7 +134,7 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_SUB_SORT` | `hot` | `hot`, `new`, `top`, `rising`, `controversial` |
 | `RDVWR_DEFAULT_SUB_TIME` | `day` | `hour`, `day`, `week`, `month`, `year`, `all` |
 | `RDVWR_DEFAULT_COMMENT_SORT` | `confidence` | `confidence`, `top`, `new`, `controversial`, `old`, `qa` |
-| `RDVWR_DEFAULT_HOME_FEED` | `personalized` | `personalized`, `subscribed` |
+| `RDVWR_DEFAULT_HOME_FEED` | `personalized` | `personalized`, `subscribed`, `popular` |
 | `RDVWR_DEFAULT_PERSONALIZED_HOME` | `1` | `0` turns the personalized home feed off by default (it only applies with pasted cookies or a [Reddit login](#reddit-login)) |
 | `RDVWR_DEFAULT_PAGINATION` | `0` | `1` disables infinite scroll in favor of a "load more" button |
 | `RDVWR_DEFAULT_SHOW_AVATARS` | `0` | `1` shows profile pictures |
