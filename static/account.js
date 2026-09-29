@@ -16,9 +16,9 @@ const pvSubInput = document.getElementById('pv-subreddit-input');
 const PENCIL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
 const me = () => window.__REDDIT_LOGIN__?.username;
 
-const avatarInner = (icon, cls) => icon
-  ? `<img class="${cls}" src="${escHtml(icon)}" alt="" data-onerror="hide">`
-  : `<span class="${cls} acct-avatar-letter">${escHtml((me() || '?')[0].toUpperCase())}</span>`;
+const avatarInner = icon => icon
+  ? `<img class="ctx-icon" src="${escHtml(icon)}" alt="" data-onerror="hide">`
+  : `<span class="ctx-icon acct-avatar-letter">${escHtml((me() || '?')[0].toUpperCase())}</span>`;
 
 /** The header link to the account page: a generic profile icon (the real picture is on the page itself). */
 export function initAccountLink() {
@@ -26,12 +26,6 @@ export function initAccountLink() {
   if (!link || !accountActive()) return;
   link.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
   link.hidden = false;
-}
-
-/** Show `icon` as the account's picture on the profile page. */
-function setAvatars(icon) {
-  const big = feed.querySelector('.acct-avatar-slot');
-  if (big) big.innerHTML = avatarInner(icon, 'acct-avatar acct-avatar-lg');
 }
 
 async function api(path, body) {
@@ -42,25 +36,23 @@ async function api(path, body) {
   return data;
 }
 
-function panelHtml() {
-  return `<div class="acct-panel">
-    <div class="acct-row acct-head">
-      <div class="acct-avatar-wrap">
-        <span class="acct-avatar-slot">${avatarInner('', 'acct-avatar acct-avatar-lg')}</span>
-        <button type="button" class="acct-pencil" data-acct-pencil aria-label="Change profile picture" aria-haspopup="menu" aria-expanded="false">${PENCIL}</button>
-        <div class="acct-menu" role="menu" hidden>
-          <label class="acct-menu-item" role="menuitem">Upload new picture<input type="file" data-acct-avatar accept="image/jpeg,image/png" hidden></label>
-          <button type="button" class="acct-menu-item" role="menuitem" data-acct-avatar-remove>Remove picture</button>
-        </div>
-      </div>
-      <div class="acct-head-links">
-        <a class="settings-action-btn" href="/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">Public profile</a>
-        <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
-      </div>
-    </div>
-    <div class="acct-msg" role="status"></div>
-  </div>`;
+/** The picture with its pencil menu, in the title strip where other profiles show theirs. */
+function avatarHtml(icon) {
+  return `<span class="acct-avatar-wrap">${avatarInner(icon)}
+    <button type="button" class="acct-pencil" data-acct-pencil aria-label="Change profile picture" aria-haspopup="menu" aria-expanded="false">${PENCIL}</button>
+    <span class="acct-menu" role="menu" hidden>
+      <label class="acct-menu-item" role="menuitem">Upload new picture<input type="file" data-acct-avatar accept="image/jpeg,image/png" hidden></label>
+      <button type="button" class="acct-menu-item" role="menuitem" data-acct-avatar-remove>Remove picture</button>
+    </span></span>`;
 }
+
+const actionsHtml = () => `<div class="acct-ctx-actions" id="acct-ctx-actions">
+  <div class="acct-head-links">
+    <a class="settings-action-btn" href="/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">View public profile</a>
+    <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+  </div>
+  <div class="acct-msg" role="status"></div>
+</div>`;
 
 function tabsHtml(tab) {
   return `<div class="acct-tabs">${['posts', 'comments'].map(t =>
@@ -94,12 +86,19 @@ async function fetchAbout() {
 }
 
 function renderAbout(d) {
-  document.getElementById('ctx-icon-wrap').innerHTML = '';
-  setAvatars(d?.icon);
+  const wrap = document.getElementById('ctx-icon-wrap');
+  const menuOpen = wrap.querySelector('.acct-menu:not([hidden])');
+  if (!wrap.querySelector('.acct-avatar-wrap') || !menuOpen) wrap.innerHTML = avatarHtml(d?.icon);
   document.getElementById('ctx-title').textContent = `u/${me()}`;
   document.getElementById('ctx-stats').innerHTML = d
     ? `<span>${fmtNum(d.karma_post)}</span> post karma · <span>${fmtNum(d.karma_comment)}</span> comment karma · joined ${fmtDate(d.created_utc)}` : '';
+  if (!document.getElementById('acct-ctx-actions')) ctxInfo.insertAdjacentHTML('beforeend', actionsHtml());
   ctxInfo.classList.add('visible');
+}
+
+/** Leaving the account page: take its extras out of the shared title strip. */
+export function leaveAccount() {
+  document.getElementById('acct-ctx-actions')?.remove();
 }
 
 async function loadItems(tab, after = null) {
@@ -133,8 +132,8 @@ export async function loadAccount(tab = 'posts') {
   sortBar.style.display = 'none';
   sentinel.innerHTML = '';
   sentinel.classList.remove('active', 'loading');
-  ctxInfo.classList.remove('visible');
-  feed.innerHTML = panelHtml() + tabsHtml(tab) + '<div class="acct-list"><div class="acct-loading state-sub">Loading…</div></div>';
+  feed.innerHTML = tabsHtml(tab) + '<div class="acct-list"><div class="acct-loading state-sub">Loading…</div></div>';
+  renderAbout(null);
   fetchAbout().then(d => { if (state.accountMode) renderAbout(d); });
   await loadItems(tab);
 }
@@ -151,22 +150,8 @@ feed.addEventListener('click', async e => {
     }
     return;
   }
-  const menu = feed.querySelector('.acct-menu');
-  const pencil = e.target.closest('[data-acct-pencil]');
-  if (menu) {
-    menu.hidden = pencil ? !menu.hidden : true;
-    feed.querySelector('[data-acct-pencil]')?.setAttribute('aria-expanded', String(!menu.hidden));
-  }
-  if (pencil) return;
   const moreBtn = e.target.closest('[data-acct-more]');
   if (moreBtn) { moreBtn.disabled = true; loadItems(state.accountTab, moreBtn.dataset.acctMore); return; }
-
-  if (e.target.closest('[data-acct-avatar-remove]')) {
-    const msg = feed.querySelector('.acct-panel .acct-msg');
-    try { say(msg, 'Removing…'); await api('/api/account/avatar/remove', {}); say(msg, 'Picture removed.'); fetchAbout().then(renderAbout); }
-    catch (err) { say(msg, `Failed: ${err.message}`); }
-    return;
-  }
 
   const item = e.target.closest('.acct-item');
   if (!item) return;
@@ -213,13 +198,33 @@ feed.addEventListener('click', async e => {
   }
 });
 
-feed.addEventListener('change', async e => {
+// The picture menu and the header buttons live in the shared title strip, outside #feed.
+const acctMsg = () => ctxInfo.querySelector('.acct-ctx-actions .acct-msg');
+const setMenu = open => {
+  const menu = ctxInfo.querySelector('.acct-menu');
+  if (menu) menu.hidden = !open;
+  ctxInfo.querySelector('[data-acct-pencil]')?.setAttribute('aria-expanded', String(!!open));
+};
+
+document.addEventListener('click', async e => {
+  if (!state.accountMode) return;
+  const pencil = e.target.closest('[data-acct-pencil]');
+  if (pencil) { setMenu(ctxInfo.querySelector('.acct-menu')?.hidden); return; }
+  if (!e.target.closest('.acct-menu')) { setMenu(false); return; }
+  if (e.target.closest('[data-acct-avatar-remove]')) {
+    setMenu(false);
+    try { say(acctMsg(), 'Removing…'); await api('/api/account/avatar/remove', {}); say(acctMsg(), 'Picture removed.'); fetchAbout().then(renderAbout); }
+    catch (err) { say(acctMsg(), `Failed: ${err.message}`); }
+  }
+});
+
+document.addEventListener('change', async e => {
   const input = e.target.closest('[data-acct-avatar]');
   if (!state.accountMode || !input || !input.files[0]) return;
-  const msg = feed.querySelector('.acct-panel .acct-msg');
   const fd = new FormData();
   fd.append('file', input.files[0]);
-  try { say(msg, 'Uploading…'); await api('/api/account/avatar', fd); say(msg, 'Picture updated (Reddit can take a moment to show it).'); fetchAbout().then(renderAbout); }
-  catch (err) { say(msg, `Failed: ${err.message}`); }
+  setMenu(false);
+  try { say(acctMsg(), 'Uploading…'); await api('/api/account/avatar', fd); say(acctMsg(), 'Picture updated (Reddit can take a moment to show it).'); fetchAbout().then(renderAbout); }
+  catch (err) { say(acctMsg(), `Failed: ${err.message}`); }
   input.value = '';
 });

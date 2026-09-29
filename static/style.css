@@ -2154,24 +2154,23 @@ details.comment:not([open]) > .comment-replies { display:none; }
 
 /* Account page: the logged-in Reddit account's own profile (JS: account.js, no-JS: noscript/account.html) */
 .account-link { display:flex; align-items:center; }
-.acct-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; background:var(--bg3); display:block; }
-.acct-avatar-lg { width:72px; height:72px; }
-.acct-avatar-letter { display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; color:var(--tx2); border:1px solid var(--b2); box-sizing:border-box; }
-.acct-avatar-lg.acct-avatar-letter { font-size:26px; }
-.acct-head { gap:16px; justify-content:space-between; }
-.acct-head-links { display:flex; align-items:center; gap:8px; }
-.acct-avatar-wrap { position:relative; flex-shrink:0; }
-.acct-pencil { position:absolute; right:-4px; bottom:-4px; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--bg2); border:1px solid var(--b2); color:var(--tx2); cursor:pointer; padding:0; list-style:none; }
+.acct-avatar-letter { display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:15px; color:var(--tx2); box-sizing:border-box; }
+.acct-head-links { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.acct-head-links form { margin:0; }
+.acct-head-links .settings-action-btn { text-decoration:none; }
+.acct-ctx-actions { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.acct-ctx-actions .acct-msg { text-align:right; max-width:200px; }
+.acct-avatar-wrap { position:relative; flex-shrink:0; display:block; }
+.acct-pencil { position:absolute; right:-5px; bottom:-5px; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--bg2); border:1px solid var(--b2); color:var(--tx2); cursor:pointer; padding:0; list-style:none; }
 .acct-pencil::-webkit-details-marker { display:none; }
 .acct-pencil:hover { color:var(--ac); border-color:var(--ac); }
-.acct-menu { position:absolute; z-index:20; top:80px; left:0; min-width:190px; display:flex; flex-direction:column; gap:6px; padding:6px; background:var(--bg2); border:1px solid var(--b2); border-radius:8px; box-shadow:var(--shadow-dropdown); }
+.acct-menu { position:absolute; z-index:20; top:46px; left:0; min-width:190px; display:flex; flex-direction:column; gap:6px; padding:6px; background:var(--bg2); border:1px solid var(--b2); border-radius:8px; box-shadow:var(--shadow-dropdown); }
 .acct-menu[hidden] { display:none; }
 .acct-menu-item { background:none; border:none; text-align:left; padding:7px 10px; border-radius:5px; color:var(--tx2); font-family:var(--mono); font-size:11px; cursor:pointer; }
 .acct-menu-item:hover { background:var(--bg3); color:var(--tx); }
 .acct-avatar-menu { position:static; }
-.acct-avatar-menu > .acct-menu { align-items:stretch; }
-.acct-panel, .acct-list, .acct-tabs { max-width:720px; margin:0 auto; padding:0 20px; box-sizing:border-box; }
-.acct-panel { padding-top:14px; padding-bottom:6px; }
+.acct-list, .acct-tabs { max-width:720px; margin:0 auto; padding:0 20px; box-sizing:border-box; }
+.acct-tabs { margin-top:10px; }
 .acct-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:6px 0; }
 .acct-row form { margin:0; }
 .acct-row .settings-action-btn { text-decoration:none; }
