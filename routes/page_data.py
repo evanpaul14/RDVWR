@@ -15,7 +15,7 @@ Each build_* function returns that template context as a dict (see _page), or
 from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
 from ns_prefs import get_pref
-from routes.home import fetch_frontpage
+from routes.home import fetch_frontpage, fetch_personalized_home
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_moderators, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
 from routes.comments import fetch_comments, fetch_morechildren
@@ -75,10 +75,12 @@ def clean_time(t, default):
 
 # ── Feeds ─────────────────────────────────────────────────────────────────────
 
-def build_home(sort, t, after):
-    """Reddit's logged-out front page — what the JS app's home shows without a Reddit
-    session (the personalized feed needs cookies only JS can send)."""
-    feed, err = _attempt(fetch_frontpage, sort, t, after)
+def build_home(sort, t, after, cookie=None):
+    """The home feed: personalized when `cookie` (the Reddit login) is given and works,
+    else Reddit's logged-out front page — what the JS app's home shows without a session."""
+    feed, err = _attempt(fetch_personalized_home, cookie, sort, t, after) if cookie else (None, None)
+    if feed is None:
+        feed, err = _attempt(fetch_frontpage, sort, t, after)
     return _page("home", "Home", {
         "nav": _feed_nav("/home", sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err,

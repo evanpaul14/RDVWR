@@ -115,6 +115,7 @@ python3 -m pytest tests/
 | `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `RDVWR_DISABLE_PERSONALIZED_HOME` | `0` | Set to `1` to disable the personalized (logged-in) home feed entirely. |
+| `REDDIT_LOGIN` | `0` | Set to `1` to enable logging in to a Reddit account from the settings panel (see [Reddit login](#reddit-login)). |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
 | `ALL_PROXY` | _(unset)_ | Forward proxy for all outbound Reddit/media requests, e.g. `socks5h://127.0.0.1:9050` or `http://user:pass@host:port`. Sets both `HTTP_PROXY` and `HTTPS_PROXY` at once (same convention as [Redlib](https://github.com/redlib-org/redlib)). |
@@ -134,6 +135,7 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_SUB_TIME` | `day` | `hour`, `day`, `week`, `month`, `year`, `all` |
 | `RDVWR_DEFAULT_COMMENT_SORT` | `confidence` | `confidence`, `top`, `new`, `controversial`, `old`, `qa` |
 | `RDVWR_DEFAULT_HOME_FEED` | `personalized` | `personalized`, `subscribed` |
+| `RDVWR_DEFAULT_PERSONALIZED_HOME` | `1` | `0` turns the personalized home feed off by default (it only applies with pasted cookies or a [Reddit login](#reddit-login)) |
 | `RDVWR_DEFAULT_PAGINATION` | `0` | `1` disables infinite scroll in favor of a "load more" button |
 | `RDVWR_DEFAULT_SHOW_AVATARS` | `0` | `1` shows profile pictures |
 | `RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA` | `0` | `1` links out to third-party media instead of embedding it |
@@ -143,6 +145,12 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_MARK_READ` | `1` | `0` stops marking posts as read on scroll |
 | `RDVWR_DEFAULT_HIDE_READ_HOME` *(experimental)* | `0` | `1` hides read posts on the home feed. No settings-panel toggle; set via env var only. |
 | `RDVWR_DEFAULT_HIDE_READ_SUB` *(experimental)* | `0` | `1` hides read posts in subreddits. No settings-panel toggle; set via env var only. |
+
+## Reddit login
+
+`REDDIT_LOGIN=1` adds a "Reddit account" section to settings with log in / log out. Logged in, Home shows that account's personalized feed (on requests from the server's own machine only, and switchable off with the "Personalized home feed" setting, which also covers pasted cookies). Nothing else in the app uses the account yet. Reddit no longer issues API apps, so there's no OAuth: sign in on reddit.com in your own browser, then paste that session's cookies into the form (F12 → Application → Cookies → right-click the `reddit.com` row → Copy all as header value). The server checks them against Reddit and stores them.
+
+Login stays on the server: the cookies go only to Reddit, are never sent back to the browser, and are kept in `.reddit_login.json` (mode 0600, override with `REDDIT_LOGIN_FILE`). The login routes only answer requests coming directly from the machine running the server (not through a reverse proxy), so use `localhost` or an SSH tunnel. Logging out deletes the file. Needs a writable disk, so it won't work on Vercel.
 
 ## Media proxying
 

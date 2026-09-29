@@ -9,3 +9,4 @@ extension/
 benchmark.py
 .vercel
 .env*
+.reddit_login.json*

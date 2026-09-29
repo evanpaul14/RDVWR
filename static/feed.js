@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { settings } from './settings.js';
+import { settings, personalizedHomeMode } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
@@ -95,8 +95,9 @@ async function _fetchHomePage(sort, time, after, distance) {
   if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${encodeURIComponent(after)}`;
   if (distance) url += `&distance=${distance}`;
-  const fetchOpts = (!window.__DISABLE_PERSONALIZED_HOME__ && settings.redditCookies)
-    ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
+  const mode = personalizedHomeMode();
+  if (mode === 'login') url += '&login=1';
+  const fetchOpts = mode === 'cookies' ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
   const res  = await fetch(url, fetchOpts);
   const data = await res.json();
   return { res, data };

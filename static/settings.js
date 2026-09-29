@@ -14,6 +14,7 @@ export const DEFAULTS = {
   hideReadSub: false,
   redditCookies: '',
   homeFeed: 'personalized',
+  personalizedHome: true,
   theme: 'dark',
   pagination: false,
   layout: 'card',
@@ -38,6 +39,16 @@ function _load() {
 }
 
 export const settings = _load();
+
+/** How the home feed is personalized right now: 'cookies' (pasted in settings, sent by this
+ *  browser), 'login' (the server-side Reddit login, see reddit_login.py), or null. Pasted
+ *  cookies win over the login; the personalizedHome toggle or the deployer's
+ *  RDVWR_DISABLE_PERSONALIZED_HOME turns both off. */
+export function personalizedHomeMode() {
+  if (window.__DISABLE_PERSONALIZED_HOME__ || !settings.personalizedHome) return null;
+  if (settings.redditCookies) return 'cookies';
+  return window.__REDDIT_LOGIN__?.username ? 'login' : null;
+}
 
 export function saveSettings() {
   storeSet(KEY, JSON.stringify(settings));

@@ -3,9 +3,10 @@ fetched server-side: for the JS app's first render and for the no-JS fallback in
 <noscript> (templates/noscript/). The per-page data lives in routes/page_data.py."""
 import re
 from flask import Blueprint, jsonify, redirect, render_template, request
-from helpers import (DISABLE_DOWNLOADS, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
+from helpers import (DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
                      USERNAME_RE, POST_ID_RE, MULTINAME_RE, log)
 from reddit_html import local_reddit_path
+import reddit_login
 from ns_prefs import get_pref
 from routes.live import LIVE_ID_RE
 from routes.media import resolve_reddit_url
@@ -46,7 +47,8 @@ def _feed_sort(sort, default):
 @bp.route("/home", strict_slashes=False)
 @bp.route("/home/<sort>", strict_slashes=False)
 def home(sort='best'):
-    return _respond(build_home(_feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after')))
+    cookie = None if DISABLE_PERSONALIZED_HOME or not get_pref('personalized_home') else reddit_login.request_cookie_header()
+    return _respond(build_home(_feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after'), cookie))
 
 
 @bp.route("/r/<sub>", strict_slashes=False)

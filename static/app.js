@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { settings, saveSettings, applySettings, DEFAULTS } from './settings.js';
+import { settings, saveSettings, personalizedHomeMode, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
 import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
 import { escHtml, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
@@ -665,7 +665,7 @@ function setFeedsMenuOpen(open) {
 }
 feedsBtn.addEventListener('click', e => {
   e.stopPropagation();
-  if (!settings.redditCookies) { navigate('/saved'); return; }
+  if (!personalizedHomeMode()) { navigate('/saved'); return; }
   setFeedsMenuOpen(feedsDropdown.hidden);
 });
 feedsDropdown.addEventListener('click', e => {
@@ -909,6 +909,31 @@ const settingsPanel   = document.getElementById('settings-panel');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsBody    = document.getElementById('settings-body');
 
+/** Logged in server-side (see reddit_login.py); only ever set for requests from the server's own machine. */
+function _hasHomeCredential() {
+  return !!(settings.redditCookies || window.__REDDIT_LOGIN__?.username);
+}
+
+function _loginSectionHtml() {
+  const st = window.__REDDIT_LOGIN__;
+  if (!st) return '';
+  const hint = '(sign in on reddit.com, then F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, and paste below)';
+  const row = st.username
+    ? `<div class="settings-row"><span class="settings-label">Logged in as u/${escHtml(st.username)}</span><form method="post" action="/auth/reddit/logout"><button class="settings-action-btn" type="submit">Log out</button></form></div>`
+    : st.available
+    ? `<div class="settings-row settings-row--stack"><span class="settings-label">Not logged in <span class="settings-hint">${hint}</span></span><form method="post" action="/auth/reddit/login"><textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea><button class="settings-action-btn" type="submit">Log in</button></form></div>`
+    : '<div class="settings-row"><span class="settings-label">Log in from the machine running the server</span></div>';
+  return `<div class="settings-section"><div class="settings-section-title">Reddit account</div>${row}</div>`;
+}
+
+function _syncHomeRows() {
+  const has = _hasHomeCredential();
+  const toggleRow = settingsBody.querySelector('#s-personalized-home-row');
+  const feedRow = settingsBody.querySelector('#s-home-feed-row');
+  if (toggleRow) toggleRow.style.display = has ? '' : 'none';
+  if (feedRow) feedRow.style.display = has && settings.personalizedHome ? '' : 'none';
+}
+
 function _settingsHtml() {
   const subSortOpts = [['hot','Hot'],['new','New'],['top','Top'],['rising','Rising'],['controversial','Controversial']];
   const timeOpts    = [['all','All time'],['year','Past year'],['month','Past month'],['week','Past week'],['day','Past day'],['hour','Past hour']];
@@ -930,7 +955,8 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default time</span>${sel('s-sub-time', timeOpts, settings.subTime)}</label>
     <label class="settings-row"><span class="settings-label">Disable infinite scroll</span>${chk('s-pagination', settings.pagination)}</label>
     ${window.__DISABLE_PERSONALIZED_HOME__ ? '' : `
-    <label class="settings-row" id="s-home-feed-row"${settings.redditCookies ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed']], settings.homeFeed || 'personalized')}</label>
+    <label class="settings-row" id="s-personalized-home-row"${_hasHomeCredential() ? '' : ' style="display:none"'}><span class="settings-label">Personalized home feed</span>${chk('s-personalized-home', settings.personalizedHome)}</label>
+    <label class="settings-row" id="s-home-feed-row"${_hasHomeCredential() && settings.personalizedHome ? '' : ' style="display:none"'}><span class="settings-label">Home feed</span>${sel('s-home-feed', [['personalized','Personalized'],['subscribed','Subscribed']], settings.homeFeed || 'personalized')}</label>
     <label class="settings-row settings-row--stack"><span class="settings-label">Reddit cookies <span class="settings-hint">(for personalised home feed — open reddit.com, F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, then paste below)</span></span><textarea class="settings-input settings-textarea" id="s-reddit-cookies" spellcheck="false" autocomplete="off" placeholder="loid=…; token_v2=…; session_tracker=…">${escHtml(settings.redditCookies || '')}</textarea></label>`}
   </div>
   <div class="settings-section">
@@ -948,6 +974,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW content in search</span>${chk('s-nsfw-search-hide', settings.nsfwSearchHide)}</label>
   </div>
+  ${_loginSectionHtml()}
   <div class="settings-section">
     <div class="settings-section-title">Read history</div>
     <label class="settings-row"><span class="settings-label">Mark posts as read on scroll</span>${chk('s-mark-read', settings.markRead)}</label>
@@ -975,7 +1002,14 @@ function bindSettingEvents() {
     settings.redditCookies = e.target.value.trim();
     saveSettings();
     updateFeedsBtn();
-    settingsBody.querySelector('#s-home-feed-row').style.display = settings.redditCookies ? '' : 'none';
+    _syncHomeRows();
+  });
+  settingsBody.querySelector('#s-personalized-home')?.addEventListener('change', e => {
+    settings.personalizedHome = e.target.checked;
+    saveSettings();
+    updateFeedsBtn();
+    _syncHomeRows();
+    if (parseRoute().type === 'home') renderRoute(parseRoute());
   });
   settingsBody.querySelector('#s-home-feed')?.addEventListener('change', e => {
     settings.homeFeed = e.target.value;
@@ -1062,7 +1096,7 @@ function subscribedIsHome() {
 }
 
 function personalizedHomeActive() {
-  return !window.__DISABLE_PERSONALIZED_HOME__ && !!settings.redditCookies;
+  return !!personalizedHomeMode();
 }
 
 function updateFeedsBtn() {

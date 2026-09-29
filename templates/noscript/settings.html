@@ -31,6 +31,11 @@
     {{ select_row('sub_sort', 'Default sort', 'Used when browsing a subreddit without picking a sort.', [('hot', 'Hot'), ('new', 'New'), ('top', 'Top'), ('rising', 'Rising'), ('controversial', 'Controversial')]) }}
     {{ select_row('sub_time', 'Default time', 'Used for Top/Controversial when no time filter is chosen.', [('hour', 'Past hour'), ('day', 'Today'), ('week', 'Past week'), ('month', 'Past month'), ('year', 'Past year'), ('all', 'All time')]) }}
 
+    {% if page.login and page.login.username %}
+    <input type="hidden" name="personalized_home_shown" value="1">
+    {{ check_row('personalized_home', 'Personalized home feed', 'Home shows your Reddit account\'s feed instead of the logged-out front page.') }}
+    {% endif %}
+
     <div class="settings-section-title">Comments</div>
     {{ select_row('comment_sort', 'Default sort', '', [('confidence', 'Best'), ('top', 'Top'), ('new', 'New'), ('controversial', 'Controversial'), ('old', 'Old'), ('qa', 'Q&A')]) }}
 
@@ -47,4 +52,24 @@
       <a class="ns-settings-cancel" href="{{ page.next }}">Cancel</a>
     </div>
   </form>
+
+  {% if page.login %}
+  <div class="settings-section-title">Reddit account</div>
+  {% if page.login.username %}
+  <form class="ns-settings-row" method="post" action="/auth/reddit/logout">
+    <input type="hidden" name="next" value="{{ page.next }}">
+    <span class="ns-settings-row-text"><strong>Logged in as u/{{ page.login.username }}</strong><small>Stored only on this server.</small></span>
+    <button type="submit">Log out</button>
+  </form>
+  {% elif page.login.available %}
+  <form class="ns-settings-form" method="post" action="/auth/reddit/login">
+    <input type="hidden" name="next" value="{{ page.next }}">
+    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Not logged in</strong><small>Sign in on reddit.com, then paste your cookies (F12 → Application → Cookies → right-click the reddit.com row → Copy all as header value).</small></span>
+      <textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea></label>
+    <button type="submit">Log in</button>
+  </form>
+  {% else %}
+  <div class="ns-settings-row"><span class="ns-settings-row-text"><strong>Login unavailable</strong><small>Log in from the machine running the server.</small></span></div>
+  {% endif %}
+  {% endif %}
 </div>
