@@ -216,9 +216,6 @@ feed.addEventListener('click', async e => {
     try { say(msg, 'Deleting…'); await api('/api/account/delete', { id }); item.remove(); }
     catch (err) { say(msg, `Failed: ${err.message}`); }
   }
-}); item.remove(); }
-    catch (err) { say(msg, `Failed: ${err.message}`); delete del.dataset.armed; del.textContent = 'delete'; del.classList.remove('acct-danger'); }
-  }
 });
 
 sortBar.addEventListener('click', e => {
