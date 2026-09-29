@@ -1,5 +1,6 @@
 {# The logged-in account's own profile (page_data.build_account): posts/comments with edit and delete, profile picture, sign out. #}
 {% import 'noscript/macros/ui.html' as ui %}
+{% import 'noscript/macros/posts.html' as posts with context %}
 {% set about = page.about %}
 {% set next = current_url() %}
 
@@ -40,17 +41,26 @@
 {% if page.error %}
   {{ ui.error_state(page.error) }}
 {% else %}
-  <div class="feed-list acct-list">
+  <div class="feed-list">
     {% for it in page['items'] %}
       {% set fullname = ('t3_' if page.tab == 'posts' else 't1_') ~ it.id %}
       <div class="acct-item">
         {% if page.tab == 'posts' %}
-          <a class="acct-item-title" href="/r/{{ it.subreddit }}/comments/{{ it.id }}">{{ it.title }}</a>
-          <div class="acct-item-meta">r/{{ it.subreddit }} &middot; &#9650; {{ it.score | fmtnum }} &middot; {{ it.num_comments | fmtnum }} comments &middot; {{ it.created_utc | timeago }}</div>
+          {{ posts.card(it) }}
         {% else %}
-          <div class="acct-item-meta">in <a href="/r/{{ it.subreddit }}">r/{{ it.subreddit }}</a> &middot; <a href="/r/{{ it.subreddit }}/comments/{{ it.link_id }}/_/{{ it.id }}">{{ it.link_title }}</a></div>
-          <div class="ucc-body md">{{ it.body | mdtext }}</div>
-          <div class="acct-item-meta">&#9650; {{ it.score | fmtnum }} &middot; {{ it.created_utc | timeago }}</div>
+          {% set post_url = '/r/' ~ it.subreddit ~ '/comments/' ~ it.link_id %}
+          <div class="user-comment-card">
+            <div class="ucc-context">
+              <span>in <a href="/r/{{ it.subreddit }}">r/{{ it.subreddit }}</a></span>
+              <span>&middot;</span>
+              <a class="ucc-post-link" href="{{ post_url }}">{{ it.link_title }}</a>
+            </div>
+            <div class="ucc-body md">{{ it.body | mdtext }}</div>
+            <div class="ucc-footer">
+              <span class="ucc-score">&#9650; {{ it.score | fmtnum }}</span>
+              <a class="ucc-permalink" href="{{ post_url }}/_/{{ it.id }}" title="{{ it.created_utc | fmtdatetime }}">{{ it.created_utc | timeago }}</a>
+            </div>
+          </div>
         {% endif %}
         <div class="acct-manage">
           {% if page.tab == 'comments' or it.is_self %}
