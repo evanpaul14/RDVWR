@@ -5,6 +5,8 @@ import { state } from './state.js';
 import { escHtml, fmtNum, fmtDate, errState, timeAgo } from './utils.js';
 import { accountActive } from './vote.js';
 import { showSkeletons, setMainOpen } from './feed.js';
+import { renderPost, renderUserCommentCard, renderMd, waitForMdLibs } from './render.js';
+import { initMedia, initGifVideos } from './media.js';
 
 const feed       = document.getElementById('feed');
 const sentinel   = document.getElementById('scroll-sentinel');
@@ -54,28 +56,16 @@ const actionsHtml = () => `<div class="acct-ctx-actions" id="acct-ctx-actions">
   <div class="acct-msg" role="status"></div>
 </div>`;
 
-function tabsHtml(tab) {
-  return `<div class="acct-tabs">${['posts', 'comments'].map(t =>
-    `<button type="button" class="sort-btn${t === tab ? ' active' : ''}" data-acct-tab="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>`;
-}
+const tabsHtml = tab => ['posts', 'comments'].map(t =>
+  `<button type="button" class="sort-btn${t === tab ? ' active' : ''}" data-acct-tab="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
 
-function itemHtml(kind, it) {
+/** The same card other profiles show, with edit/delete underneath. */
+function itemHtml(kind, it, idx) {
   const isPost = kind === 'posts';
-  const fullname = (isPost ? 't3_' : 't1_') + it.id;
-  const sub = escHtml(it.subreddit);
-  const path = isPost ? `/r/${sub}/comments/${escHtml(it.id)}` : `/r/${sub}/comments/${escHtml(it.link_id)}/_/${escHtml(it.id)}`;
-  const raw = isPost ? it.selftext : it.body;
-  const head = isPost
-    ? `<a class="acct-item-title" href="${path}" data-nav="${path}">${escHtml(it.title)}</a>
-       <div class="acct-item-meta">r/${sub} · ▲ ${fmtNum(it.score)} · ${fmtNum(it.num_comments)} comments · ${timeAgo(it.created_utc)}</div>`
-    : `<div class="acct-item-meta">in <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a> · <a href="${path}" data-nav="${path}">${escHtml(it.link_title)}</a></div>
-       <div class="acct-item-text" data-acct-text>${escHtml(raw)}</div>
-       <div class="acct-item-meta">▲ ${fmtNum(it.score)} · ${timeAgo(it.created_utc)}</div>`;
-  const editable = !isPost || it.is_self;
-  return `<div class="acct-item" data-acct-id="${fullname}">${head}
-    ${isPost && it.is_self && raw ? `<div class="acct-item-text" data-acct-text>${escHtml(raw)}</div>` : ''}
+  const card = isPost ? renderPost(it, idx, true) : renderUserCommentCard(it, idx);
+  return `<div class="acct-item" data-acct-id="${isPost ? 't3_' : 't1_'}${escHtml(it.id)}">${card}
     <div class="acct-manage">
-      ${editable ? '<button type="button" class="acct-link" data-acct-edit>edit</button>' : ''}
+      ${!isPost || it.is_self ? '<button type="button" class="acct-link" data-acct-edit>edit</button>' : ''}
       <button type="button" class="acct-link" data-acct-delete>delete</button>
       <span class="acct-msg" role="status"></span>
     </div></div>`;
@@ -103,19 +93,23 @@ export function leaveAccount() {
 
 async function loadItems(tab, after = null) {
   const myGen = state.feedGen;
-  const list = feed.querySelector('.acct-list');
-  const more = feed.querySelector('.acct-more');
-  more?.remove();
+  feed.querySelector('.acct-more')?.remove();
   try {
     const data = await api(`/api/account/${tab}${after ? `?after=${encodeURIComponent(after)}` : ''}`);
+    await waitForMdLibs();
     if (myGen !== state.feedGen) return;
-    list.querySelector('.acct-loading')?.remove();
+    if (!after) feed.innerHTML = '';
     const items = data[tab] || [];
-    if (!items.length && !after) list.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>';
-    list.insertAdjacentHTML('beforeend', items.map(it => itemHtml(tab, it)).join(''));
-    if (data.after) list.insertAdjacentHTML('afterend', `<button type="button" class="settings-action-btn acct-more" data-acct-more="${escHtml(data.after)}">Load more</button>`);
+    if (!items.length && !after) { feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">Nothing here</div></div>'; return; }
+    const start = feed.querySelectorAll('.acct-item').length;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = items.map((it, i) => itemHtml(tab, it, start + i)).join('');
+    initMedia(tmp);
+    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
+    initGifVideos(feed);
+    if (data.after) feed.insertAdjacentHTML('beforeend', `<button type="button" class="settings-action-btn acct-more" data-acct-more="${escHtml(data.after)}">Load more</button>`);
   } catch (e) {
-    if (myGen === state.feedGen) list.innerHTML = errState(escHtml(e.message), 'feed');
+    if (myGen === state.feedGen) feed.innerHTML = errState(escHtml(e.message), 'feed');
   }
 }
 
@@ -129,10 +123,11 @@ export async function loadAccount(tab = 'posts') {
   subInput.value = '';
   pvSubInput.value = '';
   setMainOpen('');
-  sortBar.style.display = 'none';
   sentinel.innerHTML = '';
   sentinel.classList.remove('active', 'loading');
-  feed.innerHTML = tabsHtml(tab) + '<div class="acct-list"><div class="acct-loading state-sub">Loading…</div></div>';
+  sortBar.innerHTML = tabsHtml(tab);
+  sortBar.style.display = 'flex';
+  showSkeletons();
   renderAbout(null);
   fetchAbout().then(d => { if (state.accountMode) renderAbout(d); });
   await loadItems(tab);
@@ -142,14 +137,6 @@ const say = (el, text) => { if (el) el.textContent = text; };
 
 feed.addEventListener('click', async e => {
   if (!state.accountMode) return;
-  const tabBtn = e.target.closest('[data-acct-tab]');
-  if (tabBtn) {
-    if (tabBtn.dataset.acctTab !== state.accountTab) {
-      history.pushState({}, '', tabBtn.dataset.acctTab === 'posts' ? '/account' : '/account?tab=comments');
-      loadAccount(tabBtn.dataset.acctTab);
-    }
-    return;
-  }
   const moreBtn = e.target.closest('[data-acct-more]');
   if (moreBtn) { moreBtn.disabled = true; loadItems(state.accountTab, moreBtn.dataset.acctMore); return; }
 
@@ -158,7 +145,7 @@ feed.addEventListener('click', async e => {
   const id = item.dataset.acctId, msg = item.querySelector('.acct-msg'), manage = item.querySelector('.acct-manage');
   if (e.target.closest('[data-acct-edit]')) {
     if (item.querySelector('.acct-edit')) return;
-    const textEl = item.querySelector('[data-acct-text]');
+    const textEl = item.querySelector('.ucc-body, .post-excerpt');
     const form = document.createElement('form');
     form.className = 'acct-edit';
     form.innerHTML = `<textarea class="settings-input settings-textarea" rows="6" maxlength="${id.startsWith('t3_') ? 40000 : 10000}"></textarea>
@@ -181,8 +168,7 @@ feed.addEventListener('click', async e => {
       try {
         say(msg, 'Saving…');
         await api('/api/account/edit', { id, text });
-        if (textEl) textEl.textContent = text;
-        else item.querySelector('.acct-item-meta:last-of-type')?.insertAdjacentHTML('afterend', `<div class="acct-item-text" data-acct-text>${escHtml(text)}</div>`);
+        if (textEl) textEl.innerHTML = textEl.classList.contains('ucc-body') ? renderMd(text) : `<div class="md">${renderMd(text)}</div>`;
         say(msg, 'Saved.');
         done();
       } catch (err) { say(msg, `Failed: ${err.message}`); }
@@ -196,6 +182,13 @@ feed.addEventListener('click', async e => {
     try { say(msg, 'Deleting…'); await api('/api/account/delete', { id }); item.remove(); }
     catch (err) { say(msg, `Failed: ${err.message}`); delete del.dataset.armed; del.textContent = 'delete'; del.classList.remove('acct-danger'); }
   }
+});
+
+sortBar.addEventListener('click', e => {
+  const tabBtn = state.accountMode && e.target.closest('[data-acct-tab]');
+  if (!tabBtn || tabBtn.dataset.acctTab === state.accountTab) return;
+  history.pushState({}, '', tabBtn.dataset.acctTab === 'posts' ? '/account' : '/account?tab=comments');
+  loadAccount(tabBtn.dataset.acctTab);
 });
 
 // The picture menu and the header buttons live in the shared title strip, outside #feed.
