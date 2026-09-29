@@ -1710,3 +1710,46 @@ class TestSubmitPost:
                 r = cl.post('/submit', data={'sub': 'test', 'title': 'Keep me', 'kind': 'self', 'body': ''}, environ_base=self.LOCAL, headers=self.SAME)
                 html = r.get_data(as_text=True)
                 assert r.status_code == 400 and 'not allowed to post there' in html and 'Keep me' in html
+
+
+class TestSubscribedFeed:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def test_subscriptions_lists_all_pages_sorted(self, tmp_path):
+        from routes import home
+        a, b, c = TestVoting()._login(tmp_path)
+        page = lambda names, after: MockResponse({'data': {'children': [{'data': {'display_name': n}} for n in names], 'after': after}})
+        with a, b, c, patch.object(home, 'reddit_get', side_effect=[page(['zeta', 'Alpha'], 't5_x'), page(['beta'], None)]) as g:
+            r = app.test_client().get('/api/subscriptions', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.get_json() == {'subs': ['Alpha', 'beta', 'zeta']}
+        assert g.call_args_list[1].kwargs['params']['after'] == 't5_x'
+        assert r.headers['Cache-Control'] == 'private, no-store'
+
+    def test_subscribed_feed_is_the_account_front_page(self, tmp_path):
+        from routes import home
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(home, 'fetch_frontpage', return_value={'posts': [], 'after': None}) as f:
+            r = app.test_client().get('/api/subscribed?sort=new&after=t3_x', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200 and f.call_args.args == ('new', '', 't3_x')
+
+    def test_account_only(self, tmp_path):
+        a, b, c = TestVoting()._login(tmp_path)
+        cl = app.test_client()
+        for path in ('/api/subscriptions', '/api/subscribed'):
+            assert cl.get(path, environ_base=self.LOCAL, headers=self.SAME).status_code == 404   # login off
+            with a, b, c:
+                assert cl.get(path, environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+
+    def test_noscript_subscribed_page(self, tmp_path):
+        from routes import page_data
+        a, b, c = TestVoting()._login(tmp_path)
+        post = {'id': 'abc', 'title': 'Hello there', 'author': 'a', 'subreddit': 's', 'score': 3, 'upvote_ratio': 90,
+                'num_comments': 0, 'created_utc': 0, 'url': 'https://x'}
+        with a, b, c, patch.object(page_data, 'fetch_subscriptions', return_value=['s']), \
+             patch.object(page_data, 'fetch_frontpage', return_value={'posts': [post], 'after': 't3_n'}):
+            html = app.test_client().get('/subscribed', environ_base=self.LOCAL).get_data(as_text=True)
+        assert 'Hello there' in html and 'href="/subscribed/hot?after=t3_n"' in html
+        with a, b, c, patch.object(page_data, 'fetch_subscriptions', return_value=[]):
+            assert "haven&#39;t joined any" in app.test_client().get('/subscribed', environ_base=self.LOCAL).get_data(as_text=True)
+        assert 'JavaScript' in app.test_client().get('/subscribed').get_data(as_text=True)   # public: unchanged

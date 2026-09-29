@@ -3,7 +3,7 @@ import re
 import uuid
 import requests
 from urllib.parse import urlparse, parse_qs
-from flask import Blueprint, jsonify, request, make_response
+from flask import Blueprint, abort, jsonify, request, make_response
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 from media_detection import process_post, extract_posts
@@ -143,6 +143,50 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
         m = re.search(r'"after"\s*:\s*"([A-Za-z0-9_-]+)"', resp.text)
         next_after = m.group(1) if m else None
     return {"posts": posts, "after": next_after, "via": "shreddit"}
+
+
+def fetch_subscriptions(timeout=10):
+    """Names of the subreddits the logged-in account has joined, A-Z. Account requests only."""
+    names, after = [], ''
+    for _ in range(5):   # 100 per page; 500 is more than any feed can use
+        resp = reddit_get("https://www.reddit.com/subreddits/mine/subscriber.json",
+                          params={"limit": 100, "raw_json": 1, "after": after}, timeout=timeout)
+        if resp.status_code != 200:
+            raise UpstreamError.from_status(resp.status_code)
+        data = resp.json()["data"]
+        names += [c["data"]["display_name"] for c in data["children"]]
+        after = data.get("after")
+        if not after:
+            break
+    return sorted(set(names), key=str.lower)
+
+
+def _require_account():
+    if not reddit_login.request_account_active():
+        abort(404)
+
+
+@bp.route("/api/subscriptions")
+def get_subscriptions():
+    """The logged-in account's joined subreddits (local requests only)."""
+    _require_account()
+    try:
+        return cached_json({"subs": fetch_subscriptions()}, 0)
+    except UpstreamError as e:
+        return e.response()
+
+
+@bp.route("/api/subscribed")
+def get_subscribed():
+    """The logged-in account's own front page: posts from the subreddits it has joined,
+    all of them (unlike a /r/a+b+c multireddit, which is capped at 50 names)."""
+    _require_account()
+    sort = request.args.get("sort", "hot")
+    try:
+        return cached_json(fetch_frontpage(sort if sort in FEED_SORTS else "hot", request.args.get("t", ""),
+                                           request.args.get("after", "")), 0)
+    except UpstreamError as e:
+        return e.response()
 
 
 def _home_cookie():

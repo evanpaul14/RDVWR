@@ -5,6 +5,7 @@ import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { getSavedPosts } from './saved.js';
 import { getSubs } from './subscriptions.js';
+import { accountActive } from './vote.js';
 import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -221,7 +222,11 @@ export async function loadSaved() {
 // `base` is the URL prefix the feed lives under: /home when it stands in for the
 // anonymous home feed, /subscribed when a personalized home feed takes /home.
 export async function loadSubscribed(sort='hot', time='all', after=null, base='/subscribed') {
-  const subs = getSubs();
+  let subs = getSubs();
+  if (accountActive()) {
+    try { subs = (await (await fetch('/api/subscriptions')).json()).subs || []; }
+    catch { subs = []; }
+  }
   state.subsMode    = true;
   state.subsBase    = base;
   state.homeMode    = false;
@@ -251,10 +256,10 @@ export async function loadSubscribed(sort='hot', time='all', after=null, base='/
     sortBar.style.display = 'none';
     sentinel.innerHTML = '';
     sentinel.classList.remove('active', 'loading');
-    feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No subscriptions</div><div class="state-sub">Open a subreddit and use its subscribe button to add it here.</div></div>';
+    feed.innerHTML = `<div class="state"><div class="state-icon">∅</div><div class="state-title">No subscriptions</div><div class="state-sub">Open a subreddit and use its ${accountActive() ? 'join' : 'subscribe'} button to add it here.</div></div>`;
     return;
   }
-  setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
+  setMainOpen(accountActive() ? `https://www.reddit.com/${sort}/` : `https://www.reddit.com/r/${encodeURIComponent(state.currentSub)}/${sort}/`);
   sortBar.innerHTML = buildHomeSortHtml(sort, time);
   sortBar.style.display = 'flex';
   await loadSubFeed(state.currentSub, sort, time, after);
@@ -301,7 +306,9 @@ export async function loadAbout(sub) {
 }
 
 async function fetchPosts(sub, sort, time, after, quarantineOptIn=false) {
-  let url = `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
+  // While logged in to Reddit the Subscribed feed is the account's own front page, which
+  // covers every joined subreddit (a /r/a+b+c multireddit tops out at 50 names).
+  let url = state.subsMode && accountActive() ? `/api/subscribed?sort=${sort}` : `/api/r/${encodeURIComponent(sub)}?sort=${sort}`;
   if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${after}`;
   if (quarantineOptIn) url += '&quarantine_opt_in=1';

@@ -10,6 +10,7 @@
         <a href="/r/popular">popular</a>
         <a href="/r/all">all</a>
         {%- if account_active() %}
+        <a href="/subscribed">subscribed</a>
         <a href="/submit{% if scope_sub %}?sub={{ scope_sub }}{% endif %}">post</a>{% endif %}
       </nav>
       {# Like the JS header search: "r/<sub>" or "u/<user>" jumps straight there (see
