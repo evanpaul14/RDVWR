@@ -1121,6 +1121,8 @@ settingsOverlay.addEventListener('click', closeSettingsPanel);
 /** Local subscriptions take over Home when there's no personalized feed, or when the
  *  user picked them as the home feed in settings. */
 function subscribedIsHome() {
+  // Logged in: the account's real subscriptions, only when it's picked as the home feed.
+  if (accountActive()) return personalizedHomeActive() && settings.homeFeed === 'subscribed';
   return getSubs().length > 0 && (!personalizedHomeActive() || settings.homeFeed === 'subscribed');
 }
 

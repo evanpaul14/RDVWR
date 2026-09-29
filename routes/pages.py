@@ -10,7 +10,7 @@ import reddit_login
 from ns_prefs import get_pref
 from routes.live import LIVE_ID_RE
 from routes.media import resolve_reddit_url
-from routes.page_data import (build_home, build_subreddit, build_multi, build_duplicates, build_wiki,
+from routes.page_data import (build_home, build_subscribed, build_subreddit, build_multi, build_duplicates, build_wiki,
                               build_post, build_profile, build_search, build_live, build_message,
                               clean_time, TIMED_SORTS)
 
@@ -189,6 +189,8 @@ def saved():
 @bp.route("/subscribed", strict_slashes=False)
 @bp.route("/subscribed/<sort>", strict_slashes=False)
 def subscribed(sort=''):
+    if reddit_login.request_account_active():
+        return _respond(build_subscribed(_feed_sort(sort, 'hot'), clean_time(_arg('t'), 'all'), _arg('after')))
     return _respond(build_message(
         "Subscribed", "Your subscriptions are kept in your browser's storage, which needs JavaScript."))
 

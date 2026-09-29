@@ -15,7 +15,7 @@ Each build_* function returns that template context as a dict (see _page), or
 from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
 from ns_prefs import get_pref
-from routes.home import fetch_frontpage, fetch_personalized_home
+from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_moderators, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
 from routes.comments import fetch_comments, fetch_morechildren
@@ -84,6 +84,18 @@ def build_home(sort, t, after, cookie=None):
     return _page("home", "Home", {
         "nav": _feed_nav("/home", sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err,
+    })
+
+
+def build_subscribed(sort, t, after):
+    """The logged-in account's own front page (its joined subreddits), see routes/home.py."""
+    subs, sub_err = _attempt(fetch_subscriptions)
+    if sub_err is None and not subs:
+        return build_message("Subscribed", "You haven't joined any subreddits yet.", "/", "Go home")
+    feed, err = _attempt(fetch_frontpage, sort, t, after)
+    return _page("home", "Subscribed", {
+        "nav": _feed_nav("/subscribed", sort, t, feed and feed["after"]),
+        "posts": feed["posts"] if feed else [], "error": err or sub_err,
     })
 
 
