@@ -1753,3 +1753,163 @@ class TestSubscribedFeed:
         with a, b, c, patch.object(page_data, 'fetch_subscriptions', return_value=[]):
             assert "haven&#39;t joined any" in app.test_client().get('/subscribed', environ_base=self.LOCAL).get_data(as_text=True)
         assert 'JavaScript' in app.test_client().get('/subscribed').get_data(as_text=True)   # public: unchanged
+
+
+class TestMediaAndFlair:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+    UP = 'https://reddit-uploaded-media.s3-accelerate.amazonaws.com/'
+    VID = 'https://reddit-uploaded-video.s3-accelerate.amazonaws.com/'
+
+    def _lease(self, asset='abc123xyz'):
+        r = MagicMock(ok=True, status_code=200)
+        r.json.return_value = {'args': {'action': '//reddit-uploaded-media.s3-accelerate.amazonaws.com',
+                                        'fields': [{'name': 'key', 'value': asset}, {'name': 'acl', 'value': 'private'}]},
+                               'asset': {'asset_id': asset}}
+        return r
+
+    def _ok(self, body=None):
+        r = MagicMock(ok=True, status_code=200)
+        r.json.return_value = body if body is not None else {}
+        return r
+
+    def test_upload_image_returns_asset_and_url(self, tmp_path):
+        import io, reddit_actions, reddit_media
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._lease()) as lease, \
+             patch.object(reddit_media.requests, 'post', return_value=MagicMock(status_code=201)) as s3:
+            r = app.test_client().post('/api/upload', data={'file': (io.BytesIO(b'\x89PNG data'), 'pic.png', 'image/png')},
+                                       content_type='multipart/form-data', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200
+        assert r.get_json() == {'asset_id': 'abc123xyz', 'url': self.UP + 'abc123xyz', 'type': 'image'}
+        assert lease.call_args.args[0] == 'https://oauth.reddit.com/api/media/asset.json'
+        assert s3.call_args.args[0] == 'https://reddit-uploaded-media.s3-accelerate.amazonaws.com'
+        assert s3.call_args.kwargs['data']['key'] == 'abc123xyz'
+
+    def test_upload_rejects_bad_types_and_non_local(self, tmp_path):
+        import io
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c:
+            cl = app.test_client()
+            r = cl.post('/api/upload', data={'file': (io.BytesIO(b'x'), 'a.exe', 'application/x-msdownload')},
+                        content_type='multipart/form-data', environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 415
+            assert cl.post('/api/upload', environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+            assert cl.post('/api/upload', data={'file': (io.BytesIO(b'x'), 'a.png', 'image/png')}, content_type='multipart/form-data',
+                           environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+
+    def test_video_upload_also_uploads_a_poster_frame(self, tmp_path):
+        import io, reddit_actions, reddit_media
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', side_effect=[self._lease('vid111'), self._lease('pos222')]), \
+             patch.object(reddit_media.requests, 'post', return_value=MagicMock(status_code=201)), \
+             patch.object(reddit_media, 'video_poster', return_value=b'jpegbytes'):
+            r = app.test_client().post('/api/upload', data={'file': (io.BytesIO(b'mp4'), 'clip.mp4', 'video/mp4')},
+                                       content_type='multipart/form-data', environ_base=self.LOCAL, headers=self.SAME)
+        j = r.get_json()
+        assert j['type'] == 'video' and j['asset_id'] == 'vid111' and j['poster_url'].endswith('/pos222')
+
+    def test_flairs_lookup_hides_mod_only_and_reports_required(self, tmp_path):
+        from routes import posting
+        a, b, c = TestVoting()._login(tmp_path)
+        flairs = MockResponse([{'id': 'aaaaaaaa-1', 'text': 'News', 'text_editable': False},
+                               {'id': 'bbbbbbbb-2', 'text': 'Mods', 'mod_only': True},
+                               {'id': 'cccccccc-3', 'text': '', 'text_editable': True}])
+        reqs = MockResponse({'is_flair_required': True})
+        with a, b, c, patch.object(posting, 'reddit_get', side_effect=[flairs, reqs]):
+            r = app.test_client().get('/api/r/test/flairs', environ_base=self.LOCAL, headers=self.SAME)
+        j = r.get_json()
+        assert [f['text'] for f in j['flairs']] == ['News', ''] and j['flairs'][1]['editable'] and j['required'] is True
+
+    def test_submit_with_flair_and_each_media_kind(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        img = {'asset_id': 'img111', 'url': self.UP + 'img111'}
+        img2 = {'asset_id': 'img222', 'url': self.UP + 'img222'}
+        vid = {'asset_id': 'vid111', 'url': self.VID + 'vid111', 'poster_url': self.UP + 'pos111'}
+        gallery_ok = self._ok({'json': {'errors': [], 'data': {'url': 'https://www.reddit.com/r/test/comments/g1/x/'}}})
+        posted = self._ok({'json': {'errors': [], 'data': {'websocket_url': 'wss://x'}}})
+        found = self._ok({'data': {'children': [{'data': {'title': 'T', 'created_utc': 4102444800, 'permalink': '/r/test/comments/m1/t/'}}]}})
+        cl = app.test_client()
+        with a, b, c, patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', return_value=found), \
+             patch.object(reddit_actions.time, 'time', return_value=4102444800):
+            with patch.object(reddit_actions.cffi_requests, 'post', return_value=gallery_ok) as post:
+                r = cl.post('/api/submit', json={'sub': 'test', 'title': 'T', 'kind': 'gallery', 'media': [img, img2],
+                            'flair_id': 'aaaaaaaa-1', 'flair_text': 'Custom'}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.get_json() == {'path': '/r/test/comments/g1/x/'}
+                assert post.call_args.args[0].endswith('/api/submit_gallery_post.json')
+                sent = post.call_args.kwargs['json']
+                assert [i['media_id'] for i in sent['items']] == ['img111', 'img222'] and sent['flair_id'] == 'aaaaaaaa-1' and sent['flair_text'] == 'Custom'
+            with patch.object(reddit_actions.cffi_requests, 'post', return_value=posted) as post:
+                r = cl.post('/api/submit', json={'sub': 'test', 'title': 'T', 'kind': 'image', 'media': [img]}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.get_json() == {'path': '/r/test/comments/m1/t/'} and post.call_args.kwargs['data']['kind'] == 'image'
+                r = cl.post('/api/submit', json={'sub': 'test', 'title': 'T', 'kind': 'video', 'media': [vid]}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.status_code == 200 and post.call_args.kwargs['data']['video_poster_url'] == self.UP + 'pos111'
+
+    def test_submit_media_validation(self, tmp_path):
+        a, b, c = TestVoting()._login(tmp_path)
+        good = {'asset_id': 'img111', 'url': self.UP + 'img111'}
+        bad_url = {'asset_id': 'img111', 'url': 'https://evil.example/x.png'}
+        cl = app.test_client()
+        with a, b, c:
+            for body in ({'kind': 'gallery', 'media': [good]}, {'kind': 'image', 'media': [bad_url]}, {'kind': 'image', 'media': []},
+                         {'kind': 'video', 'media': [good]}, {'kind': 'gallery', 'media': [good] * 21},
+                         {'kind': 'self', 'media': [], 'flair_id': 'not a flair!'}):
+                r = cl.post('/api/submit', json={'sub': 'test', 'title': 'T', **body}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.status_code == 400, body
+
+    def test_comment_with_image_uses_richtext(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        made = self._ok({'json': {'errors': [], 'data': {'things': [{'data': {'id': 'c1', 'name': 't1_c1', 'author': 'me', 'body': 'x',
+                                                                              'body_html': '', 'score': 1, 'created_utc': 0}}]}}})
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=made) as post:
+            r = app.test_client().post('/api/comment', json={'parent': 't3_abc', 'text': 'look', 'media_id': 'img111'},
+                                       environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 200
+            import json as _json
+            doc = _json.loads(post.call_args.kwargs['data']['richtext_json'])['document']
+            assert doc[0]['c'][0]['t'] == 'look' and doc[-1] == {'e': 'img', 'id': 'img111', 'c': ''}
+            assert 'text' not in post.call_args.kwargs['data']
+            r = app.test_client().post('/api/comment', json={'parent': 't3_abc', 'text': '', 'media_id': 'img111'}, environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 200                                    # an image alone is enough
+            r = app.test_client().post('/api/comment', json={'parent': 't3_abc', 'text': '', 'media_id': 'bad id'}, environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 400
+
+    def test_noscript_form_uploads_attached_file_then_posts(self, tmp_path):
+        import io, reddit_actions, reddit_media
+        a, b, c = TestVoting()._login(tmp_path)
+        posted = self._ok({'json': {'errors': [], 'data': {'websocket_url': 'wss://x'}}})
+        found = self._ok({'data': {'children': [{'data': {'title': 'Pic', 'created_utc': 4102444800, 'permalink': '/r/test/comments/m1/pic/'}}]}})
+        with a, b, c, patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', return_value=found), \
+             patch.object(reddit_actions.time, 'time', return_value=4102444800), \
+             patch.object(reddit_actions.cffi_requests, 'post', side_effect=[self._lease('img111'), posted]) as post, \
+             patch.object(reddit_media.requests, 'post', return_value=MagicMock(status_code=201)):
+            r = app.test_client().post('/submit', data={'sub': 'test', 'title': 'Pic', 'kind': 'self', 'body': '',
+                                                        'files': (io.BytesIO(b'png'), 'p.png', 'image/png')},
+                                       content_type='multipart/form-data', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 302 and r.headers['Location'] == '/r/test/comments/m1/pic/'
+        assert post.call_args.kwargs['data']['kind'] == 'image'
+
+    def test_noscript_form_lists_flairs(self, tmp_path):
+        from routes import posting
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(posting, 'fetch_flairs', return_value={'flairs': [{'id': 'aaaaaaaa-1', 'text': 'News', 'editable': False}], 'required': True}):
+            html = app.test_client().get('/submit?sub=test&title=Keep', environ_base=self.LOCAL).get_data(as_text=True)
+        assert 'value="aaaaaaaa-1"' in html and 'Choose a flair' in html and 'value="Keep"' in html and 'enctype="multipart/form-data"' in html
+
+
+class TestImageCommentFinishes:
+    def test_placeholder_replaced_by_processed_comment(self):
+        import reddit_actions
+        placeholder = {'name': 't1_c1', 'body': 'hi\n\n*Processing img abc...*'}
+        done = MockResponse({'data': {'children': [{'data': {'name': 't1_c1', 'body': 'hi\n\nhttps://preview.redd.it/abc.png'}}]}})
+        with patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', side_effect=[MockResponse({'data': {'children': []}}), done]):
+            out = reddit_actions._finished_comment(placeholder)
+        assert 'preview.redd.it' in out['body'] and out['likes'] is True
+
+    def test_gives_up_but_still_returns_the_comment(self):
+        import reddit_actions
+        placeholder = {'name': 't1_c1', 'body': '*Processing img abc...*'}
+        with patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', return_value=MockResponse({'data': {'children': []}})):
+            assert reddit_actions._finished_comment(placeholder, tries=3) == placeholder
