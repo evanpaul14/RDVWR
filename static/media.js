@@ -608,7 +608,11 @@ export function mediaHtml(p, full = false) {
   } else if (p.streamable_id) {
     html = `<div class="${vc}"><div class="streamable-embed"><iframe src="https://streamable.com/e/${escHtml(p.streamable_id)}" frameborder="0" width="100%" height="100%" allowfullscreen allow="autoplay"></iframe></div></div>`;
   } else if (p.embed_url) {
-    html = `<div class="${vc}"><iframe src="${escHtml(p.embed_url)}"${p.embed_height ? ` style="aspect-ratio:auto;height:${+p.embed_height}px"` : ''} allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+    // Tweets: load Twitter's own dark-themed embed; Reddit's wrapper page is always light.
+    const src = p.tweet_id
+      ? `https://platform.twitter.com/embed/Tweet.html?id=${escHtml(p.tweet_id)}&theme=dark&dnt=true&hideThread=false`
+      : escHtml(p.embed_url);
+    html = `<div class="${vc}"><iframe src="${src}"${p.embed_height ? ` style="aspect-ratio:auto;height:${+p.embed_height}px"` : ''} allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
   } else if (p.gif_url) {
     html = p.gif_is_video
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
@@ -736,11 +740,16 @@ document.addEventListener('touchend', e => {
   if (btn && !btn.disabled) btn.click();
 }, { passive: true });
 
-// Reddit's tweet embed pages report their real rendered height to the parent.
+// Tweet embeds report their rendered height to the parent: Twitter's own iframe
+// (twttr.embed JSON-RPC) and Reddit's wrapper page ('tweet-measured').
 window.addEventListener('message', e => {
-  const d = e.data;
-  if (!d || d.action !== 'tweet-measured' || !(d.height > 0)) return;
-  for (const f of document.querySelectorAll('iframe[src*="redditmedia.com/mediaembed/"]')) {
-    if (f.contentWindow === e.source) { f.style.aspectRatio = 'auto'; f.style.height = `${Math.ceil(d.height)}px`; }
+  let d = e.data, h = 0;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return; } }
+  if (!d || typeof d !== 'object') return;
+  if (d.action === 'tweet-measured') h = d.height;
+  else if (d['twttr.embed']?.method === 'twttr.private.resize') h = d['twttr.embed'].params?.[0]?.height;
+  if (!(h > 0)) return;
+  for (const f of document.querySelectorAll('iframe[src*="redditmedia.com/mediaembed/"], iframe[src*="platform.twitter.com/embed/"]')) {
+    if (f.contentWindow === e.source) { f.style.aspectRatio = 'auto'; f.style.height = `${Math.ceil(h)}px`; }
   }
 });
