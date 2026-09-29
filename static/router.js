@@ -42,6 +42,7 @@ export function parseRoute(path=location.pathname) {
     const params = _qs(path);
     return { type:'user', username:mUser[1], after: params.get('after') || null, page: parseInt(params.get('page')) || 1 };
   }
+  if (/^\/account\/?$/.test(pathname)) return { type: 'account', tab: _qs(path).get('tab') === 'comments' ? 'comments' : 'posts' };
   if (pathname === '/saved' || pathname === '/saved/') return { type: 'saved' };
   const mSubscribed = pathname.match(/^\/subscribed(?:\/([^\/]+))?\/?$/i);
   if (mSubscribed) {

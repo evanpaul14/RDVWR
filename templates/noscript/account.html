@@ -1,0 +1,73 @@
+{# The logged-in account's own profile (page_data.build_account): posts/comments with edit and delete, profile picture, sign out. #}
+{% import 'noscript/macros/ui.html' as ui %}
+{% set about = page.about %}
+{% set next = current_url() %}
+
+{% if about %}
+  {% set stats -%}
+    <span>{{ about.karma_post | fmtnum }}</span> post karma &middot; <span>{{ about.karma_comment | fmtnum }}</span> comment karma
+    {%- if about.created_utc %} &middot; joined {{ about.created_utc | fmtdate }}{% endif -%}
+  {%- endset %}
+  {{ ui.ctx_header('u/' ~ about.name, stats, about.icon) }}
+{% else %}
+  {{ ui.ctx_header('u/' ~ page.username) }}
+{% endif %}
+
+<div class="acct-panel">
+  <form class="acct-row" method="post" action="/actions/account/avatar" enctype="multipart/form-data">
+    <input type="hidden" name="next" value="{{ next }}">
+    <span class="submit-label">Profile picture</span>
+    <input class="file-input" type="file" name="file" accept="image/jpeg,image/png">
+    <button class="settings-action-btn" type="submit">Upload</button>
+    <button class="settings-action-btn" type="submit" name="remove" value="1" formnovalidate>Remove</button>
+  </form>
+  <div class="acct-row">
+    <a class="settings-action-btn" href="/user/{{ page.username }}">Public profile</a>
+    <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
+  </div>
+</div>
+
+<div class="sort-bar ns-sort-bar">
+  {% for t, url in page.tab_links %}{{ ui.sort_link(t | capitalize, url, t == page.tab) }}{% endfor %}
+</div>
+
+{% if page.error %}
+  {{ ui.error_state(page.error) }}
+{% else %}
+  <div class="feed-list acct-list">
+    {% for it in page['items'] %}
+      {% set fullname = ('t3_' if page.tab == 'posts' else 't1_') ~ it.id %}
+      <div class="acct-item">
+        {% if page.tab == 'posts' %}
+          <a class="acct-item-title" href="/r/{{ it.subreddit }}/comments/{{ it.id }}">{{ it.title }}</a>
+          <div class="acct-item-meta">r/{{ it.subreddit }} &middot; &#9650; {{ it.score | fmtnum }} &middot; {{ it.num_comments | fmtnum }} comments &middot; {{ it.created_utc | timeago }}</div>
+        {% else %}
+          <div class="acct-item-meta">in <a href="/r/{{ it.subreddit }}">r/{{ it.subreddit }}</a> &middot; <a href="/r/{{ it.subreddit }}/comments/{{ it.link_id }}/_/{{ it.id }}">{{ it.link_title }}</a></div>
+          <div class="ucc-body md">{{ it.body | mdtext }}</div>
+          <div class="acct-item-meta">&#9650; {{ it.score | fmtnum }} &middot; {{ it.created_utc | timeago }}</div>
+        {% endif %}
+        <div class="acct-manage">
+          {% if page.tab == 'comments' or it.is_self %}
+          <details><summary>edit</summary>
+            <form method="post" action="/actions/account/edit">
+              <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
+              <textarea class="settings-input settings-textarea" name="text" rows="6" required>{{ page.full_texts.get(fullname, it.selftext) if page.tab == 'posts' else it.body }}</textarea>
+              <button class="submit-go" type="submit">Save</button>
+            </form>
+          </details>
+          {% endif %}
+          <details><summary>delete</summary>
+            <form method="post" action="/actions/account/delete">
+              <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
+              <span class="acct-item-meta">This can't be undone.</span>
+              <button class="settings-action-btn acct-danger" type="submit">Delete for good</button>
+            </form>
+          </details>
+        </div>
+      </div>
+    {% else %}
+      {{ ui.empty_state('Nothing here') }}
+    {% endfor %}
+  </div>
+  {{ ui.next_link(page.next_url) }}
+{% endif %}

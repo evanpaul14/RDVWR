@@ -10,7 +10,8 @@ import reddit_login
 from ns_prefs import get_pref
 from routes.live import LIVE_ID_RE
 from routes.media import resolve_reddit_url
-from routes.page_data import (build_home, build_subscribed, build_subreddit, build_multi, build_duplicates, build_wiki,
+from routes.actions import require_account
+from routes.page_data import (build_account, build_home, build_subscribed, build_subreddit, build_multi, build_duplicates, build_wiki,
                               build_post, build_profile, build_search, build_live, build_message,
                               clean_time, TIMED_SORTS)
 
@@ -131,6 +132,13 @@ def share_link(sub, token):
 
 
 # ── Users, search, live ───────────────────────────────────────────────────────
+
+@bp.route("/account", strict_slashes=False)
+def account():
+    """The logged-in account's own profile page (local requests while logged in only)."""
+    require_account(post=False)
+    return _respond(build_account(_arg('tab', 'posts'), _arg('after')))
+
 
 @bp.route("/user/<username>", strict_slashes=False)
 @bp.route("/u/<username>", strict_slashes=False)
