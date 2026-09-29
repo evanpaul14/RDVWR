@@ -1552,3 +1552,51 @@ class TestVoting:
             assert 'action="/actions/vote"' in html and 'name="dir" value="0"' in html   # already upvoted -> clears
         with patch.object(page_data, 'fetch_frontpage', return_value=feed):
             assert 'action="/actions/vote"' not in app.test_client().get('/home').get_data(as_text=True)
+
+
+class TestJoinSubreddit:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def _login(self, tmp_path):
+        return TestVoting()._login(tmp_path)
+
+    def test_join_and_leave_post_to_reddit(self, tmp_path):
+        import reddit_actions
+        a, b, c = self._login(tmp_path)
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {}
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=resp) as post:
+            cl = app.test_client()
+            assert cl.post('/api/subscribe', json={'sub': 'test', 'action': 'sub'},
+                           environ_base=self.LOCAL, headers=self.SAME).status_code == 200
+            assert post.call_args.args[0] == 'https://oauth.reddit.com/api/subscribe'
+            assert post.call_args.kwargs['data']['action'] == 'sub' and post.call_args.kwargs['data']['sr_name'] == 'test'
+            cl.post('/api/subscribe', json={'sub': 'test', 'action': 'unsub'}, environ_base=self.LOCAL, headers=self.SAME)
+            assert post.call_args.kwargs['data']['action'] == 'unsub'
+
+    def test_rejects_multis_bad_input_and_non_local(self, tmp_path):
+        a, b, c = self._login(tmp_path)
+        with a, b, c:
+            cl = app.test_client()
+            for bad in ({'sub': 'a+b', 'action': 'sub'}, {'sub': 'test', 'action': 'ban'}, {'sub': '../x', 'action': 'sub'}):
+                assert cl.post('/api/subscribe', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+            assert cl.post('/api/subscribe', json={'sub': 'test', 'action': 'sub'},
+                           environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+
+    def test_noscript_subreddit_shows_join_form_only_when_logged_in(self, tmp_path):
+        from routes import page_data
+        a, b, c = self._login(tmp_path)
+        about = {'title': 'Test', 'description': '', 'sidebar': '', 'sidebar_html': '', 'subscribers': 1,
+                 'active': 0, 'icon': '', 'state': None, 'user_is_subscriber': False}
+        feed = {'posts': [], 'after': None}
+        patches = (patch.object(page_data, 'fetch_feed', return_value=feed), patch.object(page_data, 'fetch_about', return_value=about),
+                   patch.object(page_data, 'fetch_rules', return_value=[]), patch.object(page_data, 'fetch_moderators', return_value=[]),
+                   patch.object(page_data, 'fetch_widgets', return_value=[]))
+        from contextlib import ExitStack
+        with ExitStack() as st:
+            for p in patches: st.enter_context(p)
+            with a, b, c:
+                html = app.test_client().get('/r/test', environ_base=self.LOCAL).get_data(as_text=True)
+                assert 'action="/actions/subscribe"' in html and 'value="sub"' in html and '>join<' in html
+            assert 'action="/actions/subscribe"' not in app.test_client().get('/r/test').get_data(as_text=True)

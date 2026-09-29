@@ -230,6 +230,7 @@ def fetch_about(subreddit, timeout=10):
         "sidebar":      d.get("description", ""),
         "sidebar_html": clean_reddit_html(d.get("description_html")),
         "subscribers":  d.get("subscribers", 0),
+        "user_is_subscriber": d.get("user_is_subscriber"),  # the logged-in account's membership, else None
         "active":       active,
         "icon":         icon or "",
         "state":        state,

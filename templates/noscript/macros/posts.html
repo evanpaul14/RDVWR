@@ -199,7 +199,7 @@
 {%- endmacro %}
 
 {% macro vote_form(fullname, likes) -%}
-  {%- if vote_enabled() -%}
+  {%- if account_active() -%}
   <form class="ns-vote" method="post" action="/actions/vote">
     <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ current_url() }}">
     <button class="vote-btn vote-up{% if likes is sameas true %} on{% endif %}" name="dir" value="{{ 0 if likes is sameas true else 1 }}" aria-label="Upvote" title="Upvote">&#9650;</button>
