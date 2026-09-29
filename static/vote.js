@@ -1,7 +1,8 @@
 // Voting as the logged-in Reddit account (see reddit_login.py). The controls only exist
 // when the server says we're logged in (window.__REDDIT_LOGIN__.username), which it does
 // only for requests from the server's own machine.
-export const votingEnabled = () => !!window.__REDDIT_LOGIN__?.username;
+export const accountActive = () => !!window.__REDDIT_LOGIN__?.username;
+export const votingEnabled = accountActive;
 
 const dirOf = likes => likes === true ? 1 : likes === false ? -1 : 0;
 

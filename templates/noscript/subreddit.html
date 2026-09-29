@@ -13,6 +13,13 @@
     {%- if about.state %} &middot; <span class="ctx-state">{{ SUB_STATE_LABELS.get(about.state, about.state) }}</span>{% endif -%}
   {%- endset %}
   {{ ui.ctx_header(about.title or 'r/' ~ page.sub, stats, about.icon) }}
+  {% if account_active() and about.user_is_subscriber is not none and '+' not in page.sub %}
+  <form class="ns-join" method="post" action="/actions/subscribe">
+    <input type="hidden" name="sub" value="{{ page.sub }}"><input type="hidden" name="next" value="{{ current_url() }}">
+    <input type="hidden" name="action" value="{{ 'unsub' if about.user_is_subscriber else 'sub' }}">
+    <button type="submit" class="ctx-sub-btn{% if about.user_is_subscriber %} is-subscribed{% endif %}">{{ 'joined' if about.user_is_subscriber else 'join' }}</button>
+  </form>
+  {% endif %}
 {% else %}
   {{ ui.ctx_header('r/' ~ page.sub) }}
 {% endif %}

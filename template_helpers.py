@@ -204,7 +204,7 @@ def register(app):
         app.add_template_global(fn)
     app.add_template_global(download_url)
     app.add_template_global(current_url)
-    app.add_template_global(lambda: reddit_login.request_account_active() and bool(reddit_login.username()), 'vote_enabled')
+    app.add_template_global(lambda: reddit_login.request_account_active() and bool(reddit_login.username()), 'account_active')
     app.add_template_global(pager_urls)
 
     def asset_v(filename):

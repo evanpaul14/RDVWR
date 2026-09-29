@@ -44,3 +44,8 @@ def _post(path, data, timeout=15):
 def vote(fullname, direction):
     """direction: 1 upvote, -1 downvote, 0 clear. fullname is t3_<post> or t1_<comment>."""
     _post('/api/vote', {'id': fullname, 'dir': direction})
+
+
+def subscribe(subreddit, join):
+    """Join (join=True) or leave a single subreddit."""
+    _post('/api/subscribe', {'action': 'sub' if join else 'unsub', 'sr_name': subreddit})

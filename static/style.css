@@ -2089,3 +2089,4 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-score.vote-ctl .vote-btn { font-size:10px; padding:1px 2px; }
 .ns-vote { display:inline-flex; margin:0; }
 .ns-vote .vote-btn { font-size:12px; padding:2px 5px; }
+.ns-join { margin:0 0 8px; }
