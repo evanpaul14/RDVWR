@@ -735,3 +735,12 @@ document.addEventListener('touchend', e => {
   const btn = stage.querySelector(dx < 0 ? '.gallery-next' : '.gallery-prev');
   if (btn && !btn.disabled) btn.click();
 }, { passive: true });
+
+// Reddit's tweet embed pages report their real rendered height to the parent.
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || d.action !== 'tweet-measured' || !(d.height > 0)) return;
+  for (const f of document.querySelectorAll('iframe[src*="redditmedia.com/mediaembed/"]')) {
+    if (f.contentWindow === e.source) { f.style.aspectRatio = 'auto'; f.style.height = `${Math.ceil(d.height)}px`; }
+  }
+});
