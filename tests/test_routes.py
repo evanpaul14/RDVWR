@@ -1285,3 +1285,197 @@ class TestServerCache:
             c.get("/x?a=1")
             c.get("/x?a=2")
         assert len(calls) == 2
+
+
+# ── Reddit login ──────────────────────────────────────────────────────────────
+
+class TestRedditLogin:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def test_disabled_by_default(self):
+        c = app.test_client()
+        assert c.post('/auth/reddit/login', environ_base=self.LOCAL, headers=self.SAME).status_code == 404
+
+    def test_non_local_and_proxied_requests_rejected(self):
+        import reddit_login
+        with patch.object(reddit_login, 'ENABLED', True):
+            c = app.test_client()
+            assert c.post('/auth/reddit/login', environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+            assert c.post('/auth/reddit/login', environ_base=self.LOCAL,
+                          headers={**self.SAME, 'X-Forwarded-For': '1.2.3.4'}).status_code == 404
+
+    def test_cross_site_post_rejected(self):
+        import reddit_login
+        with patch.object(reddit_login, 'ENABLED', True):
+            r = app.test_client().post('/auth/reddit/login', environ_base=self.LOCAL, headers={'Sec-Fetch-Site': 'cross-site'})
+        assert r.status_code == 403
+
+    def test_rejects_garbage_and_signed_out_cookies(self, tmp_path):
+        import reddit_login
+        with patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(tmp_path / 'l.json')), \
+             patch.object(reddit_login, '_whoami', return_value=None):
+            c = app.test_client()
+            for raw in ('not a cookie', 'reddit_session=abc'):
+                r = c.post('/auth/reddit/login', data={'cookies': raw}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.status_code == 400
+            assert reddit_login.username() is None
+
+    def test_login_stores_cookies_locally_and_logout_removes_them(self, tmp_path):
+        import reddit_login
+        store = str(tmp_path / 'l.json')
+        with patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', store), \
+             patch.object(reddit_login, '_whoami', return_value='someone'):
+            c = app.test_client()
+            r = c.post('/auth/reddit/login', data={'cookies': 'Cookie: reddit_session=abc; token_v2=xyz'},
+                       environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 302
+            assert reddit_login.username() == 'someone'
+            assert reddit_login.cookie_header() == 'reddit_session=abc; token_v2=xyz'
+            assert oct(os.stat(store).st_mode & 0o777) == '0o600'
+            c.post('/auth/reddit/logout', environ_base=self.LOCAL, headers=self.SAME)
+            assert reddit_login.username() is None and not os.path.exists(store)
+
+
+class TestPersonalizedHomeViaLogin:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def _logged_in(self, tmp_path):
+        import reddit_login
+        store = tmp_path / 'l.json'
+        store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
+        return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)))
+
+    def test_login_flag_uses_stored_cookies_for_local_requests(self, tmp_path):
+        from routes import home
+        p1, p2 = self._logged_in(tmp_path)
+        feed = {'posts': [], 'after': None, 'via': 'shreddit'}
+        with p1, p2, patch.object(home, 'fetch_personalized_home', return_value=feed) as f:
+            r = app.test_client().get('/api/home?login=1', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200 and r.get_json()['via'] == 'shreddit'
+        assert f.call_args.args[0] == 'reddit_session=abc'
+
+    def test_login_cookies_not_used_without_flag_or_off_machine(self, tmp_path):
+        from routes import home
+        p1, p2 = self._logged_in(tmp_path)
+        anon = {'posts': [], 'after': None}
+        with p1, p2, patch.object(home, 'fetch_personalized_home') as f, \
+             patch.object(home, 'fetch_frontpage', return_value=anon):
+            c = app.test_client()
+            c.get('/api/home', environ_base=self.LOCAL, headers=self.SAME)
+            c.get('/api/home?login=1', environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME)
+            c.get('/api/home?login=1', environ_base=self.LOCAL, headers={**self.SAME, 'X-Forwarded-For': '1.2.3.4'})
+        f.assert_not_called()
+
+    def test_noscript_home_personalized_unless_pref_off(self, tmp_path):
+        from routes import page_data
+        p1, p2 = self._logged_in(tmp_path)
+        feed = {'posts': [], 'after': None}
+        with p1, p2, patch.object(page_data, 'fetch_personalized_home', return_value=feed) as f:
+            c = app.test_client()
+            c.get('/home', environ_base=self.LOCAL)
+            assert f.call_count == 1
+            c.set_cookie('ns_personalized_home', '0')
+            c.get('/home', environ_base=self.LOCAL)
+            assert f.call_count == 1
+
+
+class TestFetchPersonalizedHome:
+    HTML = (
+        '<article><shreddit-post id="t3_abc123" permalink="/r/python/comments/abc123/hi/" post-type="text" '
+        'post-title="Hello" subreddit-prefixed-name="r/python" author="someone" score="5" comment-count="2"></shreddit-post></article>'
+        '<article><shreddit-post id="t3_ad1" promoted permalink="/r/x/comments/ad1/ad/"></shreddit-post></article>'
+        '<faceplate-partial id="feed-next-page-partial" src="/svc/shreddit/feeds/home-feed?after=t3_zzz&amp;distance=4"></faceplate-partial>'
+    )
+
+    def _resp(self, text, status=200):
+        r = MockResponse(status_code=status)
+        r.text = text
+        return r
+
+    def test_parses_posts_skips_promoted_and_finds_next_cursor(self):
+        from routes import home
+        with patch.object(home.cffi_requests, 'get', return_value=self._resp(self.HTML)) as g, \
+             patch.object(home, 'reddit_get', return_value=MockResponse(status_code=500)):
+            out = home.fetch_personalized_home('reddit_session=abc', 'best')
+        assert out['via'] == 'shreddit' and out['after'] == 't3_zzz'
+        assert [p['id'] for p in out['posts']] == ['abc123']
+        assert g.call_args.kwargs['headers']['Cookie'] == 'reddit_session=abc'
+        assert g.call_args.kwargs['allow_redirects'] is False
+
+    def test_non_200_raises_upstream_error(self):
+        from routes import home
+        with patch.object(home.cffi_requests, 'get', return_value=self._resp('Blocked', 403)):
+            with pytest.raises(helpers.UpstreamError):
+                home.fetch_personalized_home('reddit_session=abc', 'best')
+
+
+class TestAccountReads:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def _jwt(self, exp):
+        import base64
+        b = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip('=')
+        return f"{b({'alg': 'none'})}.{b({'exp': exp})}.sig"
+
+    def _logged_in(self, tmp_path):
+        import reddit_login
+        store = tmp_path / 'l.json'
+        store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
+        reddit_login._token.update(cookies=None, value=None, exp=0.0)
+        return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)))
+
+    def test_access_token_minted_from_home_page_set_cookie_and_cached(self, tmp_path):
+        import time, reddit_login
+        tok = self._jwt(time.time() + 86400)
+        resp = MagicMock(status_code=200)
+        resp.headers.get_list.return_value = ['session_tracker=x; Path=/', f'token_v2={tok}; Domain=.reddit.com']
+        p1, p2 = self._logged_in(tmp_path)
+        with p1, p2, patch.object(reddit_login.cffi_requests, 'get', return_value=resp) as g:
+            assert reddit_login.access_token() == tok
+            assert reddit_login.access_token() == tok          # cached, no second mint
+        assert g.call_count == 1 and g.call_args.kwargs['headers']['Cookie'] == 'reddit_session=abc'
+
+    def test_access_token_none_when_cookies_dead(self, tmp_path):
+        import reddit_login
+        resp = MagicMock(status_code=200)
+        resp.headers.get_list.return_value = ['session_tracker=x']
+        p1, p2 = self._logged_in(tmp_path)
+        with p1, p2, patch.object(reddit_login.cffi_requests, 'get', return_value=resp):
+            assert reddit_login.access_token() is None
+
+    def test_request_token_only_for_local_requests(self, tmp_path):
+        import reddit_login
+        p1, p2 = self._logged_in(tmp_path)
+        with p1, p2, patch.object(reddit_login, 'access_token', return_value='T'):
+            with app.test_request_context('/', environ_base=self.LOCAL):
+                assert reddit_login.request_token() == 'T'
+            with app.test_request_context('/', environ_base={'REMOTE_ADDR': '10.0.0.5'}):
+                assert reddit_login.request_token() is None
+            with app.test_request_context('/', environ_base=self.LOCAL, headers={'X-Forwarded-For': '1.2.3.4'}):
+                assert reddit_login.request_token() is None
+            assert reddit_login.request_token() is None   # no request context (e.g. background thread)
+
+    def test_reddit_get_uses_bearer_token_against_oauth_host(self):
+        with patch.object(reddit_client, 'USER_TOKEN_PROVIDER', lambda: 'T'), \
+             patch.object(reddit_client.cffi_requests, 'get', return_value=MagicMock(status_code=200)) as g:
+            reddit_client.reddit_get('https://www.reddit.com/r/test/new.json', params={'a': 1}, timeout=5)
+        assert g.call_args.args[0] == 'https://oauth.reddit.com/r/test/new.json'
+        assert g.call_args.kwargs['headers']['Authorization'] == 'Bearer T'
+        assert g.call_args.kwargs['params'] == {'a': 1}
+
+    def test_account_reads_bypass_and_never_populate_shared_cache(self, tmp_path):
+        from routes import home
+        import reddit_login
+        p1, p2 = self._logged_in(tmp_path)
+        with p1, p2, patch.object(home, 'fetch_frontpage', return_value={'posts': [], 'after': None}), \
+             patch.object(reddit_login, 'access_token', return_value='T'):
+            r = app.test_client().get('/api/home?sort=hot', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.headers['Cache-Control'] == 'private, no-store'
+
+    def test_parallel_propagates_request_context(self):
+        with app.test_request_context('/x?y=1'):
+            from flask import request
+            assert helpers.parallel(lambda: request.args.get('y'))[0] == '1'

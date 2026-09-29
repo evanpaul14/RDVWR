@@ -39,6 +39,10 @@ _ADAPTER = requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=32)
 SESSION.mount("https://", _ADAPTER)
 SESSION.mount("http://", _ADAPTER)
 
+# Set by reddit_login: returns a bearer token when the current request should read as the
+# logged-in Reddit account (a local request while logged in), else None.
+USER_TOKEN_PROVIDER = None
+
 REDDIT_OAUTH = os.environ.get('REDDIT_OAUTH', '1').strip().lower() not in ('0', 'false', 'no', 'off')
 
 # ── Reddit OAuth spoofing ─────────────────────────────────────────────────────
@@ -486,6 +490,18 @@ def _record_ratelimit(device: _OAuthDevice, resp):
 def reddit_get(url, *, quarantine=False, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
     Pass quarantine=True to use the quarantine-opted-in session instead of OAuth."""
+    if not quarantine and USER_TOKEN_PROVIDER:
+        user_token = USER_TOKEN_PROVIDER()
+        if user_token:
+            user_url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
+            headers = {**kwargs.get("headers", {}), "Authorization": f"Bearer {user_token}"}
+            try:
+                resp = cffi_requests.get(user_url, impersonate="chrome131", proxies=PROXIES,
+                                         **{**kwargs, "headers": headers})
+                if resp.status_code != 401:
+                    return resp
+            except Exception as e:
+                log.warning("account read failed, using anonymous path: %s", e)
     if not REDDIT_OAUTH or quarantine:
         sess = _get_quarantine_session() if quarantine else SESSION
         return sess.get(url, **kwargs)

@@ -24,6 +24,7 @@ PREFS = {
     'sub_sort':            Pref('ns_sub_sort', 'subSort', SUB_SORTS),
     'sub_time':            Pref('ns_sub_time', 'subTime', TIME_FILTERS),
     'comment_sort':        Pref('ns_comment_sort', 'commentSort', COMMENT_SORTS),
+    'personalized_home':   Pref('ns_personalized_home', 'personalizedHome', None),
     'link_external_media': Pref('ns_link_external_media', 'linkExternalMedia', None),
     'nsfw_blur':           Pref('ns_nsfw_blur', 'nsfwBlur', None),
     'nsfw_hide':           Pref('ns_nsfw_hide', 'nsfwHide', None),

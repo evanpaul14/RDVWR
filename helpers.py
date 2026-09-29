@@ -8,9 +8,11 @@ import logging
 import threading
 from functools import wraps
 from urllib.parse import urlsplit
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 from flask import jsonify, request, Response, make_response
 from media_detection import process_post
+import reddit_login
 from reddit_client import reddit_get
 
 
@@ -106,6 +108,7 @@ DEFAULT_SETTINGS = {
     'subTime':           _enum_env('RDVWR_DEFAULT_SUB_TIME', 'day', TIME_FILTERS),
     'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence', COMMENT_SORTS),
     'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed'}),
+    'personalizedHome':  _bool_env('RDVWR_DEFAULT_PERSONALIZED_HOME', True),
     'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
     'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
     'linkExternalMedia': _bool_env('RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA', False),
@@ -147,8 +150,10 @@ class UpstreamError(Exception):
 
 def parallel(*fns):
     """Run each zero-arg callable in its own thread and return results in order."""
+    # Each thread runs in a copy of this context so the request (and with it the local
+    # Reddit login, see reddit_login.request_account_active) is visible inside fetches.
     with ThreadPoolExecutor(max_workers=len(fns)) as ex:
-        futures = [ex.submit(fn) for fn in fns]
+        futures = [ex.submit(contextvars.copy_context().run, fn) for fn in fns]
         return [f.result() for f in futures]
 
 
@@ -307,7 +312,9 @@ def is_same_site_request():
 
 def cached_json(data, seconds):
     resp = make_response(jsonify(data))
-    resp.headers['Cache-Control'] = f'public, max-age={seconds}'
+    # Data fetched as the logged-in account (vote state etc.) must never reach a shared cache.
+    resp.headers['Cache-Control'] = ('private, no-store' if reddit_login.request_account_active()
+                                     else f'public, max-age={seconds}')
     return resp
 
 _view_cache = TTLCache(500, name='view')
@@ -319,6 +326,12 @@ def server_cache(ttl):
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
+            if reddit_login.request_account_active():
+                # Reading as the account: bypass the shared cache in both directions.
+                resp = f(*args, **kwargs)
+                if isinstance(resp, Response):
+                    resp.headers['Cache-Control'] = 'private, no-store'
+                return resp
             key = request.full_path
             hit = _view_cache.get(key)
             if hit is not _CACHE_MISS:
@@ -334,3 +347,10 @@ def server_cache(ttl):
             return resp
         return wrapper
     return decorator
+
+
+def safe_next(raw):
+    """Only ever redirect back to a same-site path."""
+    if not raw or not raw.startswith('/') or raw.startswith('//') or '\\' in raw:
+        return '/'
+    return raw
