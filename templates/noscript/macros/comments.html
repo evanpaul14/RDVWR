@@ -37,6 +37,7 @@
         {{ posts.awards(c.awards) }}
       </summary>
       <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
+      {{ posts.vote_form('t1_' ~ c.id, c.likes) }}
       {%- if c.replies -%}
         <div class="comment-replies">
           {%- if depth >= THREAD_MAX_DEPTH -%}

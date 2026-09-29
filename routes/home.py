@@ -109,6 +109,7 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
                     if not d:
                         continue
                     full = process_post(d)
+                    post['likes'] = full['likes']
                     post['flair'] = full['flair']
                     post['flair_richtext'] = full['flair_richtext']
                     post['flair_type'] = full['flair_type']

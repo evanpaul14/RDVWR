@@ -2079,3 +2079,13 @@ details.comment:not([open]) > .comment-replies { display:none; }
   .ns-about-panel { padding:12px 12px 0; }
   .ns-settings-wrap { padding:18px 12px 60px; }
 }
+
+/* Voting arrows (only rendered while logged in to Reddit via localhost) */
+.vote-ctl { display:inline-flex; align-items:center; gap:4px; }
+.vote-btn { background:none; border:0; padding:2px 3px; font-size:11px; line-height:1; color:var(--tx3); cursor:pointer; border-radius:3px; }
+.vote-btn:hover { color:var(--tx); }
+.vote-btn[data-vote="1"].on, .vote-up.on   { color:var(--up); }
+.vote-btn[data-vote="-1"].on, .vote-down.on { color:var(--ac); }
+.comment-score.vote-ctl .vote-btn { font-size:10px; padding:1px 2px; }
+.ns-vote { display:inline-flex; margin:0; }
+.ns-vote .vote-btn { font-size:12px; padding:2px 5px; }

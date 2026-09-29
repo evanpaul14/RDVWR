@@ -1479,3 +1479,76 @@ class TestAccountReads:
         with app.test_request_context('/x?y=1'):
             from flask import request
             assert helpers.parallel(lambda: request.args.get('y'))[0] == '1'
+
+
+class TestVoting:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def _login(self, tmp_path):
+        import reddit_login
+        store = tmp_path / 'l.json'
+        store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
+        return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)),
+                patch.object(reddit_login, 'access_token', return_value='T'))
+
+    def test_vote_posts_to_reddit_as_account(self, tmp_path):
+        import reddit_actions
+        a, b, c = self._login(tmp_path)
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {}
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=resp) as post:
+            r = app.test_client().post('/api/vote', json={'id': 't3_abc', 'dir': 1},
+                                       environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200 and r.get_json() == {'ok': True}
+        assert post.call_args.args[0] == 'https://oauth.reddit.com/api/vote'
+        assert post.call_args.kwargs['data']['id'] == 't3_abc' and post.call_args.kwargs['data']['dir'] == 1
+        assert post.call_args.kwargs['headers']['Authorization'] == 'Bearer T'
+
+    def test_vote_hidden_unless_local_and_logged_in(self, tmp_path):
+        a, b, c = self._login(tmp_path)
+        with a, b, c:
+            cl = app.test_client()
+            assert cl.post('/api/vote', json={'id': 't3_abc', 'dir': 1}, environ_base={'REMOTE_ADDR': '10.0.0.5'},
+                           headers=self.SAME).status_code == 404
+            assert cl.post('/api/vote', json={'id': 't3_abc', 'dir': 1}, environ_base=self.LOCAL,
+                           headers={**self.SAME, 'X-Forwarded-For': '1.1.1.1'}).status_code == 404
+        assert app.test_client().post('/api/vote', json={'id': 't3_abc', 'dir': 1}, environ_base=self.LOCAL,
+                                      headers=self.SAME).status_code == 404   # login disabled
+
+    def test_vote_rejects_cross_site_and_bad_input(self, tmp_path):
+        a, b, c = self._login(tmp_path)
+        with a, b, c:
+            cl = app.test_client()
+            assert cl.post('/api/vote', json={'id': 't3_abc', 'dir': 1}, environ_base=self.LOCAL,
+                           headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
+            for bad in ({'id': 't2_abc', 'dir': 1}, {'id': 't3_abc', 'dir': 5}, {'id': '../x', 'dir': 1}):
+                assert cl.post('/api/vote', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+
+    def test_reddit_errors_are_reported(self, tmp_path):
+        import reddit_actions
+        a, b, c = self._login(tmp_path)
+        resp = MagicMock(ok=False, status_code=429)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=resp):
+            r = app.test_client().post('/api/vote', json={'id': 't3_abc', 'dir': 1}, environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 429 and 'rate limiting' in r.get_json()['error']
+
+    def test_noscript_form_vote_redirects_back_and_buttons_render_only_when_logged_in(self, tmp_path):
+        import reddit_actions
+        from routes import page_data
+        a, b, c = self._login(tmp_path)
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {}
+        post = {'id': 'abc', 'title': 'T', 'author': 'a', 'subreddit': 's', 'score': 3, 'upvote_ratio': 90,
+                'num_comments': 0, 'created_utc': 0, 'url': 'https://x', 'likes': True}
+        feed = {'posts': [post], 'after': None}
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=resp), \
+             patch.object(page_data, 'fetch_personalized_home', return_value=feed):
+            cl = app.test_client()
+            r = cl.post('/actions/vote', data={'id': 't3_abc', 'dir': '0', 'next': '/r/x?y=1'},
+                        environ_base=self.LOCAL, headers=self.SAME)
+            assert r.status_code == 302 and r.headers['Location'] == '/r/x?y=1'
+            html = cl.get('/home', environ_base=self.LOCAL).get_data(as_text=True)
+            assert 'action="/actions/vote"' in html and 'name="dir" value="0"' in html   # already upvoted -> clears
+        with patch.object(page_data, 'fetch_frontpage', return_value=feed):
+            assert 'action="/actions/vote"' not in app.test_client().get('/home').get_data(as_text=True)

@@ -3,6 +3,7 @@ import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDo
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
+import { votingEnabled, voteCtlHtml } from './vote.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -333,8 +334,10 @@ export function renderPost(p, idx, showSub=false) {
       <div class="post-footer">
         <div class="footer-left">
           <div class="score-block">
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
-            <span class="score-num">${fmtNum(p.score)}</span>
+            ${votingEnabled()
+              ? voteCtlHtml('t3_' + id, p.likes, p.score, `<span class="score-num vote-score">${fmtNum(p.score)}</span>`)
+              : `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1L9 5H3L6 1Z" fill="#ff6b35"/></svg>
+            <span class="score-num">${fmtNum(p.score)}</span>`}
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
           <a class="post-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a>
@@ -471,7 +474,9 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
         ${isOP       ? '<span class="comment-op">OP</span>'         : ''}
         ${isStickied ? '<span class="badge badge-sticky">📌 stickied</span>' : ''}
         ${renderAuthorFlair(c)}
-        <span class="comment-score">▲ ${fmtNum(c.score)}</span>
+        ${votingEnabled()
+          ? voteCtlHtml('t1_' + c.id, c.likes, c.score, `<span class="vote-score">${fmtNum(c.score)}</span>`, 'comment-score')
+          : `<span class="comment-score">▲ ${fmtNum(c.score)}</span>`}
         <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}" title="${fmtDateTime(c.created_utc)}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
         ${renderAwards(c.awards)}
       </div>
