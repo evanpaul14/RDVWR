@@ -2176,6 +2176,15 @@ label.settings-action-btn { cursor:pointer; }
 .acct-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
 .acct-edit { display:flex; flex-direction:column; gap:8px; margin:4px 0; }
 .acct-edit textarea, .acct-manage textarea { width:100%; box-sizing:border-box; font-family:var(--sans); font-size:14px; line-height:1.5; height:auto; word-break:normal; }
+.acct-item { position:relative; }
+.acct-dots { position:absolute; top:8px; right:8px; z-index:5; width:26px; height:26px; border-radius:50%; background:var(--bg2); border:1px solid var(--b2); color:var(--tx3); cursor:pointer; font-size:16px; line-height:1; padding:0; }
+.acct-dots:hover, .acct-dots[aria-expanded="true"] { color:var(--tx); border-color:var(--tx3); }
+.acct-more-menu { position:absolute; z-index:6; top:38px; right:8px; min-width:120px; display:flex; flex-direction:column; padding:4px; background:var(--bg2); border:1px solid var(--b2); border-radius:8px; box-shadow:var(--shadow-dropdown); }
+.acct-more-menu[hidden] { display:none; }
+.acct-item > .acct-msg { display:block; padding:4px 4px 0; }
+.acct-item > .acct-msg:empty { display:none; }
+.acct-danger-btn { background:#d64545; color:#fff; }
+.acct-menu-item.acct-danger { color:#ff6b6b; }
 .acct-manage { padding:6px 4px 0; display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
 .acct-manage details { font-family:var(--mono); font-size:10px; }
 .acct-manage details[open] { flex-basis:100%; }
@@ -2186,3 +2195,17 @@ label.settings-action-btn { cursor:pointer; }
 .acct-danger, .acct-link.acct-danger { color:#ff6b6b; }
 .acct-danger:hover { border-color:#ff6b6b; }
 .acct-more { display:block; margin:0 auto 24px; }
+
+/* No-JS account page: dots menu is a <details>, delete confirmation is a :target popup */
+.acct-dots-details { position:absolute; top:8px; right:8px; z-index:5; }
+.acct-dots-details > summary { list-style:none; text-align:center; line-height:24px; }
+.acct-dots-details > summary::-webkit-details-marker { display:none; }
+.acct-dots-details > .acct-dots { position:static; display:block; }
+.acct-dots-details > summary.acct-dots { cursor:pointer; }
+.acct-dots-details .acct-more-menu { top:32px; right:0; }
+.acct-dots-details .acct-more-menu a, .acct-dots-details .acct-more-menu summary { display:block; text-decoration:none; list-style:none; }
+.acct-dots-details .acct-more-menu summary::-webkit-details-marker { display:none; }
+.acct-dots-details .acct-more-menu form { padding:6px; display:flex; flex-direction:column; gap:6px; }
+.acct-popup { display:none; }
+.acct-popup:target { display:block; }
+.acct-popup > a.submit-overlay { display:block; }

@@ -62,23 +62,29 @@
             </div>
           </div>
         {% endif %}
-        <div class="acct-manage">
-          {% if page.tab == 'comments' or it.is_self %}
-          <details><summary>edit</summary>
-            <form method="post" action="/actions/account/edit">
-              <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
-              <textarea class="settings-input settings-textarea" name="text" rows="6" required>{{ page.full_texts.get(fullname, it.selftext) if page.tab == 'posts' else it.body }}</textarea>
-              <button class="submit-go" type="submit">Save</button>
-            </form>
-          </details>
-          {% endif %}
-          <details><summary>delete</summary>
-            <form method="post" action="/actions/account/delete">
-              <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
-              <span class="acct-item-meta">This can't be undone.</span>
-              <button class="settings-action-btn acct-danger" type="submit">Delete for good</button>
-            </form>
-          </details>
+        <details class="acct-dots-details">
+          <summary class="acct-dots" aria-label="Options">&#8943;</summary>
+          <div class="acct-more-menu" style="display:flex">
+            {% if page.tab == 'comments' or it.is_self %}
+            <details><summary class="acct-menu-item">Edit</summary>
+              <form method="post" action="/actions/account/edit">
+                <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
+                <textarea class="settings-input settings-textarea" name="text" rows="6" required>{{ page.full_texts.get(fullname, it.selftext) if page.tab == 'posts' else it.body }}</textarea>
+                <button class="submit-go" type="submit">Save</button>
+              </form>
+            </details>
+            {% endif %}
+            <a class="acct-menu-item acct-danger" href="#del-{{ it.id }}">Delete</a>
+          </div>
+        </details>
+        <div class="acct-popup" id="del-{{ it.id }}">
+          <a class="submit-overlay" href="#" aria-label="Cancel"></a>
+          <form class="submit-modal acct-confirm" method="post" action="/actions/account/delete">
+            <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ next }}">
+            <div class="submit-title">Delete this {{ 'post' if page.tab == 'posts' else 'comment' }}?</div>
+            <div class="acct-msg">This can't be undone.</div>
+            <div class="submit-row"><button class="submit-go acct-danger-btn" type="submit">Delete</button><a class="settings-action-btn" href="#">Cancel</a></div>
+          </form>
         </div>
       </div>
     {% else %}

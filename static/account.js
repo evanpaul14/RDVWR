@@ -59,16 +59,43 @@ const actionsHtml = () => `<div class="acct-ctx-actions" id="acct-ctx-actions">
 const tabsHtml = tab => ['posts', 'comments'].map(t =>
   `<button type="button" class="sort-btn${t === tab ? ' active' : ''}" data-acct-tab="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
 
-/** The same card other profiles show, with edit/delete underneath. */
+/** The same card other profiles show, with a three-dot menu (edit / delete) over its corner. */
 function itemHtml(kind, it, idx) {
   const isPost = kind === 'posts';
   const card = isPost ? renderPost(it, idx, true) : renderUserCommentCard(it, idx);
   return `<div class="acct-item" data-acct-id="${isPost ? 't3_' : 't1_'}${escHtml(it.id)}">${card}
-    <div class="acct-manage">
-      ${!isPost || it.is_self ? '<button type="button" class="acct-link" data-acct-edit>edit</button>' : ''}
-      <button type="button" class="acct-link" data-acct-delete>delete</button>
-      <span class="acct-msg" role="status"></span>
-    </div></div>`;
+    <button type="button" class="acct-dots" data-acct-dots aria-label="${isPost ? 'Post' : 'Comment'} options" aria-haspopup="menu" aria-expanded="false">⋯</button>
+    <div class="acct-more-menu" role="menu" hidden>
+      ${!isPost || it.is_self ? '<button type="button" class="acct-menu-item" role="menuitem" data-acct-edit>Edit</button>' : ''}
+      <button type="button" class="acct-menu-item acct-danger" role="menuitem" data-acct-delete>Delete</button>
+    </div>
+    <span class="acct-msg" role="status"></span></div>`;
+}
+
+const closeItemMenus = () => feed.querySelectorAll('.acct-more-menu:not([hidden])').forEach(m => {
+  m.hidden = true;
+  m.previousElementSibling?.setAttribute('aria-expanded', 'false');
+});
+
+/** A popup asking to confirm a delete; resolves true only if confirmed. */
+function confirmDelete(what) {
+  return new Promise(resolve => {
+    const root = document.createElement('div');
+    root.innerHTML = `<div class="submit-overlay"></div>
+      <div class="submit-modal acct-confirm" role="alertdialog" aria-modal="true" aria-label="Delete ${what}">
+        <div class="submit-title">Delete this ${what}?</div>
+        <div class="acct-msg">This can't be undone.</div>
+        <div class="submit-row"><button type="button" class="submit-go acct-danger-btn" data-yes>Delete</button><button type="button" class="settings-action-btn" data-no>Cancel</button></div>
+      </div>`;
+    document.body.appendChild(root);
+    const done = ok => { root.remove(); document.removeEventListener('keydown', onKey, true); resolve(ok); };
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    document.addEventListener('keydown', onKey, true);
+    root.querySelector('.submit-overlay').addEventListener('click', () => done(false));
+    root.querySelector('[data-no]').addEventListener('click', () => done(false));
+    root.querySelector('[data-yes]').addEventListener('click', () => done(true));
+    root.querySelector('[data-no]').focus();
+  });
 }
 
 async function fetchAbout() {
@@ -142,7 +169,16 @@ feed.addEventListener('click', async e => {
 
   const item = e.target.closest('.acct-item');
   if (!item) return;
-  const id = item.dataset.acctId, msg = item.querySelector('.acct-msg'), manage = item.querySelector('.acct-manage');
+  const id = item.dataset.acctId, msg = item.querySelector('.acct-msg');
+  const dots = e.target.closest('[data-acct-dots]');
+  if (dots) {
+    const menu = dots.nextElementSibling, open = menu.hidden;
+    closeItemMenus();
+    menu.hidden = !open;
+    dots.setAttribute('aria-expanded', String(open));
+    return;
+  }
+  closeItemMenus();
   if (e.target.closest('[data-acct-edit]')) {
     if (item.querySelector('.acct-edit')) return;
     const textEl = item.querySelector('.ucc-body, .post-excerpt');
@@ -152,7 +188,7 @@ feed.addEventListener('click', async e => {
       <div class="acct-row"><button type="submit" class="submit-go">Save</button><button type="button" class="settings-action-btn" data-cancel>Cancel</button></div>`;
     const box = form.querySelector('textarea');
     box.disabled = true;
-    manage.before(form);
+    item.querySelector('.acct-dots').before(form);
     textEl?.setAttribute('hidden', '');
     const done = () => { form.remove(); textEl?.removeAttribute('hidden'); };
     try {   // listings cut post text short, so fetch the whole thing before it can be saved back
@@ -175,11 +211,12 @@ feed.addEventListener('click', async e => {
     });
     return;
   }
-  const del = e.target.closest('[data-acct-delete]');
-  if (del) {
-    // Two-step in place of a confirm() dialog: the first click arms the button.
-    if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = 'really delete?'; del.classList.add('acct-danger'); return; }
+  if (e.target.closest('[data-acct-delete]')) {
+    if (!await confirmDelete(id.startsWith('t3_') ? 'post' : 'comment')) return;
     try { say(msg, 'Deleting…'); await api('/api/account/delete', { id }); item.remove(); }
+    catch (err) { say(msg, `Failed: ${err.message}`); }
+  }
+}); item.remove(); }
     catch (err) { say(msg, `Failed: ${err.message}`); delete del.dataset.armed; del.textContent = 'delete'; del.classList.remove('acct-danger'); }
   }
 });
@@ -201,6 +238,7 @@ const setMenu = open => {
 
 document.addEventListener('click', async e => {
   if (!state.accountMode) return;
+  if (!e.target.closest('.acct-item')) closeItemMenus();
   const pencil = e.target.closest('[data-acct-pencil]');
   if (pencil) { setMenu(ctxInfo.querySelector('.acct-menu')?.hidden); return; }
   if (!e.target.closest('.acct-menu')) { setMenu(false); return; }
