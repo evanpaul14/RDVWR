@@ -1,8 +1,9 @@
 import { state } from './state.js';
+import { initVotes } from './vote.js';
 import { settings, saveSettings, personalizedHomeMode, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
 import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
-import { escHtml, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
+import { escHtml, fmtNum, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
 import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
 import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
@@ -1125,6 +1126,7 @@ function updateFeedsActive(route) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+initVotes(fmtNum);
 applySettings();
 state.currentCommentSort = settings.commentSort;
 updateFeedsBtn();

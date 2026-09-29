@@ -198,6 +198,16 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro vote_form(fullname, likes) -%}
+  {%- if vote_enabled() -%}
+  <form class="ns-vote" method="post" action="/actions/vote">
+    <input type="hidden" name="id" value="{{ fullname }}"><input type="hidden" name="next" value="{{ current_url() }}">
+    <button class="vote-btn vote-up{% if likes is sameas true %} on{% endif %}" name="dir" value="{{ 0 if likes is sameas true else 1 }}" aria-label="Upvote" title="Upvote">&#9650;</button>
+    <button class="vote-btn vote-down{% if likes is sameas false %} on{% endif %}" name="dir" value="{{ 0 if likes is sameas false else -1 }}" aria-label="Downvote" title="Downvote">&#9660;</button>
+  </form>
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro footer(p) -%}
   {%- set domain = link_domain(p) -%}
   <div class="post-footer">
@@ -207,6 +217,7 @@
         <span class="score-num">{{ p.score | fmtnum }}</span>
         <div class="ratio-bar"><div class="ratio-fill" style="width:{{ p.upvote_ratio }}%"></div></div>
       </div>
+      {{ vote_form('t3_' ~ p.id, p.likes) }}
       <a class="post-author" href="/user/{{ p.author }}">u/{{ p.author }}</a>
       {{ time_ago(p.created_utc, p.edited_utc) }}
       {{ awards(p.awards) }}

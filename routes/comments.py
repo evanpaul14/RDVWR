@@ -21,6 +21,7 @@ def _parse_comment_fields(d):
         "body":                  d.get("body", ""),
         "body_html":             clean_reddit_html(d.get("body_html")),
         "score":                 d.get("score", 0),
+        "likes":                 d.get("likes"),
         "created_utc":           d.get("created_utc", 0),
         "edited_utc":            edited_utc,
         "depth":                 d.get("depth", 0),

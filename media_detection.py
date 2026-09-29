@@ -319,6 +319,7 @@ def process_post(p):
         "author":         p.get("author", "[deleted]"),
         "subreddit":      p.get("subreddit", ""),
         "score":          p.get("score", 0),
+        "likes":          p.get("likes"),  # the logged-in account's vote: True, False or None
         "upvote_ratio":   round(p.get("upvote_ratio", 0) * 100),
         "num_comments":   p.get("num_comments", 0),
         "created_utc":    p.get("created_utc", 0),
