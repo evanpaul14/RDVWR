@@ -1648,3 +1648,65 @@ class TestCommenting:
             r = app.test_client().post('/actions/comment', data={'parent': 't1_abc', 'text': 'hi', 'next': '/r/x/comments/y'},
                                        environ_base=self.LOCAL, headers=self.SAME)
         assert r.status_code == 302 and r.headers['Location'] == '/r/x/comments/y'
+
+
+class TestSubmitPost:
+    LOCAL = {'REMOTE_ADDR': '127.0.0.1'}
+    SAME = {'Sec-Fetch-Site': 'same-origin'}
+
+    def _reddit(self, url='https://www.reddit.com/r/test/comments/abc123/hello/'):
+        resp = MagicMock(ok=True, status_code=200)
+        resp.json.return_value = {'json': {'errors': [], 'data': {'url': url, 'id': 'abc123', 'name': 't3_abc123'}}}
+        return resp
+
+    def test_text_post_submits_and_returns_local_path(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
+            r = app.test_client().post('/api/submit', json={'sub': 'r/test', 'title': ' Hello ', 'kind': 'self', 'body': 'body'},
+                                       environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 200 and r.get_json() == {'path': '/r/test/comments/abc123/hello/'}
+        d = post.call_args.kwargs['data']
+        assert post.call_args.args[0] == 'https://oauth.reddit.com/api/submit'
+        assert (d['sr'], d['title'], d['kind'], d['text']) == ('test', 'Hello', 'self', 'body')
+
+    def test_link_post_needs_a_url(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        cl = app.test_client()
+        with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
+            bad = cl.post('/api/submit', json={'sub': 'test', 'title': 't', 'kind': 'link', 'body': 'not a url'},
+                          environ_base=self.LOCAL, headers=self.SAME)
+            ok = cl.post('/api/submit', json={'sub': 'test', 'title': 't', 'kind': 'link', 'body': 'https://example.com/x'},
+                         environ_base=self.LOCAL, headers=self.SAME)
+        assert bad.status_code == 400 and ok.status_code == 200
+        assert post.call_args.kwargs['data']['kind'] == 'link' and post.call_args.kwargs['data']['url'] == 'https://example.com/x'
+
+    def test_validation_and_local_only(self, tmp_path):
+        a, b, c = TestVoting()._login(tmp_path)
+        cl = app.test_client()
+        with a, b, c:
+            for bad in ({'sub': 'a+b', 'title': 't', 'kind': 'self'}, {'sub': '', 'title': 't', 'kind': 'self'},
+                        {'sub': 'test', 'title': '', 'kind': 'self'}, {'sub': 'test', 'title': 'x' * 301, 'kind': 'self'},
+                        {'sub': 'test', 'title': 't', 'kind': 'poll'}):
+                assert cl.post('/api/submit', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
+            assert cl.post('/api/submit', json={'sub': 'test', 'title': 't', 'kind': 'self'},
+                           environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
+            assert cl.get('/submit', environ_base={'REMOTE_ADDR': '10.0.0.5'}).status_code == 404
+        assert app.test_client().get('/submit', environ_base=self.LOCAL).status_code == 404   # login disabled
+
+    def test_noscript_form_redirects_and_redisplays_errors(self, tmp_path):
+        import reddit_actions
+        a, b, c = TestVoting()._login(tmp_path)
+        locked = MagicMock(ok=True, status_code=200)
+        locked.json.return_value = {'json': {'errors': [['SUBREDDIT_NOTALLOWED', 'You are not allowed to post there.', 'sr']]}}
+        with a, b, c:
+            cl = app.test_client()
+            assert 'action="/submit"' in cl.get('/submit?sub=test', environ_base=self.LOCAL).get_data(as_text=True)
+            with patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()):
+                r = cl.post('/submit', data={'sub': 'test', 'title': 'T', 'kind': 'self', 'body': ''}, environ_base=self.LOCAL, headers=self.SAME)
+                assert r.status_code == 302 and r.headers['Location'] == '/r/test/comments/abc123/hello/'
+            with patch.object(reddit_actions.cffi_requests, 'post', return_value=locked):
+                r = cl.post('/submit', data={'sub': 'test', 'title': 'Keep me', 'kind': 'self', 'body': ''}, environ_base=self.LOCAL, headers=self.SAME)
+                html = r.get_data(as_text=True)
+                assert r.status_code == 400 and 'not allowed to post there' in html and 'Keep me' in html
