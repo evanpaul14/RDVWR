@@ -2107,18 +2107,47 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-form-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
 .ns-reply > summary { cursor:pointer; font-family:var(--mono); font-size:10px; color:var(--tx3); }
 
-/* New post modal (only available while logged in to Reddit via localhost) */
+/* New post modal (only available while logged in to Reddit via localhost) and the no-JS /submit form */
 .submit-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300; }
-.submit-modal { position:fixed; z-index:301; top:12vh; left:50%; transform:translateX(-50%); width:min(560px, calc(100vw - 32px)); display:flex; flex-direction:column; gap:10px; padding:16px; background:var(--bg2); border:1px solid var(--b2); border-radius:10px; box-shadow:var(--shadow-dropdown); }
+.submit-modal { position:fixed; z-index:301; top:8vh; left:50%; transform:translateX(-50%); width:min(560px, calc(100vw - 32px)); max-height:84vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:18px; background:var(--bg2); border:1px solid var(--b2); border-radius:10px; box-shadow:var(--shadow-dropdown); }
+.submit-head { display:flex; align-items:center; justify-content:space-between; }
 .submit-title { font-family:var(--serif); font-size:20px; color:var(--tx); }
-.submit-kind { display:flex; gap:14px; font-size:13px; color:var(--tx2); }
+.submit-x { background:none; border:none; color:var(--tx3); cursor:pointer; font-size:14px; padding:4px; }
+.submit-x:hover { color:var(--tx); }
+.submit-field { display:flex; flex-direction:column; gap:6px; }
+.submit-label { font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--tx3); }
+.submit-modal .settings-input, .ns-submit-form .settings-input { width:100%; box-sizing:border-box; font-family:var(--sans); font-size:14px; padding:9px 10px; border-radius:6px; }
+.submit-modal .settings-textarea, .ns-submit-form .settings-textarea { height:auto; font-size:14px; line-height:1.5; word-break:normal; }
+.submit-prefixed { display:flex; align-items:center; background:var(--bg3); border:1px solid var(--b2); border-radius:6px; padding-left:10px; color:var(--tx3); font-family:var(--mono); font-size:12px; gap:6px; transition:border-color .15s; }
+.submit-prefixed:focus-within { border-color:var(--ac); }
+.submit-prefixed .settings-input { border:none; background:none; padding-left:0; }
 .submit-row { display:flex; align-items:center; gap:8px; }
+.submit-go { background:var(--ac); border:none; border-radius:5px; color:#0c0c0c; font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.03em; padding:8px 18px; cursor:pointer; }
+.submit-go:hover { filter:brightness(1.1); }
 .submit-msg { font-family:var(--mono); font-size:10px; color:var(--tx3); }
-.submit-modal .settings-input { width:100%; box-sizing:border-box; }
-.submit-flair { display:flex; gap:8px; }
-.submit-flair .settings-select { flex:1; }
-.submit-media { display:flex; flex-direction:column; gap:4px; color:var(--tx2); font-size:13px; }
-.submit-media-hint { font-family:var(--mono); font-size:10px; color:var(--tx3); }
+/* Segmented control: radios styled as tabs; works without JS */
+.seg { display:flex; gap:2px; padding:2px; background:var(--bg3); border:1px solid var(--b2); border-radius:7px; }
+.seg label { flex:1; cursor:pointer; }
+.seg input, .chip input, .file-drop input[type="file"] { position:absolute; opacity:0; width:1px; height:1px; pointer-events:none; }
+.seg span { display:block; text-align:center; padding:6px 10px; border-radius:5px; font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--tx3); transition:color .15s,background .15s; }
+.seg label:hover span { color:var(--tx2); }
+.seg input:checked + span { background:var(--bg2); color:var(--ac); box-shadow:0 0 0 1px var(--b2); }
+.seg input:focus-visible + span, .chip input:focus-visible + span { outline:2px solid var(--ac); outline-offset:1px; }
+/* Flair picker: radios styled as chips */
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { cursor:pointer; }
+.chip span { display:inline-block; padding:3px 10px; border:1px solid var(--b2); border-radius:12px; font-size:12px; color:var(--tx2); background:var(--bg3); transition:border-color .15s; }
+.chip:hover span { border-color:var(--tx3); }
+.chip input:checked + span { border-color:var(--ac); box-shadow:0 0 0 1px var(--ac); }
+/* File picker */
+.file-drop { position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:22px 14px; border:1px dashed var(--b2); border-radius:8px; background:var(--bg3); cursor:pointer; text-align:center; transition:border-color .15s; }
+.file-drop:hover, .file-drop.over, .file-drop:focus-within { border-color:var(--ac); }
+.file-input { padding:8px; border:1px dashed var(--b2); border-radius:8px; background:var(--bg3); color:var(--tx2); font-size:12px; }
+.file-input::file-selector-button { margin-right:10px; padding:4px 10px; background:none; border:1px solid var(--b2); border-radius:4px; color:var(--tx2); font-family:var(--mono); font-size:11px; cursor:pointer; }
+.submit-label small { text-transform:none; letter-spacing:0; font-family:var(--sans); font-size:11px; }
+.file-drop-title { font-size:13px; color:var(--tx); word-break:break-all; }
+.file-drop-hint { font-family:var(--mono); font-size:10px; color:var(--tx3); }
 .comment-attach { font-family:var(--mono); font-size:10px; color:var(--tx3); cursor:pointer; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .comment-attach:hover { color:var(--tx); }
 .submit-modal [hidden] { display:none !important; }
+.ns-settings-row--field { flex-direction:column; align-items:stretch; cursor:default; }

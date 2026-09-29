@@ -2,25 +2,29 @@
 <div class="ns-settings-wrap">
   <h1 class="ns-settings-title">New post</h1>
   {% if page.error %}<p class="ns-note" role="alert">{{ page.error }}</p>{% endif %}
-  <form class="ns-settings-form" method="post" action="/submit" enctype="multipart/form-data">
-    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Subreddit</strong></span>
-      <input class="settings-input" name="sub" value="{{ page.form.sub }}" placeholder="r/" required pattern="(r/)?[A-Za-z0-9_]{1,50}"></label>
-    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Title</strong></span>
+  <form class="ns-settings-form ns-submit-form" method="post" action="/submit" enctype="multipart/form-data">
+    <label class="ns-settings-row ns-settings-row--field"><span class="submit-label">Community</span>
+      <span class="submit-prefixed"><span aria-hidden="true">r /</span><input class="settings-input" name="sub" value="{{ page.form.sub | replace('r/', '', 1) }}" placeholder="subreddit" required pattern="(r/)?[A-Za-z0-9_]{1,50}" autocomplete="off"></span></label>
+    <label class="ns-settings-row ns-settings-row--field"><span class="submit-label">Title</span>
       <input class="settings-input" name="title" value="{{ page.form.title }}" maxlength="300" required></label>
-    <div class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Flair</strong><small>{% if page.flairs %}{% if page.flair_required %}Required by this subreddit.{% else %}Optional.{% endif %}{% else %}Choose the subreddit, then load its flairs.{% endif %}</small></span>
+    <div class="ns-settings-row ns-settings-row--field"><span class="submit-label">Flair{% if page.flairs %}{% if page.flair_required %} · required{% else %} · optional{% endif %}{% endif %}</span>
       {% if page.flairs %}
-      <select class="settings-select" name="flair_id"><option value="">{{ 'Choose a flair' if page.flair_required else 'No flair' }}</option>
-        {%- for f in page.flairs %}<option value="{{ f.id }}"{% if f.id == page.form.flair_id %} selected{% endif %}>{{ f.text or '(blank)' }}{% if f.editable %} (editable){% endif %}</option>{% endfor -%}
-      </select>
-      <input class="settings-input" name="flair_text" value="{{ page.form.flair_text }}" maxlength="64" placeholder="Custom flair text (editable flairs only)">
-      {% else %}<button type="submit" formmethod="get" formaction="/submit" formenctype="application/x-www-form-urlencoded" formnovalidate>Load flairs</button>{% endif %}
+      <div class="chips">
+        {%- if not page.flair_required %}<label class="chip"><input type="radio" name="flair_id" value=""{% if not page.form.flair_id %} checked{% endif %}><span>No flair</span></label>{% endif -%}
+        {%- for f in page.flairs %}<label class="chip"><input type="radio" name="flair_id" value="{{ f.id }}"{% if f.id == page.form.flair_id %} checked{% endif %}><span{% if f.background %} style="background:{{ f.background }};color:{{ '#fff' if f.text_color == 'light' else '#111' }}"{% endif %}>{{ f.text or '(blank)' }}{% if f.editable %} ✎{% endif %}</span></label>{% endfor -%}
+      </div>
+      <input class="settings-input" name="flair_text" value="{{ page.form.flair_text }}" maxlength="64" placeholder="Custom flair text (editable ✎ flairs only)">
+      {% else %}<div><button class="settings-action-btn" type="submit" formmethod="get" formaction="/submit" formenctype="application/x-www-form-urlencoded" formnovalidate>Load this community's flairs</button></div>{% endif %}
     </div>
-    <label class="ns-settings-row ns-settings-row--select"><span class="ns-settings-row-text"><strong>Type</strong></span>
-      <select class="settings-select" name="kind"><option value="self"{% if page.form.kind != 'link' %} selected{% endif %}>Text</option><option value="link"{% if page.form.kind == 'link' %} selected{% endif %}>Link</option></select></label>
-    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Text or link</strong><small>For a link post, put the full URL here.</small></span>
+    <div class="ns-settings-row ns-settings-row--field"><span class="submit-label">Type</span>
+      <div class="seg" role="radiogroup" aria-label="Post type">
+        <label><input type="radio" name="kind" value="self"{% if page.form.kind != 'link' %} checked{% endif %}><span>Text</span></label>
+        <label><input type="radio" name="kind" value="link"{% if page.form.kind == 'link' %} checked{% endif %}><span>Link</span></label>
+      </div></div>
+    <label class="ns-settings-row ns-settings-row--field"><span class="submit-label">Text or link <small>(for a link post, the full URL)</small></span>
       <textarea class="settings-input settings-textarea" name="body" rows="8" maxlength="40000">{{ page.form.body }}</textarea></label>
-    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Images or video</strong><small>Optional; replaces the text/link above. One image or video, or several images for a gallery.</small></span>
-      <input type="file" name="files" accept="image/*,video/mp4,video/quicktime" multiple></label>
+    <label class="ns-settings-row ns-settings-row--field"><span class="submit-label">Images or video <small>(optional; replaces the text/link above — one image or video, or several images for a gallery)</small></span>
+      <input class="file-input" type="file" name="files" accept="image/*,video/mp4,video/quicktime" multiple></label>
     <div class="ns-settings-actions"><button type="submit">Post</button><a class="ns-settings-cancel" href="/">Cancel</a></div>
   </form>
 </div>
