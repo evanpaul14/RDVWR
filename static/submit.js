@@ -11,7 +11,7 @@ const MODAL = `
     <span class="submit-prefixed"><span aria-hidden="true">r /</span><input name="sub" class="settings-input" placeholder="subreddit" autocomplete="off" autocapitalize="off" spellcheck="false" required></span></label>
   <label class="submit-field"><span class="submit-label">Title</span>
     <input name="title" class="settings-input" maxlength="300" required></label>
-  <div class="submit-field submit-flair" hidden><span class="submit-label">Flair</span><div class="chips" data-flair-chips></div>
+  <div class="submit-field submit-flair" hidden><span class="submit-label">Flair</span><select name="flair_id" class="settings-input" data-flair-chips></select>
     <input name="flair_text" class="settings-input" placeholder="Custom flair text" maxlength="64" hidden></div>
   <div class="seg" role="radiogroup" aria-label="Post type">
     <label><input type="radio" name="kind" value="self" checked><span>Text</span></label>
@@ -64,10 +64,9 @@ export function initSubmit({ getSub, navigate }) {
         const data = await jsonOrError(await fetch(`/api/r/${encodeURIComponent(sub)}/flairs`), 'Flair lookup');
         if (flairFor !== sub) return;
         flairs = data.flairs; flairRequired = data.required;
-        const chip = (id, text, style = '', on = false) =>
-          `<label class="chip"><input type="radio" name="flair_id" value="${esc(id)}"${on ? ' checked' : ''}><span${style ? ` style="${esc(style)}"` : ''}>${esc(text)}</span></label>`;
-        chipsBox.innerHTML = (flairRequired ? '' : chip('', 'No flair', '', true)) +
-          flairs.map(f => chip(f.id, f.text || '(blank)', f.background ? `background:${f.background};color:${f.text_color === 'light' ? '#fff' : '#111'}` : '')).join('');
+        const opt = (id, text) => `<option value="${esc(id)}">${esc(text)}${flairs.find(f => f.id === id)?.editable ? ' ✎' : ''}</option>`;
+        chipsBox.innerHTML = (flairRequired ? opt('', 'Select a flair…') : opt('', 'No flair')) +
+          flairs.map(f => opt(f.id, f.text || '(blank)')).join('');
         flairBox.hidden = !flairs.length;
         syncFlairText();
       } catch { flairBox.hidden = true; }
