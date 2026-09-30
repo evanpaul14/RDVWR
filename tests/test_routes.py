@@ -1821,6 +1821,13 @@ class TestMediaAndFlair:
         j = r.get_json()
         assert [f['text'] for f in j['flairs']] == ['News', ''] and j['flairs'][1]['editable'] and j['required'] is True
 
+    def test_flairs_lookup_survives_a_non_list_reply(self, tmp_path):
+        from routes import posting
+        a, b, c = TestVoting()._login(tmp_path)
+        with a, b, c, patch.object(posting, 'reddit_get', return_value=MockResponse({'error': 'x'})):
+            r = app.test_client().get('/api/r/test/flairs', environ_base=self.LOCAL, headers=self.SAME)
+        assert r.status_code == 502
+
     def test_submit_with_flair_and_each_media_kind(self, tmp_path):
         import reddit_actions
         a, b, c = TestVoting()._login(tmp_path)

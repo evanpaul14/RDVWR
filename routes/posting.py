@@ -25,9 +25,12 @@ def fetch_flairs(subreddit, timeout=10):
         return {"flairs": [], "required": False}   # flair disabled or not for us to choose
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
+    data = resp.json()
+    if not isinstance(data, list):   # an error object instead of the flair list
+        raise UpstreamError.from_status(502)
     flairs = [{"id": f["id"], "text": f.get("text") or "", "editable": bool(f.get("text_editable")),
                "text_color": f.get("text_color") or "dark", "background": f.get("background_color") or ""}
-              for f in resp.json() if f.get("id") and not f.get("mod_only")]
+              for f in data if isinstance(f, dict) and f.get("id") and not f.get("mod_only")]
     required = False
     try:
         reqs = reddit_get(f"https://www.reddit.com/api/v1/{subreddit}/post_requirements", timeout=timeout)
