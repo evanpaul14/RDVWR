@@ -62,24 +62,4 @@ def test_login_status_reports_expired_after_failed_mint(tmp_path, monkeypatch):
     monkeypatch.setattr(reddit_login, '_mint_failed', False)
     assert reddit_login.login_status()['expired'] is False
     monkeypatch.setattr(reddit_login, '_mint_failed', True)
-    assert reddit_login.login_status() == {'available': True, 'username': 'u', 'expired': True, 'oauth': False}
-
-
-def test_oauth_exchange_checks_state_and_refresh_token_is_used(tmp_path, monkeypatch):
-    import reddit_oauth
-    monkeypatch.setattr(reddit_login, 'STORE_PATH', str(tmp_path / 'login.json'))
-    monkeypatch.setattr(reddit_login, 'ENABLED', True)
-    monkeypatch.setattr(reddit_oauth, '_token_request',
-                        lambda d: {'access_token': 'A1', 'refresh_token': 'R1', 'expires_in': 3600}
-                        if d['grant_type'] == 'authorization_code' else {'access_token': 'A2', 'expires_in': 3600})
-    monkeypatch.setattr(reddit_oauth, 'whoami', lambda tok: 'someone')
-    with pytest.raises(ValueError):   # a state we never issued
-        reddit_oauth.exchange('reddit://redirect?state=bogus&code=c')
-    state = reddit_oauth.authorize_url().split('state=')[1].split('&')[0]
-    assert reddit_login.login_with_oauth(f'reddit://redirect?state={state}&code=c') == 'someone'
-    assert reddit_login._load() == {'username': 'someone', 'refresh_token': 'R1'}
-    assert reddit_login.access_token() == 'A1'           # cached from the exchange
-    reddit_login._token['exp'] = 0
-    assert reddit_login.access_token() == 'A2'           # re-minted from the refresh token
-    monkeypatch.setattr(reddit_login, 'is_local_request', lambda: True)
-    assert reddit_login.login_status() == {'available': True, 'username': 'someone', 'expired': False, 'oauth': True}
+    assert reddit_login.login_status() == {'available': True, 'username': 'u', 'expired': True}
