@@ -7,7 +7,6 @@ from flask import Blueprint, abort, redirect, request
 from markupsafe import escape
 from helpers import is_same_site_request, safe_next
 import reddit_login
-import reddit_oauth
 import reddit_owner
 
 bp = Blueprint("auth", __name__)
@@ -25,23 +24,6 @@ def login():
     _require_local_post()
     try:
         reddit_login.login_with_cookies(request.form.get('cookies', ''))
-    except Exception as e:
-        return f"Login failed: {e}", 400
-    return redirect(safe_next(request.form.get('next')))
-
-
-@bp.route("/auth/reddit/oauth/start")
-def oauth_start():
-    if not reddit_login.ENABLED or not reddit_login.is_local_request():
-        abort(404)
-    return redirect(reddit_oauth.authorize_url())
-
-
-@bp.route("/auth/reddit/oauth/finish", methods=["POST"])
-def oauth_finish():
-    _require_local_post()
-    try:
-        reddit_login.login_with_oauth(request.form.get('pasted', ''))
     except Exception as e:
         return f"Login failed: {e}", 400
     return redirect(safe_next(request.form.get('next')))

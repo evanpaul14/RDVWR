@@ -78,17 +78,5 @@
   {% else %}
   <div class="ns-settings-row"><span class="ns-settings-row-text"><strong>Login unavailable</strong><small>Log in from the machine running the server.</small></span></div>
   {% endif %}
-  {% if page.login.available %}
-  {% if page.login.oauth %}
-  <div class="ns-settings-row"><span class="ns-settings-row-text"><strong>Signed in with a refresh token</strong><small>Renews itself until you log out.</small></span></div>
-  {% else %}
-  <form class="ns-settings-form" method="post" action="/auth/reddit/oauth/finish">
-    <input type="hidden" name="next" value="{{ page.next }}">
-    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Stay signed in longer</strong><small><a href="/auth/reddit/oauth/start" target="_blank" rel="noopener">Open the authorize page</a>, click Allow, then paste the reddit://redirect?code=… address it sends you to. Uses the Reddit Android app's client id, so it goes beyond Reddit's terms.</small></span>
-      <textarea class="settings-input settings-textarea" name="pasted" spellcheck="false" autocomplete="off" placeholder="reddit://redirect?state=…&code=…"></textarea></label>
-    <button type="submit">Save</button>
-  </form>
-  {% endif %}
-  {% endif %}
   {% endif %}
 </div>
