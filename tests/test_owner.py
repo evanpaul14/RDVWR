@@ -38,3 +38,17 @@ def test_owner_page_404_without_key(monkeypatch):
     monkeypatch.setattr(reddit_login, 'ENABLED', True)
     monkeypatch.setattr(reddit_owner, 'KEY', '')
     assert app.test_client().get('/auth/owner').status_code == 404
+
+
+def test_rotated_session_cookie_is_stored(tmp_path, monkeypatch):
+    monkeypatch.setattr(reddit_login, 'STORE_PATH', str(tmp_path / 'login.json'))
+    reddit_login._save({'username': 'u', 'cookies': 'reddit_session=old; loid=L'})
+    out = reddit_login._adopt_rotated_session('reddit_session=old; loid=L',
+                                              ['reddit_session=new; Path=/; Secure', 'token_v2=t; Path=/'])
+    assert out == 'reddit_session=new; loid=L'
+    assert reddit_login._load()['cookies'] == out
+    assert reddit_login._adopt_rotated_session(out, ['token_v2=t']) == out
+    # a newer login that landed meanwhile is not overwritten
+    reddit_login._save({'username': 'u', 'cookies': 'reddit_session=newer'})
+    assert reddit_login._adopt_rotated_session('reddit_session=old; loid=L', ['reddit_session=x']) == 'reddit_session=old; loid=L'
+    assert reddit_login._load()['cookies'] == 'reddit_session=newer'
