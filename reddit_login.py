@@ -19,6 +19,7 @@ import time
 from curl_cffi import requests as cffi_requests
 from flask import has_request_context, request
 import reddit_client
+import reddit_oauth
 import reddit_owner
 from reddit_client import PROXIES
 
@@ -82,10 +83,29 @@ def login_with_cookies(raw):
     if not name:
         raise ValueError('Those cookies are not signed in to a Reddit account.')
     with _lock:
-        _save({'username': name, 'cookies': cookies})
+        _save({**_load(), 'username': name, 'cookies': cookies})
     _mint_failed = False
     log.info('reddit login: signed in as u/%s', name)
     return name
+
+
+def login_with_oauth(pasted):
+    """Store a refresh token from a pasted authorize-redirect address; returns the username."""
+    global _mint_failed
+    refresh, access, expires_in = reddit_oauth.exchange(pasted)
+    name = reddit_oauth.whoami(access)
+    if not name:
+        raise ValueError('Reddit issued a token but would not say whose it is.')
+    with _lock:
+        _save({**_load(), 'username': name, 'refresh_token': refresh})
+    _token.update(cookies='oauth:' + refresh, value=access, exp=time.time() + expires_in)
+    _mint_failed = False
+    log.info('reddit login: signed in with a refresh token as u/%s', name)
+    return name
+
+
+def _refresh_token():
+    return _load().get('refresh_token') if ENABLED else None
 
 
 def cookie_header():
@@ -123,7 +143,8 @@ def login_status():
         return None
     local = is_local_request()
     return {'available': local, 'username': username() if local else None,
-            'expired': bool(local and _mint_failed and cookie_header())}
+            'expired': bool(local and _mint_failed and (cookie_header() or _refresh_token())),
+            'oauth': bool(local and _refresh_token())}
 
 
 def _jwt_exp(tok):
@@ -165,6 +186,20 @@ def access_token():
     the home page hands out to anyone holding a live `reddit_session` cookie. Same
     thing here: mint one from the stored cookies, cache it in memory, re-mint near expiry."""
     global _mint_failed
+    rt = _refresh_token()
+    if rt:
+        with _token_lock:
+            if _token['cookies'] == 'oauth:' + rt and _token['value'] and time.time() < _token['exp'] - _TOKEN_MARGIN:
+                return _token['value']
+            try:
+                tok, expires_in = reddit_oauth.refresh(rt)
+            except Exception as e:
+                log.warning('reddit login: refresh token failed: %s', e)
+                _mint_failed = True
+                return None
+            _token.update(cookies='oauth:' + rt, value=tok, exp=time.time() + expires_in)
+            _mint_failed = False
+            return tok
     cookies = cookie_header()
     if not cookies:
         return None
@@ -193,7 +228,7 @@ def access_token():
 
 def request_account_active():
     """True when this request should act as the login: a local request while logged in."""
-    return bool(ENABLED and has_request_context() and is_local_request() and cookie_header())
+    return bool(ENABLED and has_request_context() and is_local_request() and (cookie_header() or _refresh_token()))
 
 
 def request_token():
