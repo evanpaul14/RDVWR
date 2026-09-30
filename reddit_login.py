@@ -30,6 +30,7 @@ STORE_PATH = os.environ.get('REDDIT_LOGIN_FILE') or os.path.join(os.path.dirname
 _lock = threading.Lock()
 _token_lock = threading.Lock()
 _token = {'cookies': None, 'value': None, 'exp': 0.0}
+_mint_failed = False   # the last token mint got no token_v2: the stored cookies have probably expired
 _TOKEN_MARGIN = 300  # re-mint this many seconds before token_v2 expires
 _COOKIE_RE = re.compile(r'^[\w.\-]+=[^;\s]*(;\s*[\w.\-]+=[^;\s]*)*;?$')
 
@@ -75,12 +76,14 @@ def username():
 
 
 def login_with_cookies(raw):
+    global _mint_failed
     cookies = _clean(raw)
     name = _whoami(cookies)
     if not name:
         raise ValueError('Those cookies are not signed in to a Reddit account.')
     with _lock:
         _save({'username': name, 'cookies': cookies})
+    _mint_failed = False
     log.info('reddit login: signed in as u/%s', name)
     return name
 
@@ -119,7 +122,8 @@ def login_status():
     if not ENABLED:
         return None
     local = is_local_request()
-    return {'available': local, 'username': username() if local else None}
+    return {'available': local, 'username': username() if local else None,
+            'expired': bool(local and _mint_failed and cookie_header())}
 
 
 def _jwt_exp(tok):
@@ -160,6 +164,7 @@ def access_token():
     Reddit's web client authenticates its API calls with `token_v2` (about a day), which
     the home page hands out to anyone holding a live `reddit_session` cookie. Same
     thing here: mint one from the stored cookies, cache it in memory, re-mint near expiry."""
+    global _mint_failed
     cookies = cookie_header()
     if not cookies:
         return None
@@ -179,7 +184,9 @@ def access_token():
             if sc.startswith('token_v2='):
                 tok = sc.split(';', 1)[0][len('token_v2='):]
                 _token.update(cookies=cookies, value=tok, exp=_jwt_exp(tok))
+                _mint_failed = False
                 return tok
+        _mint_failed = True
         log.warning('reddit login: no token_v2 in response (HTTP %s); cookies expired?', r.status_code)
         return None
 

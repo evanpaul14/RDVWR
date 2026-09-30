@@ -959,7 +959,10 @@ function _loginSectionHtml() {
   const st = window.__REDDIT_LOGIN__;
   if (!st) return '';
   const hint = '(sign in on reddit.com, then F12 → Application → Cookies → right-click the <code>reddit.com</code> row → Copy all as header value, and paste below)';
-  const row = st.username
+  const loginForm = `<form method="post" action="/auth/reddit/login"><textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea><button class="settings-action-btn" type="submit">Log in</button></form>`;
+  const row = st.username && st.expired
+    ? `<div class="settings-row settings-row--stack"><span class="settings-label">Login expired for u/${escHtml(st.username)} <span class="settings-hint">Reddit stopped accepting the saved cookies, so posting and voting are off. ${hint}</span></span>${loginForm}</div>`
+    : st.username
     ? `<div class="settings-row"><span class="settings-label">Logged in as u/${escHtml(st.username)}</span><form method="post" action="/auth/reddit/logout"><button class="settings-action-btn" type="submit">Log out</button></form></div>`
     : st.available
     ? `<div class="settings-row settings-row--stack"><span class="settings-label">Not logged in <span class="settings-hint">${hint}</span></span><form method="post" action="/auth/reddit/login"><textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea><button class="settings-action-btn" type="submit">Log in</button></form></div>`
