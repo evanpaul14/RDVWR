@@ -142,9 +142,11 @@ def access_token():
     with _token_lock:
         if _token['cookies'] == cookies and _token['value'] and time.time() < _token['exp'] - _TOKEN_MARGIN:
             return _token['value']
+        # A still-valid token_v2 in the header makes Reddit skip issuing a new one, so mint without it.
+        mint_cookies = re.sub(r'(^|;\s*)token_v2=[^;]*;?\s*', r'\1', cookies).strip().rstrip(';')
         try:
             r = cffi_requests.get('https://www.reddit.com/', impersonate='chrome131', proxies=PROXIES, timeout=15,
-                                  allow_redirects=False, headers={'Cookie': cookies})
+                                  allow_redirects=False, headers={'Cookie': mint_cookies})
         except Exception as e:
             log.warning('reddit login: token mint failed: %s', e)
             return None
