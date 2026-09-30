@@ -967,7 +967,10 @@ function _loginSectionHtml() {
     : st.available
     ? `<div class="settings-row settings-row--stack"><span class="settings-label">Not logged in <span class="settings-hint">${hint}</span></span><form method="post" action="/auth/reddit/login"><textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea><button class="settings-action-btn" type="submit">Log in</button></form></div>`
     : '<div class="settings-row"><span class="settings-label">Log in from the machine running the server</span></div>';
-  return `<div class="settings-section"><div class="settings-section-title">Reddit account</div>${row}</div>`;
+  const oauthRow = st.available && !st.oauth
+    ? `<div class="settings-row settings-row--stack"><span class="settings-label">Stay signed in longer <span class="settings-hint">Authorize on reddit.com (<a href="/auth/reddit/oauth/start" target="_blank" rel="noopener">open the authorize page</a>), click Allow, then paste the <code>reddit://redirect?code=…</code> address it sends you to (F12 → Network shows it) below. Uses the Reddit Android app's client id, so it goes beyond Reddit's terms.</span></span><form method="post" action="/auth/reddit/oauth/finish"><textarea class="settings-input settings-textarea" name="pasted" spellcheck="false" autocomplete="off" placeholder="reddit://redirect?state=…&code=…"></textarea><button class="settings-action-btn" type="submit">Save</button></form></div>`
+    : st.oauth ? '<div class="settings-row"><span class="settings-label">Signed in with a refresh token <span class="settings-hint">renews itself until you log out</span></span></div>' : '';
+  return `<div class="settings-section"><div class="settings-section-title">Reddit account</div>${row}${oauthRow}</div>`;
 }
 
 function _syncHomeRows() {
