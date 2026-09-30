@@ -130,6 +130,30 @@ def _jwt_exp(tok):
         return time.time() + 3600
 
 
+def _adopt_rotated_session(cookies, set_cookies):
+    """If Reddit rotated reddit_session (or loid) in a response, store the new value so the
+    login keeps sliding forward instead of expiring on the original cookie's date."""
+    new = {}
+    for sc in set_cookies:
+        name, _, rest = sc.partition('=')
+        val = rest.split(';', 1)[0]
+        if name in ('reddit_session', 'loid') and val and 'max-age=0' not in sc.lower():
+            new[name] = val
+    if not new:
+        return cookies
+    parts = [p.split('=', 1) for p in cookies.split(';') if '=' in p]
+    merged = '; '.join(f'{k.strip()}={new.get(k.strip(), v.strip())}' for k, v in parts)
+    if merged == cookies:
+        return cookies
+    with _lock:
+        data = _load()
+        if data.get('cookies') != cookies:   # replaced by a newer login meanwhile
+            return cookies
+        _save({**data, 'cookies': merged})
+    log.info('reddit login: stored rotated %s', ', '.join(sorted(new)))
+    return merged
+
+
 def access_token():
     """A bearer token for oauth.reddit.com acting as the logged-in account, or None.
 
@@ -150,6 +174,7 @@ def access_token():
         except Exception as e:
             log.warning('reddit login: token mint failed: %s', e)
             return None
+        cookies = _adopt_rotated_session(cookies, r.headers.get_list('set-cookie'))
         for sc in r.headers.get_list('set-cookie'):
             if sc.startswith('token_v2='):
                 tok = sc.split(';', 1)[0][len('token_v2='):]
