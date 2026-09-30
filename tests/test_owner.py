@@ -52,3 +52,14 @@ def test_rotated_session_cookie_is_stored(tmp_path, monkeypatch):
     reddit_login._save({'username': 'u', 'cookies': 'reddit_session=newer'})
     assert reddit_login._adopt_rotated_session('reddit_session=old; loid=L', ['reddit_session=x']) == 'reddit_session=old; loid=L'
     assert reddit_login._load()['cookies'] == 'reddit_session=newer'
+
+
+def test_login_status_reports_expired_after_failed_mint(tmp_path, monkeypatch):
+    monkeypatch.setattr(reddit_login, 'STORE_PATH', str(tmp_path / 'login.json'))
+    monkeypatch.setattr(reddit_login, 'ENABLED', True)
+    monkeypatch.setattr(reddit_login, 'is_local_request', lambda: True)
+    reddit_login._save({'username': 'u', 'cookies': 'reddit_session=old'})
+    monkeypatch.setattr(reddit_login, '_mint_failed', False)
+    assert reddit_login.login_status()['expired'] is False
+    monkeypatch.setattr(reddit_login, '_mint_failed', True)
+    assert reddit_login.login_status() == {'available': True, 'username': 'u', 'expired': True}

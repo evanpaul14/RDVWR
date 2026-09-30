@@ -55,7 +55,14 @@
 
   {% if page.login %}
   <div class="settings-section-title">Reddit account</div>
-  {% if page.login.username %}
+  {% if page.login.username and page.login.expired %}
+  <form class="ns-settings-form" method="post" action="/auth/reddit/login">
+    <input type="hidden" name="next" value="{{ page.next }}">
+    <label class="ns-settings-row"><span class="ns-settings-row-text"><strong>Login expired for u/{{ page.login.username }}</strong><small>Reddit stopped accepting the saved cookies, so posting and voting are off. Sign in on reddit.com, then paste your cookies (F12 → Application → Cookies → right-click the reddit.com row → Copy all as header value).</small></span>
+      <textarea class="settings-input settings-textarea" name="cookies" spellcheck="false" autocomplete="off" placeholder="reddit_session=…; token_v2=…"></textarea></label>
+    <button type="submit">Log in</button>
+  </form>
+  {% elif page.login.username %}
   <form class="ns-settings-row" method="post" action="/auth/reddit/logout">
     <input type="hidden" name="next" value="{{ page.next }}">
     <span class="ns-settings-row-text"><strong>Logged in as u/{{ page.login.username }}</strong><small>Stored only on this server.</small></span>
