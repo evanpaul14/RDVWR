@@ -1142,7 +1142,7 @@ class TestParseShredditCrosspost:
         assert xp["id"] == "origid"
         assert xp["title"] == "Orig Title"
         assert xp["is_video"] is True
-        assert xp["hls_url"] == "https://v.redd.it/abc123/HLSPlaylist.m3u8"
+        assert xp["hls_url"] == "/api/m/v.redd.it/abc123/HLSPlaylist.m3u8"
         assert xp["audio_url"] == "https://v.redd.it/abc123/DASH_audio.mp4"
         assert xp["preview_img"].startswith("/api/img?url=")
         # outer post's own url/linked_post must not be corrupted by the crosspost link
