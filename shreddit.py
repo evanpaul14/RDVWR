@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from urllib.parse import urlparse
 from media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
-                              GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls)
+                              GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls, proxy_hls)
 
 
 def _parse_shreddit_crosspost(el):
@@ -71,7 +71,7 @@ def _parse_shreddit_crosspost(el):
             # src is always the HLS playlist URL here, which carries no DASH-vs-CMAF hint;
             # there's no way to detect the actual encoding from a shreddit-player tag alone.
             urls = build_reddit_video_urls(base, cmaf=False)
-            hls_url, video_url, audio_url = urls['hls_url'], urls['video_url'], urls['audio_url']
+            hls_url, video_url, audio_url = proxy_hls(urls['hls_url']), urls['video_url'], urls['audio_url']
         poster = player.get('poster', '') or ''
         if poster:
             preview_img = proxy_if_reddit_preview(poster)
@@ -210,7 +210,7 @@ def _parse_shreddit_post(el):
         if base:
             urls = build_reddit_video_urls(base, cmaf='/DASH_' not in content_href)
             video_url = content_href if '/DASH_' in content_href else urls['video_url']
-            hls_url, audio_url = urls['hls_url'], urls['audio_url']
+            hls_url, audio_url = proxy_hls(urls['hls_url']), urls['audio_url']
         else:
             is_video = False
 
