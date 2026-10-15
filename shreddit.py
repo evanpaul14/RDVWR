@@ -1,5 +1,6 @@
 """Parsers for shreddit (new-Reddit web component) HTML post markup."""
 import re
+from reddit_html import sanitize_reddit_html
 from datetime import datetime
 from urllib.parse import urlparse
 from media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
@@ -148,9 +149,7 @@ def _parse_shreddit_post(el):
         if not body_el:
             body_el = el.find('faceplate-html', {'slot': 'text-body'})
         if body_el:
-            for a in body_el.find_all('a'):
-                a.unwrap()
-            inner = body_el.decode_contents().strip()
+            inner = sanitize_reddit_html(body_el.decode_contents().strip())
             if inner:
                 selftext_html = inner
                 selftext = body_el.get_text(separator=' ').strip()
