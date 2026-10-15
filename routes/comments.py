@@ -1,4 +1,5 @@
 """Post comment trees and 'load more' children."""
+from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request
 from media_detection import process_post, _parse_awards, DISABLE_NSFW
 from reddit_html import clean_reddit_html
@@ -10,6 +11,9 @@ from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
 bp = Blueprint("comments", __name__)
+
+# Comments fetched per "load more" click when falling back to permalink requests.
+MORECHILDREN_PERMALINK_BATCH = 20
 
 
 def _parse_comment_fields(d):
@@ -36,6 +40,27 @@ def _parse_comment_fields(d):
         "author_flair_tc":       d.get("author_flair_text_color") or "dark",
         "awards":                _parse_awards(d.get("all_awardings")),
     }
+
+
+def _parse_comment_tree(c, author_fullnames):
+    """A listing child (comment or "more" stub) with its replies, recursively.
+    Records each author's fullname in `author_fullnames` for avatar lookup."""
+    d = c["data"]
+    if c["kind"] == "more":
+        return {
+            "kind":     "more",
+            "id":       d.get("id", ""),
+            "children": d.get("children", [])[:100],
+            "count":    d.get("count", 0),
+            "depth":    d.get("depth", 0),
+        }
+    replies = []
+    if d.get("replies") and isinstance(d["replies"], dict):
+        replies = [_parse_comment_tree(r, author_fullnames) for r in d["replies"]["data"]["children"]]
+    comment = _parse_comment_fields(d)
+    author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
+    comment["replies"] = replies
+    return comment
 
 
 def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
@@ -70,30 +95,7 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     hydrate_linked_posts([post])
 
     author_fullnames = {}
-
-    def parse_comment(c):
-        if c["kind"] == "more":
-            d = c["data"]
-            return {
-                "kind":     "more",
-                "id":       d.get("id", ""),
-                "children": d.get("children", [])[:100],
-                "count":    d.get("count", 0),
-                "depth":    d.get("depth", 0),
-            }
-        d       = c["data"]
-        replies = []
-        if d.get("replies") and isinstance(d["replies"], dict):
-            for r in d["replies"]["data"]["children"]:
-                parsed = parse_comment(r)
-                if parsed:
-                    replies.append(parsed)
-        comment = _parse_comment_fields(d)
-        author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
-        comment["replies"] = replies
-        return comment
-
-    comments = [c for c in (parse_comment(c) for c in data[1]["data"]["children"]) if c]
+    comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
     avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
     return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
 
@@ -126,6 +128,10 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
         params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
                 "api_type": "json", "raw_json": 1},
         timeout=timeout)
+    if resp.status_code == 403:
+        # Reddit refuses /api/morechildren for the OAuth device tokens, but comment
+        # permalinks still load — fetch each child's thread that way instead.
+        return _morechildren_via_permalinks(post_id, children, sort, timeout, with_avatars)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     things = resp.json().get("json", {}).get("data", {}).get("things", [])
@@ -152,6 +158,40 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
         roots.append(c)
     avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
     return {"comments": roots, "avatar_prefetch": avatar_prefetch}
+
+
+def _morechildren_via_permalinks(post_id, children, sort, timeout, with_avatars):
+    """fetch_morechildren's result built from one permalink request per comment id. Only
+    the first MORECHILDREN_PERMALINK_BATCH ids are fetched; the rest come back as a
+    trailing "more" stub so the page can offer another "load more"."""
+    ids = [i for i in children.split(",") if POST_ID_RE.match(i)]
+    batch, rest = ids[:MORECHILDREN_PERMALINK_BATCH], ids[MORECHILDREN_PERMALINK_BATCH:]
+
+    def fetch_one(cid):
+        resp = reddit_get(f"https://www.reddit.com/comments/{post_id}.json",
+                          params={"raw_json": 1, "comment": cid, "sort": sort}, timeout=timeout)
+        if resp.status_code != 200:
+            raise UpstreamError.from_status(resp.status_code)
+        return [c for c in resp.json()[1]["data"]["children"] if c["kind"] == "t1"]
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(lambda cid: _attempt_fetch(fetch_one, cid), batch))
+    if batch and all(r is None for r in results):
+        raise UpstreamError("Couldn't load these comments", 502)
+    author_fullnames = {}
+    roots = [_parse_comment_tree(c, author_fullnames) for r in results if r for c in r]
+    if rest:
+        roots.append({"kind": "more", "id": rest[0], "children": rest,
+                      "count": len(rest), "depth": 0})
+    avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
+    return {"comments": roots, "avatar_prefetch": avatar_prefetch}
+
+
+def _attempt_fetch(fn, *args):
+    try:
+        return fn(*args)
+    except Exception:
+        return None
 
 
 @bp.route("/api/r/<subreddit>/morechildren/<post_id>")

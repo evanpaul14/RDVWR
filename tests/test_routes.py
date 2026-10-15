@@ -333,6 +333,24 @@ class TestMoreChildren:
         assert resp.status_code == 200
         assert len(resp.get_json()["comments"]) == 1
 
+    @patch.object(reddit_client.SESSION, "get")
+    def test_403_falls_back_to_permalinks(self, mock_get, client):
+        def fake_get(url, **kw):
+            if "morechildren" in url:
+                return MockResponse({}, status_code=403)
+            cid = kw["params"]["comment"]
+            return MockResponse([{}, {"data": {"children": [
+                {"kind": "t1", "data": {"id": cid, "author": "u", "body": "hi", "replies": ""}},
+            ]}}])
+        mock_get.side_effect = fake_get
+        ids = ",".join(f"c{i}" for i in range(25))
+        resp = client.get(f"/api/r/testsubreddit/morechildren/abc124?children={ids}")
+        assert resp.status_code == 200
+        comments = resp.get_json()["comments"]
+        assert [c["id"] for c in comments[:20]] == [f"c{i}" for i in range(20)]
+        assert comments[20]["kind"] == "more"
+        assert comments[20]["children"] == [f"c{i}" for i in range(20, 25)]
+
 
 # ── /api/search ───────────────────────────────────────────────────────────────
 
