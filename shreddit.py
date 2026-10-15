@@ -149,6 +149,12 @@ def _parse_shreddit_post(el):
         if not body_el:
             body_el = el.find('faceplate-html', {'slot': 'text-body'})
         if body_el:
+            # Shreddit wraps the card's text in an <a> to the post's own permalink; that
+            # wrapper (and any stray </a> it leaves) isn't content, but other links are.
+            wrappers = [body_el] if body_el.name == 'a' else []
+            wrappers += body_el.find_all('a', href=lambda h: h and f'/comments/{post_id}' in h)
+            for a in wrappers:
+                a.unwrap()
             inner = sanitize_reddit_html(body_el.decode_contents().strip())
             if inner:
                 selftext_html = inner
