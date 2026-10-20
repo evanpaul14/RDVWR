@@ -304,7 +304,7 @@ class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):
         more = {"kind": "more", "data": {"id": "m1", "children": ["c8", "c9"], "count": 2}}
-        mock_get.side_effect = _reddit({r"/comments/abc123\.json": _comments_payload([_comment("c1", "Top comment"), more])})
+        mock_get.side_effect = _reddit({r"%2Fcomments/abc123\.json": _comments_payload([_comment("c1", "Top comment"), more])})
         resp = client.get("/r/testsub/comments/abc123/post_title/")
         ns = _noscript(resp)
         assert "Top comment" in ns
@@ -318,7 +318,7 @@ class TestPostPage:
         post = payload[0]["data"]["children"][0]["data"]
         post.update(edited=1700000000, all_awardings=[
             {"name": "Gold", "count": 2, "icon_url": "https://i.redd.it/x.png", "resized_icons": []}])
-        mock_get.side_effect = _reddit({r"/comments/abc123\.json": payload})
+        mock_get.side_effect = _reddit({r"%2Fcomments/abc123\.json": payload})
         ns = _noscript(client.get("/r/testsub/comments/abc123"))
         meta = re.search(r'<div class="pv-meta">.*?</div>', ns, re.S).group(0)
         # plain time span (inherits .pv-meta sizing, like postview.js), edited age shown
@@ -330,8 +330,8 @@ class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_more_page_shows_loaded_comments(self, mock_get, client):
         mock_get.side_effect = _reddit({
-            r"/comments/abc123\.json": _comments_payload([_comment("c1", "Top comment")]),
-            r"/api/morechildren\.json": {"json": {"data": {"things": [
+            r"%2Fcomments/abc123\.json": _comments_payload([_comment("c1", "Top comment")]),
+            r"/api%2Fmorechildren\.json": {"json": {"data": {"things": [
                 {"kind": "t1", "data": {"id": "c8", "author": "x", "body": "Loaded later", "parent_id": "t3_abc123"}}]}}},
         })
         ns = _noscript(client.get("/r/testsub/comments/abc123?more=c8,c9&sort=top"))
@@ -341,7 +341,7 @@ class TestPostPage:
     @patch.object(reddit_client.SESSION, "get")
     def test_comment_permalink_shows_thread_with_context_link(self, mock_get, client):
         tree = [_comment("c1", "Parent", replies=[_comment("c2", "Target reply")])]
-        mock_get.side_effect = _reddit({r"/comments/abc123\.json": _comments_payload(tree)})
+        mock_get.side_effect = _reddit({r"%2Fcomments/abc123\.json": _comments_payload(tree)})
         ns = _noscript(client.get("/r/testsub/comments/abc123/_/c2"))
         assert "Target reply" in ns and "Parent" not in ns
         assert "/r/testsub/comments/abc123/_/c2?sort=confidence&amp;context=1" in ns
