@@ -72,8 +72,10 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     if comment_id:
         params["comment"] = comment_id
         params["context"] = 8
+    # %2F before "comments": Reddit's WAF 403s the plain path for OAuth device tokens
+    # (the same trick redlib uses); the encoded form reaches the same endpoint.
     resp = reddit_get(
-        f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+        f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
         params=params, timeout=timeout)
     if resp.status_code == 403:
         state, _ = _subreddit_error_state(resp)
@@ -124,7 +126,7 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
     if not children:
         return {"comments": [], "avatar_prefetch": {}}
     resp = reddit_get(
-        "https://www.reddit.com/api/morechildren.json",
+        "https://www.reddit.com/api%2Fmorechildren.json",
         params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
                 "api_type": "json", "raw_json": 1},
         timeout=timeout)
@@ -168,7 +170,7 @@ def _morechildren_via_permalinks(post_id, children, sort, timeout, with_avatars)
     batch, rest = ids[:MORECHILDREN_PERMALINK_BATCH], ids[MORECHILDREN_PERMALINK_BATCH:]
 
     def fetch_one(cid):
-        resp = reddit_get(f"https://www.reddit.com/comments/{post_id}.json",
+        resp = reddit_get(f"https://www.reddit.com/r/all%2Fcomments/{post_id}.json",
                           params={"raw_json": 1, "comment": cid, "sort": sort}, timeout=timeout)
         if resp.status_code != 200:
             raise UpstreamError.from_status(resp.status_code)
