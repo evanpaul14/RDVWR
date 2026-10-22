@@ -43,11 +43,17 @@ jobs:
           APK=$(find apk -name '*.apk' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
           echo "APK=$APK" >> "$GITHUB_ENV"
 
-      - name: Decompile
+      - name: Decompile the operation classes
         run: |
-          # jadx exits non-zero on the odd undecompilable method; the sources are still written
-          JAVA_OPTS="-Xmx10g" jadx/bin/jadx --no-res --no-debug-info --threads-count 4 -d src "$APK" || true
-          find src -name '*.java' | wc -l
+          # Decompiling the whole app takes hours; the dex files name the Apollo operation classes.
+          CLASSES=$(python3 update_gql_hash.py classes "$APK" PostComments)
+          echo "$CLASSES"
+          [ -n "$CLASSES" ] || { echo "no PostComments class in the dex files"; exit 1; }
+          for c in $CLASSES; do
+            # jadx exits non-zero on the odd undecompilable method; the source is still written
+            JAVA_OPTS="-Xmx10g" jadx/bin/jadx --no-res --no-debug-info --single-class "$c" -d src "$APK" || true
+          done
+          find src -name '*.java'
 
       - name: Extract hashes
         run: python3 update_gql_hash.py src
