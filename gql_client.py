@@ -95,6 +95,20 @@ def _epoch(iso):
         return None
 
 
+_MEDIA_REF_RE = re.compile(r"!\[([^\]]*)\]\(([A-Za-z0-9]+)\)")
+
+
+def _resolve_media(content):
+    """Comment markdown with `![img](<media id>)` refs swapped for the asset's URL
+    (the app sends them separately in richtextMedia, like REST's media_metadata)."""
+    markdown = content.get("markdown") or ""
+    urls = {m.get("id"): m["url"] for m in content.get("richtextMedia") or [] if m.get("url")}
+    if not urls:
+        return markdown
+    return _MEDIA_REF_RE.sub(lambda m: f"![{m.group(1)}]({urls[m.group(2)]})" if m.group(2) in urls else m.group(0),
+                             markdown)
+
+
 def _comment(n, depth):
     author = n.get("authorInfo") or {}
     flair = n.get("authorFlair") or {}
@@ -108,7 +122,7 @@ def _comment(n, depth):
     return {
         "id":                    n["id"].removeprefix("t1_"),
         "author":                author.get("name") or "[deleted]",
-        "body":                  (n.get("content") or {}).get("markdown") or "",
+        "body":                  _resolve_media(n.get("content") or {}),
         "body_html":             "",
         "score":                 n.get("score") or 0,
         "likes":                 True if vote == "UPVOTE" else False if vote == "DOWNVOTE" else None,
