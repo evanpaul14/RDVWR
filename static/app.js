@@ -1007,6 +1007,7 @@ function _settingsHtml() {
     <div class="settings-section-title">Comments</div>
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
     <label class="settings-row"><span class="settings-label">Show profile pictures</span>${chk('s-show-avatars', settings.showAvatars)}</label>
+    <label class="settings-row"><span class="settings-label">Show awards</span>${chk('s-show-awards', settings.showAwards)}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Privacy</div>
@@ -1075,6 +1076,11 @@ function bindSettingEvents() {
     settings.showAvatars = e.target.checked;
     saveSettings();
     if (postView.classList.contains('open')) changeCommentSort(state.currentCommentSort);
+  });
+  settingsBody.querySelector('#s-show-awards').addEventListener('change', e => {
+    settings.showAwards = e.target.checked;
+    saveSettings();
+    retryFeedLoad();
   });
   settingsBody.querySelector('#s-link-external-media').addEventListener('change', e => {
     settings.linkExternalMedia = e.target.checked;

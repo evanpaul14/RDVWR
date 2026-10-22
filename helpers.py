@@ -111,6 +111,7 @@ DEFAULT_SETTINGS = {
     'personalizedHome':  _bool_env('RDVWR_DEFAULT_PERSONALIZED_HOME', True),
     'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
     'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
+    'showAwards':        _bool_env('RDVWR_DEFAULT_SHOW_AWARDS', True),
     'linkExternalMedia': _bool_env('RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA', False),
     'nsfwBlur':          _bool_env('RDVWR_DEFAULT_NSFW_BLUR', False),
     'nsfwHide':          _bool_env('RDVWR_DEFAULT_NSFW_HIDE', False),

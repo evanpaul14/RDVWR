@@ -45,7 +45,8 @@
 
 {% macro awards(list) -%}
   {#- static/utils.js renderAwards(): minimal layout collapses them to one medal + total. -#}
-  {%- if list and ns.layout == 'minimal' -%}
+  {%- if not list or not ns.show_awards -%}
+  {%- elif ns.layout == 'minimal' -%}
     {%- set ns_total = namespace(n=0) -%}{%- for a in list %}{% set ns_total.n = ns_total.n + (a.count if a.count > 1 else 1) %}{% endfor -%}
     <span class="awards" title="{{ list | map(attribute='name') | join(', ') }}">&#127941;{{ ns_total.n }}</span>
   {%- elif list -%}
