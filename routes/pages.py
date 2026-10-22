@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request
 from helpers import (DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
                      USERNAME_RE, POST_ID_RE, MULTINAME_RE, log)
 from reddit_html import local_reddit_path
+from gql_client import GQL_CURSOR_RE
 import reddit_login
 from ns_prefs import get_pref
 from routes.live import LIVE_ID_RE
@@ -93,7 +94,7 @@ def post(sub, post_id, slug='', comment_id=''):
     sort = _arg('sort')
     if sort not in COMMENT_SORTS:
         sort = get_pref('comment_sort')
-    more = ','.join(i for i in _arg('more').split(',') if POST_ID_RE.match(i))
+    more = ','.join(i for i in _arg('more').split(',') if POST_ID_RE.match(i) or GQL_CURSOR_RE.match(i))
     return _respond(build_post(sub, post_id, comment_id, sort, _arg('context') == '1', more))
 
 

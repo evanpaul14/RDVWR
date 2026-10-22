@@ -99,3 +99,24 @@ def _fetch_archived_overview(username, before=None):
     if len(posts) == FEED_LIMIT or len(comments) == FEED_LIMIT:
         next_after = f"arc:{items[-1]['data']['created_utc']}" if items else None
     return items, next_after
+
+
+def fetch_archived_comment_tree(post_id, comment_id=None, limit=500):
+    """Reddit-shaped comment listing children for a post from Arctic Shift's tree endpoint.
+    Fallback for when Reddit's WAF blocks the comment-tree endpoints. With `comment_id`, only
+    that comment's subtree. Depths are filled in here (the archive omits them)."""
+    params = {"link_id": post_id, "limit": limit}
+    if comment_id:
+        params["parent_id"] = f"t1_{comment_id}"
+    resp = arctic_shift_get("/comments/tree", params, timeout=20)
+    resp.raise_for_status()
+    children = resp.json().get("data", [])
+
+    def set_depth(nodes, depth):
+        for n in nodes:
+            n["data"]["depth"] = depth
+            replies = n["data"].get("replies")
+            if isinstance(replies, dict):
+                set_depth(replies["data"]["children"], depth + 1)
+    set_depth(children, 0)
+    return children

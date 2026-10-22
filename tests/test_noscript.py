@@ -300,7 +300,53 @@ class TestPager:
         assert 'href="/r/testsub/hot?after=t3_next&amp;prev=t3_p1" rel="next"' in ns
 
 
+def _gql_comment(cid, body, depth=0):
+    from gql_client import _comment
+    return _comment({"id": f"t1_{cid}", "authorInfo": {"name": "someone"}, "content": {"markdown": body},
+                     "score": 3, "createdAt": "2026-10-22T21:14:12.260000+0000"}, depth)
+
+
 class TestPostPage:
+    @patch.object(reddit_client.SESSION, "get")
+    def test_waf_blocked_comments_fall_back_to_archive(self, mock_get, client):
+        post = _comments_payload()[0]
+        nested = _comment("c1", "Archived top", replies=[_comment("c2", "Archived reply")])
+        mock_get.side_effect = _reddit({
+            r"/by_id/t3_abc123": {"data": {"children": post["data"]["children"]}},
+            r"%2Fcomments/abc123\.json": MockResponse({}, status_code=403, headers={"Content-Type": "text/html"}),
+            r"/comments/tree": {"data": [nested]},
+        })
+        with patch("routes.comments.fetch_gql_comments", side_effect=RuntimeError("gql down")):
+            ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        assert "Archived top" in ns and "Archived reply" in ns
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_waf_blocked_comments_use_graphql_tree(self, mock_get, client):
+        post = _comments_payload()[0]
+        mock_get.side_effect = _reddit({
+            r"/by_id/t3_abc123": {"data": {"children": post["data"]["children"]}},
+            r"%2Fcomments/abc123\.json": MockResponse({}, status_code=403, headers={"Content-Type": "text/html"}),
+        })
+        roots = [{**_gql_comment("g1", "Graph top"), "replies": [_gql_comment("g2", "Graph reply", depth=1)]},
+                 {"kind": "more", "id": "top", "children": ["gql:Y3Vyc29y"], "count": 7, "depth": 0}]
+        with patch("routes.comments.fetch_gql_comments", return_value=(roots, {})):
+            ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        assert "Graph top" in ns and "Graph reply" in ns
+        assert "more=gql%3AY3Vyc29y" in ns and "Load 7 more comments" in ns
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_gql_more_stub_expands_via_cursor(self, mock_get, client):
+        post = _comments_payload()[0]
+        mock_get.side_effect = _reddit({
+            r"/by_id/t3_abc123": {"data": {"children": post["data"]["children"]}},
+            r"%2Fcomments/abc123\.json": MockResponse({}, status_code=403, headers={"Content-Type": "text/html"}),
+        })
+        with patch("routes.comments.fetch_gql_comments",
+                   return_value=([_gql_comment("g9", "Expanded", depth=3)], {})) as gql:
+            ns = _noscript(client.get("/r/testsub/comments/abc123?more=gql%3AY3Vyc29y"))
+        assert any(c.kwargs.get("after") == "cursor" for c in gql.call_args_list)
+        assert "Expanded" in ns
+
     @patch.object(reddit_client.SESSION, "get")
     def test_renders_comments_and_more_link(self, mock_get, client):
         more = {"kind": "more", "data": {"id": "m1", "children": ["c8", "c9"], "count": 2}}
