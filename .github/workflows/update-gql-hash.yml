@@ -11,7 +11,7 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     permissions:
       contents: write
     env:
@@ -19,44 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-python@v5
         with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Install apkeep and jadx
-        run: |
-          gh release download --repo EFForg/apkeep --pattern 'apkeep-x86_64-unknown-linux-gnu' --output apkeep
-          chmod +x apkeep
-          gh release download --repo skylot/jadx --pattern 'jadx-[0-9]*.zip' --output jadx.zip
-          unzip -q jadx.zip -d jadx
+          python-version: '3.x'
 
       - name: Download the Reddit APK
         run: |
+          gh release download --repo EFForg/apkeep --pattern 'apkeep-x86_64-unknown-linux-gnu' --output apkeep
+          chmod +x apkeep
           mkdir apk
-          # apk-pure is an unofficial mirror; the APK is only decompiled and grepped for a
-          # 64-hex string (never run), so a tampered one can at worst yield a wrong hash.
+          # apk-pure is an unofficial mirror; the APK is only parsed for a 64-hex string
+          # (never run), so a tampered one can at worst yield a wrong hash.
           ./apkeep -a com.reddit.frontpage -d apk-pure -o acknowledge_dangers=true apk
-          ls -la apk
-          # apk-pure serves split bundles as .xapk (a zip): take the biggest .apk inside
+          # it serves split bundles as .xapk (a zip of .apk files)
           for x in apk/*.xapk; do [ -e "$x" ] && unzip -q -o "$x" -d apk/x; done
-          APK=$(find apk -name '*.apk' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
-          echo "APK=$APK" >> "$GITHUB_ENV"
-
-      - name: Decompile the operation classes
-        run: |
-          # Decompiling the whole app takes hours; the dex files name the Apollo operation classes.
-          CLASSES=$(python3 update_gql_hash.py classes "$APK" PostComments)
-          echo "$CLASSES"
-          [ -n "$CLASSES" ] || { echo "no PostComments class in the dex files"; exit 1; }
-          for c in $CLASSES; do
-            # jadx exits non-zero on the odd undecompilable method; the source is still written
-            JAVA_OPTS="-Xmx10g" jadx/bin/jadx --no-res --no-debug-info --single-class "$c" -d src "$APK" || true
-          done
-          find src -name '*.java'
+          find apk -name '*.apk'
 
       - name: Extract hashes
-        run: python3 update_gql_hash.py src
+        run: python3 update_gql_hash.py $(find apk -name '*.apk')
 
       - name: Commit if changed
         run: |
