@@ -141,6 +141,7 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_PERSONALIZED_HOME` | `1` | `0` turns the personalized home feed off by default (it only applies with pasted cookies or a [Reddit login](#reddit-login)) |
 | `RDVWR_DEFAULT_PAGINATION` | `0` | `1` disables infinite scroll in favor of a "load more" button |
 | `RDVWR_DEFAULT_SHOW_AVATARS` | `0` | `1` shows profile pictures |
+| `RDVWR_DEFAULT_SHOW_AWARDS` | `1` | `0` hides award icons on posts and comments |
 | `RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA` | `0` | `1` links out to third-party media instead of embedding it |
 | `RDVWR_DEFAULT_NSFW_BLUR` | `0` | `1` blurs NSFW thumbnails |
 | `RDVWR_DEFAULT_NSFW_HIDE` | `0` | `1` hides NSFW posts |

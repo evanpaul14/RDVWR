@@ -139,7 +139,7 @@ export function renderFlair(p, clickable=false) {
 }
 
 export function renderAwards(awards) {
-  if (!awards?.length) return '';
+  if (!awards?.length || !settings.showAwards) return '';
   if (settings.layout === 'minimal') {
     const total = awards.reduce((n, a) => n + (a.count > 1 ? a.count : 1), 0);
     return `<span class="awards" title="${awards.map(a => escHtml(a.name)).join(', ')}">🏅${total}</span>`;

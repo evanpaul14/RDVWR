@@ -37,6 +37,7 @@
     {% endif %}
 
     <div class="settings-section-title">Comments</div>
+    {{ check_row('show_awards', 'Show awards', 'Show award icons on posts and comments.') }}
     {{ select_row('comment_sort', 'Default sort', '', [('confidence', 'Best'), ('top', 'Top'), ('new', 'New'), ('controversial', 'Controversial'), ('old', 'Old'), ('qa', 'Q&A')]) }}
 
     <div class="settings-section-title">Privacy</div>

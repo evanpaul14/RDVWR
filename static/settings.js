@@ -19,6 +19,7 @@ export const DEFAULTS = {
   pagination: false,
   layout: 'card',
   showAvatars: false,
+  showAwards: true,
   linkExternalMedia: false,
 };
 
