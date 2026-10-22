@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from media_detection import clean_url, SHOW_AWARDS
+from media_detection import clean_url
 from reddit_client import _get_device, SESSION
 from helpers import log
 
@@ -100,13 +100,23 @@ _MEDIA_REF_RE = re.compile(r"!\[([^\]]*)\]\(([A-Za-z0-9]+)\)")
 
 def _resolve_media(content):
     """Comment markdown with `![img](<media id>)` refs swapped for the asset's URL
-    (the app sends them separately in richtextMedia, like REST's media_metadata)."""
+    (the app sends them separately in richtextMedia, like REST's media_metadata). Videos
+    have no plain URL, so they become reddit's video player link, which the frontend
+    turns into an embed (render.js embedRedditCommentVideos)."""
     markdown = content.get("markdown") or ""
-    urls = {m.get("id"): m["url"] for m in content.get("richtextMedia") or [] if m.get("url")}
+    media = content.get("richtextMedia") or []
+    urls = {m.get("id"): m["url"] for m in media if m.get("url")}
+    urls.update({m["id"]: f"https://www.reddit.com/link/_/video/{m['id']}/player"
+                 for m in media if m.get("__typename") == "VideoAsset" and m.get("id")})
     if not urls:
         return markdown
-    return _MEDIA_REF_RE.sub(lambda m: f"![{m.group(1)}]({urls[m.group(2)]})" if m.group(2) in urls else m.group(0),
-                             markdown)
+
+    def swap(m):
+        url = urls.get(m.group(2))
+        if not url:
+            return m.group(0)
+        return url if "/video/" in url else f"![{m.group(1)}]({url})"
+    return _MEDIA_REF_RE.sub(swap, markdown)
 
 
 def _comment(n, depth):
@@ -114,7 +124,7 @@ def _comment(n, depth):
     flair = n.get("authorFlair") or {}
     template = flair.get("template") or {}
     awards = []
-    for a in sorted((n.get("awardings") or []) if SHOW_AWARDS else [], key=lambda a: -a.get("total", 0))[:5]:
+    for a in sorted(n.get("awardings") or [], key=lambda a: -a.get("total", 0))[:5]:
         icon = clean_url(((a.get("award") or {}).get("static_icon_32") or {}).get("url", ""))
         if icon:
             awards.append({"name": a["award"].get("name", ""), "count": a.get("total", 1), "icon": icon})
@@ -166,7 +176,7 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
     if after:
         variables["after"] = after
     if comment_id:
-        variables["focusedCommentContext"] = {"commentId": comment_id, "isFocusedThreadOnly": True}
+        variables["focusedCommentContext"] = {"commentId": f"t1_{comment_id}", "isFocusedThreadOnly": True}
     for attempt in range(2):
         body = {"operationName": "PostComments", "variables": variables,
                 "extensions": {"persistedQuery": {"version": 1, "sha256Hash": _hashes["PostComments"]}}}
