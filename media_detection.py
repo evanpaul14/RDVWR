@@ -9,6 +9,7 @@ log = logging.getLogger(__name__)
 
 SELFTEXT_MAX_LEN = 600
 
+SHOW_AWARDS = os.environ.get('SHOW_AWARDS', '1').strip().lower() not in ('0', 'false', 'no', 'off')
 DISABLE_NSFW = os.environ.get('DISABLE_NSFW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
@@ -100,6 +101,8 @@ def extract_redgifs_id(url):
 
 def _parse_awards(awardings):
     awards = []
+    if not SHOW_AWARDS:
+        return awards
     for a in sorted(awardings or [], key=lambda x: -x.get("coin_price", 0)):
         resized = a.get("resized_icons") or []
         icon = clean_url(resized[0]["url"]) if resized else clean_url(

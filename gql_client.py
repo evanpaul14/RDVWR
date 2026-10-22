@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from media_detection import clean_url
+from media_detection import clean_url, SHOW_AWARDS
 from reddit_client import _get_device, SESSION
 from helpers import log
 
@@ -114,7 +114,7 @@ def _comment(n, depth):
     flair = n.get("authorFlair") or {}
     template = flair.get("template") or {}
     awards = []
-    for a in sorted(n.get("awardings") or [], key=lambda a: -a.get("total", 0))[:5]:
+    for a in sorted((n.get("awardings") or []) if SHOW_AWARDS else [], key=lambda a: -a.get("total", 0))[:5]:
         icon = clean_url(((a.get("award") or {}).get("static_icon_32") or {}).get("url", ""))
         if icon:
             awards.append({"name": a["award"].get("name", ""), "count": a.get("total", 1), "icon": icon})
