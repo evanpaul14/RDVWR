@@ -2057,3 +2057,23 @@ class TestGqlHashes:
                 patch.object(gql_client.SESSION, "get", return_value=MockResponse({"PostComments": "nope"})):
             assert gql_client._refresh_hashes() is False
             assert gql_client._hashes["PostComments"] == "d" * 64
+
+    def test_failure_dispatches_hash_workflow_once_when_token_set(self, monkeypatch):
+        import gql_client
+        monkeypatch.setenv("GITHUB_DISPATCH_TOKEN", "tok")
+        monkeypatch.setattr(gql_client, "_last_dispatch", 0.0)
+        monkeypatch.setattr(gql_client.threading, "Thread",
+                            lambda target, daemon: type("T", (), {"start": staticmethod(target)})())
+        with patch.object(gql_client.SESSION, "post", return_value=MockResponse({}, status_code=204)) as post:
+            gql_client._dispatch_workflow()
+            gql_client._dispatch_workflow()   # throttled
+        assert post.call_count == 1
+        assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer tok"
+
+    def test_failure_without_token_dispatches_nothing(self, monkeypatch):
+        import gql_client
+        monkeypatch.delenv("GITHUB_DISPATCH_TOKEN", raising=False)
+        monkeypatch.setattr(gql_client, "_last_dispatch", 0.0)
+        with patch.object(gql_client.SESSION, "post") as post:
+            gql_client._dispatch_workflow()
+        post.assert_not_called()
