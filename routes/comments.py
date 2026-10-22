@@ -4,9 +4,11 @@ from flask import Blueprint, request
 from media_detection import process_post, _parse_awards, DISABLE_NSFW
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
+from archive import fetch_archived_comment_tree
+from gql_client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
-                     UpstreamError)
+                     UpstreamError, log)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
@@ -63,6 +65,29 @@ def _parse_comment_tree(c, author_fullnames):
     return comment
 
 
+def _blocked_comments_fallback(post_id, comment_id, sort):
+    """(post_raw, comments, author_fullnames) when Reddit's WAF blocks the comment endpoint:
+    the post from by_id, the tree from the app's GraphQL API, else from the Arctic Shift archive."""
+    resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1}, timeout=12)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code, "Post not found")
+    posts = resp.json()["data"]["children"]
+    if not posts:
+        raise UpstreamError("Post not found", 404)
+    try:
+        comments, author_fullnames = fetch_gql_comments(post_id, sort, comment_id=comment_id)
+    except Exception as e:
+        log.warning("gql comment tree failed post=%s: %s", post_id, e)
+        try:
+            author_fullnames = {}
+            comments = [_parse_comment_tree(c, author_fullnames)
+                        for c in fetch_archived_comment_tree(post_id, comment_id)]
+        except Exception as e:
+            log.warning("archived comment tree failed post=%s: %s", post_id, e)
+            raise UpstreamError("Reddit is blocking comment loading right now", 403)
+    return posts[0]["data"], comments, author_fullnames
+
+
 def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
     """A post plus its comment tree: {"post", "comments", "avatar_prefetch"}. With
     `comment_id`, the tree is that comment's thread (plus a few parents of context)."""
@@ -83,21 +108,26 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
             resp = reddit_get(
                 f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
                 quarantine=True, params=params, timeout=timeout)
-    if resp.status_code != 200:
-        raise UpstreamError.from_status(resp.status_code, "Post not found")
-    data     = resp.json()
-    children = data[0]["data"]["children"]
-    if not children:
-        raise UpstreamError("Post not found", 404)
-    post_raw = children[0]["data"]
+    if resp.status_code == 403 and "json" not in resp.headers.get("content-type", ""):
+        # Network-level WAF block (HTML page) on the comment-tree endpoints; posts and
+        # listings still work, so take the post from by_id and the tree from elsewhere.
+        post_raw, comments, author_fullnames = _blocked_comments_fallback(post_id, comment_id, sort)
+    else:
+        if resp.status_code != 200:
+            raise UpstreamError.from_status(resp.status_code, "Post not found")
+        data     = resp.json()
+        posts    = data[0]["data"]["children"]
+        if not posts:
+            raise UpstreamError("Post not found", 404)
+        post_raw = posts[0]["data"]
+        author_fullnames = {}
+        comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view
     hydrate_linked_posts([post])
 
-    author_fullnames = {}
-    comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
     avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
     return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
 
@@ -125,6 +155,14 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
         sort = "confidence"
     if not children:
         return {"comments": [], "avatar_prefetch": {}}
+    if children.startswith(CURSOR_PREFIX):
+        # a stub from the GraphQL fallback: its single child id is an encoded cursor
+        try:
+            roots, author_fullnames = fetch_gql_comments(post_id, sort, after=decode_cursor(children.split(",")[0]))
+        except Exception:
+            raise UpstreamError("Couldn't load these comments", 502)
+        avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
+        return {"comments": roots, "avatar_prefetch": avatar_prefetch}
     resp = reddit_get(
         "https://www.reddit.com/api%2Fmorechildren.json",
         params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
