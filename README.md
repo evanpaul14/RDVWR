@@ -113,6 +113,7 @@ python3 -m pytest tests/
 | `REDDIT_OAUTH` | `1` | Spoofs Reddit OAuth. Set `0` to disable and use public JSON API. |
 | `GITHUB_DISPATCH_TOKEN` | _(unset)_ | Fine-grained GitHub token (Actions read/write on the repo). When comment loading fails, the server uses it to run the `update-gql-hash` workflow right away instead of waiting for its daily run. |
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
+| `SHOW_AWARDS` | `1` | Set to `0` to hide post/comment awards. |
 | `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `RDVWR_DISABLE_PERSONALIZED_HOME` | `0` | Set to `1` to disable the personalized (logged-in) home feed entirely. |
