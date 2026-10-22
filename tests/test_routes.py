@@ -2031,3 +2031,12 @@ class TestGqlHashes:
                 patch.object(gql_client.SESSION, "get", return_value=MockResponse({"PostComments": "nope"})):
             assert gql_client._refresh_hashes() is False
             assert gql_client._hashes["PostComments"] == "d" * 64
+
+    def test_update_script_finds_operation_classes_in_dex(self, tmp_path):
+        import zipfile
+        import update_gql_hash
+        apk = tmp_path / "a.apk"
+        with zipfile.ZipFile(apk, "w") as z:
+            z.writestr("classes2.dex", b"\x00Lcom/reddit/gql/PostCommentsQuery;\x00LOther;")
+            z.writestr("assets/classes.dex", b"\x00Lbad/PostCommentsQuery;")
+        assert update_gql_hash.find_classes(apk, "PostComments") == ["com.reddit.gql.PostCommentsQuery"]
