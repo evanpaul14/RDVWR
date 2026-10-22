@@ -2001,19 +2001,45 @@ class TestAccountPage:
 
 
 class TestGqlHashes:
-    def test_update_script_finds_hash_next_to_operation_name(self, tmp_path):
-        import update_gql_hash
-        good = "a" * 64
-        (tmp_path / "PostCommentsQuery.java").write_text(f'ID = "{good}"; NAME = "PostComments";')
-        (tmp_path / "Other.java").write_text(f'ID = "{"b" * 64}"; NAME = "SomethingElse";')
-        assert update_gql_hash.find_hash(tmp_path, "PostComments") == good
-        assert update_gql_hash.find_hash(tmp_path, "Missing") is None
+    @staticmethod
+    def _apk(tmp_path, loads):
+        """A tiny APK whose one dex class loads the strings at indexes `loads` of
+        ["PostComments", <64-hex>, "other"] via const-string."""
+        import struct
+        import zipfile
+        strings = [b"PostComments", b"a" * 64, b"other"]
+        insns = [x for idx in loads for x in (0x001A, idx)] + [0x000E]
+        code = struct.pack("<HHHHII", 1, 0, 0, 0, 0, len(insns)) + struct.pack(f"<{len(insns)}H", *insns)
+        uleb = lambda n: bytes([n]) if n < 0x80 else bytes([n & 0x7F | 0x80, n >> 7])
+        str_ids_off = 0x70
+        class_defs_off = str_ids_off + 4 * len(strings)
+        blob_off = class_defs_off + 32
+        blobs, str_offs = b"", []
+        for st in strings:
+            str_offs.append(blob_off + len(blobs))
+            blobs += bytes([len(st)]) + st + b"\0"
+        class_data_off = blob_off + len(blobs)
+        # class_data_item: no fields, one direct method (idx_diff, access, code_off as uleb128)
+        class_data = bytes([0, 0, 1, 0, 0, 0]) + uleb(class_data_off + 8)
+        class_data = bytes([0, 0, 1, 0, 0, 0]) + uleb(class_data_off + len(class_data))
+        class_def = struct.pack("<8I", 0, 0, 0, 0, 0, 0, class_data_off, 0)
+        dex = bytearray(0x70) + b"".join(struct.pack("<I", o) for o in str_offs) + class_def + blobs
+        dex += class_data + code
+        struct.pack_into("<II", dex, 0x38, len(strings), str_ids_off)
+        struct.pack_into("<II", dex, 0x60, 1, class_defs_off)
+        apk = tmp_path / "a.apk"
+        with zipfile.ZipFile(apk, "w") as z:
+            z.writestr("classes2.dex", bytes(dex))
+        return apk
 
-    def test_update_script_refuses_ambiguous_hash(self, tmp_path):
+    def test_update_script_finds_hash_in_class_that_loads_operation_name(self, tmp_path):
         import update_gql_hash
-        (tmp_path / "A.java").write_text(f'"{"a" * 64}" "PostComments"')
-        (tmp_path / "B.java").write_text(f'"{"b" * 64}" "PostComments"')
-        assert update_gql_hash.find_hash(tmp_path, "PostComments") is None
+        assert update_gql_hash.find_hash([self._apk(tmp_path, [0, 1])], "PostComments") == "a" * 64
+        assert update_gql_hash.find_hash([self._apk(tmp_path, [0, 1])], "Missing") is None
+
+    def test_update_script_ignores_class_without_operation_name(self, tmp_path):
+        import update_gql_hash
+        assert update_gql_hash.find_hash([self._apk(tmp_path, [1, 2])], "PostComments") is None
 
     def test_refresh_adopts_valid_hash_from_github(self):
         import gql_client
@@ -2031,12 +2057,3 @@ class TestGqlHashes:
                 patch.object(gql_client.SESSION, "get", return_value=MockResponse({"PostComments": "nope"})):
             assert gql_client._refresh_hashes() is False
             assert gql_client._hashes["PostComments"] == "d" * 64
-
-    def test_update_script_finds_operation_classes_in_dex(self, tmp_path):
-        import zipfile
-        import update_gql_hash
-        apk = tmp_path / "a.apk"
-        with zipfile.ZipFile(apk, "w") as z:
-            z.writestr("classes2.dex", b"\x00Lcom/reddit/gql/PostCommentsQuery;\x00LOther;")
-            z.writestr("assets/classes.dex", b"\x00Lbad/PostCommentsQuery;")
-        assert update_gql_hash.find_classes(apk, "PostComments") == ["com.reddit.gql.PostCommentsQuery"]
