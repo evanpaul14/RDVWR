@@ -1,21 +1,56 @@
 """Comment trees from the Reddit Android app's GraphQL endpoint (gql-fed.reddit.com).
 
 Reddit's WAF blocks every REST comment-tree endpoint for the OAuth device tokens, but the
-app's own persisted GraphQL query still answers. Hashes are the app's (see Amqx/reddit-gql);
-Reddit may retire them. Results are converted to the same dicts routes/comments.py builds."""
+app's own persisted GraphQL query still answers. The query hashes live in gql_hashes.json,
+kept current from the latest APK by .github/workflows/update-gql-hash.yml; when Reddit
+rejects ours we re-read that file from GitHub, so a rotation heals without a deploy.
+Results are converted to the same dicts routes/comments.py builds."""
 import base64
+import json
 import re
+import time
 from datetime import datetime
+from pathlib import Path
 from media_detection import clean_url
-from reddit_client import _get_device
+from reddit_client import _get_device, SESSION
 from helpers import log
 
 GQL_URL = "https://gql-fed.reddit.com/"
-POST_COMMENTS_HASH = "314f29c2494fd78c7844ef2c6b09acb4bef5b37ab50b4ddc01691d6d5c8433f8"
+HASHES_FILE = Path(__file__).parent / "gql_hashes.json"
+HASHES_URL = "https://raw.githubusercontent.com/evanpaul14/RDVWR/main/gql_hashes.json"
+HASHES_REFRESH_MIN_INTERVAL = 600   # seconds between GitHub re-reads
+HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 CURSOR_PREFIX = "gql:"   # marks a "more" stub's child id as an encoded GraphQL cursor
 GQL_CURSOR_RE = re.compile(r"^gql:[A-Za-z0-9_=-]{1,600}$")
 TOP_LEVEL_COUNT = 100
 MAX_DEPTH = 8
+
+
+def _valid_hashes(d):
+    return isinstance(d, dict) and all(isinstance(k, str) and isinstance(v, str) and HASH_RE.match(v)
+                                       for k, v in d.items())
+
+
+_hashes = json.loads(HASHES_FILE.read_text())
+_last_refresh = 0.0
+
+
+def _refresh_hashes():
+    """Re-read the hashes from GitHub (throttled). True when any of them changed."""
+    global _hashes, _last_refresh
+    if time.time() - _last_refresh < HASHES_REFRESH_MIN_INTERVAL:
+        return False
+    _last_refresh = time.time()
+    try:
+        fresh = SESSION.get(HASHES_URL, timeout=10).json()
+    except Exception as e:
+        log.warning("gql hash refresh failed: %s", e)
+        return False
+    if not _valid_hashes(fresh) or all(_hashes.get(k) == v for k, v in fresh.items()):
+        return False
+    _hashes = {**_hashes, **fresh}
+    log.info("gql hashes updated from GitHub")
+    return True
 
 
 def encode_cursor(cursor):
@@ -92,14 +127,17 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
         variables["after"] = after
     if comment_id:
         variables["focusedCommentContext"] = {"commentId": comment_id, "isFocusedThreadOnly": True}
-    body = {"operationName": "PostComments", "variables": variables,
-            "extensions": {"persistedQuery": {"version": 1, "sha256Hash": POST_COMMENTS_HASH}}}
-    resp = _post(body, timeout)
-    data = resp.json() if resp.status_code == 200 else {}
-    if data.get("errors") or not (data.get("data") or {}).get("postInfoById"):
+    for attempt in range(2):
+        body = {"operationName": "PostComments", "variables": variables,
+                "extensions": {"persistedQuery": {"version": 1, "sha256Hash": _hashes["PostComments"]}}}
+        resp = _post(body, timeout)
+        data = resp.json() if resp.status_code == 200 else {}
+        if not data.get("errors") and (data.get("data") or {}).get("postInfoById"):
+            break
         log.warning("gql comments failed post=%s status=%s errors=%s",
                     post_id, resp.status_code, (data.get("errors") or [{}])[0].get("message"))
-        raise RuntimeError("GraphQL comment fetch failed")
+        if attempt == 1 or not _refresh_hashes():
+            raise RuntimeError("GraphQL comment fetch failed")
 
     by_id, roots, author_fullnames = {}, [], {}
     for entry in data["data"]["postInfoById"]["commentForest"]["trees"]:
