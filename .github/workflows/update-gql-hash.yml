@@ -34,7 +34,9 @@ jobs:
       - name: Download the Reddit APK
         run: |
           mkdir apk
-          ./apkeep -a com.reddit.frontpage -d apk-pure apk
+          # apk-pure is an unofficial mirror; the APK is only decompiled and grepped for a
+          # 64-hex string (never run), so a tampered one can at worst yield a wrong hash.
+          ./apkeep -a com.reddit.frontpage -d apk-pure -o acknowledge_dangers=true apk
           ls -la apk
           # apk-pure serves split bundles as .xapk (a zip): take the biggest .apk inside
           for x in apk/*.xapk; do [ -e "$x" ] && unzip -q -o "$x" -d apk/x; done
