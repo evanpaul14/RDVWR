@@ -3,11 +3,14 @@
 Reddit's WAF blocks every REST comment-tree endpoint for the OAuth device tokens, but the
 app's own persisted GraphQL query still answers. The query hashes live in gql_hashes.json,
 kept current from the latest APK by .github/workflows/update-gql-hash.yml; when Reddit
-rejects ours we re-read that file from GitHub, so a rotation heals without a deploy.
+rejects ours we re-read that file from GitHub, so a rotation heals without a deploy; and if
+GITHUB_DISPATCH_TOKEN is set, a failure also kicks that workflow off right away.
 Results are converted to the same dicts routes/comments.py builds."""
 import base64
 import json
+import os
 import re
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +22,9 @@ GQL_URL = "https://gql-fed.reddit.com/"
 HASHES_FILE = Path(__file__).parent / "gql_hashes.json"
 HASHES_URL = "https://raw.githubusercontent.com/evanpaul14/RDVWR/main/gql_hashes.json"
 HASHES_REFRESH_MIN_INTERVAL = 600   # seconds between GitHub re-reads
+WORKFLOW_DISPATCH_URL = ("https://api.github.com/repos/evanpaul14/RDVWR/actions/workflows/"
+                         "update-gql-hash.yml/dispatches")
+WORKFLOW_MIN_INTERVAL = 3600        # seconds between workflow runs we trigger
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 CURSOR_PREFIX = "gql:"   # marks a "more" stub's child id as an encoded GraphQL cursor
 GQL_CURSOR_RE = re.compile(r"^gql:[A-Za-z0-9_=-]{1,600}$")
@@ -33,6 +39,7 @@ def _valid_hashes(d):
 
 _hashes = json.loads(HASHES_FILE.read_text())
 _last_refresh = 0.0
+_last_dispatch = 0.0
 
 
 def _refresh_hashes():
@@ -51,6 +58,25 @@ def _refresh_hashes():
     _hashes = {**_hashes, **fresh}
     log.info("gql hashes updated from GitHub")
     return True
+
+
+def _dispatch_workflow():
+    """Ask GitHub to run the hash-update workflow (throttled, needs GITHUB_DISPATCH_TOKEN: a
+    fine-grained token with Actions read/write on the repo). Fire-and-forget."""
+    global _last_dispatch
+    token = os.environ.get("GITHUB_DISPATCH_TOKEN", "").strip()
+    if not token or time.time() - _last_dispatch < WORKFLOW_MIN_INTERVAL:
+        return
+    _last_dispatch = time.time()
+
+    def run():
+        try:
+            resp = SESSION.post(WORKFLOW_DISPATCH_URL, json={"ref": "main"}, timeout=10, headers={
+                "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+            log.info("gql hash workflow dispatched: HTTP %s", resp.status_code)
+        except Exception as e:
+            log.warning("gql hash workflow dispatch failed: %s", e)
+    threading.Thread(target=run, daemon=True).start()
 
 
 def encode_cursor(cursor):
@@ -137,6 +163,7 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
         log.warning("gql comments failed post=%s status=%s errors=%s",
                     post_id, resp.status_code, (data.get("errors") or [{}])[0].get("message"))
         if attempt == 1 or not _refresh_hashes():
+            _dispatch_workflow()
             raise RuntimeError("GraphQL comment fetch failed")
 
     by_id, roots, author_fullnames = {}, [], {}
