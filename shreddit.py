@@ -3,7 +3,7 @@ import re
 from reddit_html import sanitize_reddit_html
 from datetime import datetime
 from urllib.parse import urlparse
-from media_detection import (SHOW_AWARDS, extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
+from media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
                               GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls, proxy_hls)
 
 
@@ -259,7 +259,7 @@ def _parse_shreddit_post(el):
 
     awards = []
     icon = el.get('award-icon-url', '')
-    if icon and SHOW_AWARDS:
+    if icon:
         try: cnt = int(el.get('award-count', 1))
         except Exception: cnt = 1
         awards = [{'name': '', 'count': cnt, 'icon': icon}]
