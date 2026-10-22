@@ -1998,3 +1998,36 @@ class TestAccountPage:
                 patch.object(page_data, 'fetch_full_texts', return_value={'t3_p1': 'the whole text'}):
             html = app.test_client().get('/account', environ_base=self.LOCAL).get_data(as_text=True)
         assert 'Mine' in html and 'the whole text' in html and 'value="t3_p1"' in html and '/auth/reddit/logout' in html
+
+
+class TestGqlHashes:
+    def test_update_script_finds_hash_next_to_operation_name(self, tmp_path):
+        import update_gql_hash
+        good = "a" * 64
+        (tmp_path / "PostCommentsQuery.java").write_text(f'ID = "{good}"; NAME = "PostComments";')
+        (tmp_path / "Other.java").write_text(f'ID = "{"b" * 64}"; NAME = "SomethingElse";')
+        assert update_gql_hash.find_hash(tmp_path, "PostComments") == good
+        assert update_gql_hash.find_hash(tmp_path, "Missing") is None
+
+    def test_update_script_refuses_ambiguous_hash(self, tmp_path):
+        import update_gql_hash
+        (tmp_path / "A.java").write_text(f'"{"a" * 64}" "PostComments"')
+        (tmp_path / "B.java").write_text(f'"{"b" * 64}" "PostComments"')
+        assert update_gql_hash.find_hash(tmp_path, "PostComments") is None
+
+    def test_refresh_adopts_valid_hash_from_github(self):
+        import gql_client
+        fresh = {"PostComments": "c" * 64}
+        with patch.object(gql_client, "_hashes", {"PostComments": "d" * 64}), \
+                patch.object(gql_client, "_last_refresh", 0.0), \
+                patch.object(gql_client.SESSION, "get", return_value=MockResponse(fresh)):
+            assert gql_client._refresh_hashes() is True
+            assert gql_client._hashes["PostComments"] == "c" * 64
+
+    def test_refresh_rejects_malformed_hashes(self):
+        import gql_client
+        with patch.object(gql_client, "_hashes", {"PostComments": "d" * 64}), \
+                patch.object(gql_client, "_last_refresh", 0.0), \
+                patch.object(gql_client.SESSION, "get", return_value=MockResponse({"PostComments": "nope"})):
+            assert gql_client._refresh_hashes() is False
+            assert gql_client._hashes["PostComments"] == "d" * 64
