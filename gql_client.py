@@ -119,9 +119,20 @@ def _resolve_media(content):
     return _MEDIA_REF_RE.sub(swap, markdown)
 
 
+def _flair_parts(flair):
+    """REST-style richtext parts from authorFlair.richtext (a JSON string of emoji/text parts)."""
+    try:
+        parts = json.loads(flair.get("richtext") or "[]")
+    except ValueError:
+        return []
+    return [{**p, "u": clean_url(p.get("u", ""))} if p.get("e") == "emoji" else p
+            for p in parts if isinstance(p, dict)]
+
+
 def _comment(n, depth):
     author = n.get("authorInfo") or {}
     flair = n.get("authorFlair") or {}
+    flair_parts = _flair_parts(flair)
     template = flair.get("template") or {}
     awards = []
     for a in sorted(n.get("awardings") or [], key=lambda a: -a.get("total", 0))[:5]:
@@ -144,8 +155,8 @@ def _comment(n, depth):
         "is_submitter":          bool(n.get("isOP")),
         "stickied":              bool(n.get("isStickied")),
         "author_flair_text":     flair.get("text") or "",
-        "author_flair_richtext": [],
-        "author_flair_type":     "text",
+        "author_flair_richtext": flair_parts,
+        "author_flair_type":     "richtext" if flair_parts else "text",
         "author_flair_bg":       template.get("backgroundColor") or "",
         "author_flair_tc":       (flair.get("textColor") or "dark").lower(),
         "awards":                awards,
