@@ -910,6 +910,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   padding:0 20px; gap:12px;
   border-bottom:1px solid var(--b); flex-shrink:0;
   background:var(--pvhdr-bg); backdrop-filter:blur(12px);
+  position:relative; z-index:5; /* keep the search dropdown above scrolled content (e.g. opacity'd load-more buttons) */
 }
 .pv-bar-left  { display:flex; align-items:center; gap:8px; }
 .pv-bar-right { display:flex; align-items:center; justify-content:flex-end; }
