@@ -140,7 +140,14 @@ def process_post(p):
         meta = p.get("media_metadata", {})
         for item in p["gallery_data"].get("items", []):
             mid = str(item.get("media_id", ""))
-            if mid in meta and meta[mid].get("status") == "valid":
+            if mid and not item.get("is_deleted") and meta.get(mid, {}).get("status") != "valid":
+                # Reddit sometimes leaves media_metadata as {"status": "failed"} for images
+                # that i.redd.it still serves; the media id is the filename (jpeg in practice).
+                u = f"https://i.redd.it/{mid}.jpeg"
+                gallery.append({"url": proxy_if_reddit_preview(u), "thumb": proxy_if_reddit_preview(u),
+                                "mini": proxy_if_reddit_preview(u), "width": 0, "height": 0,
+                                "caption": item.get("caption", "")})
+            elif mid in meta and meta[mid].get("status") == "valid":
                 s = meta[mid].get("s", {})
                 url = clean_url(s.get("u") or s.get("gif"))
                 if url:
