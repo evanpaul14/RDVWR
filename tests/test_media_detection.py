@@ -211,14 +211,23 @@ class TestProcessPost:
         g = process_post(p)["gallery"][0]
         assert g["thumb"] == g["mini"] == g["url"] == "https://i.redd.it/anim.gif"
 
-    def test_gallery_skips_invalid_items(self):
+    def test_gallery_skips_deleted_items(self):
         p = _post(
             is_gallery=True,
-            gallery_data={"items": [{"media_id": "bad"}]},
+            gallery_data={"items": [{"media_id": "bad", "is_deleted": True}]},
             media_metadata={"bad": {"status": "failed"}},
         )
         result = process_post(p)
         assert result["gallery"] == []
+
+    def test_gallery_failed_metadata_falls_back_to_i_redd_it(self):
+        p = _post(
+            is_gallery=True,
+            gallery_data={"items": [{"media_id": "m1"}]},
+            media_metadata={"m1": {"status": "failed"}},
+        )
+        result = process_post(p)
+        assert [g["url"] for g in result["gallery"]] == ["https://i.redd.it/m1.jpeg"]
 
     def test_gallery_first_image_becomes_preview(self):
         p = _post(
