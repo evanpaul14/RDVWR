@@ -99,37 +99,63 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
         params["context"] = 8
     # %2F before "comments": Reddit's WAF 403s the plain path for OAuth device tokens
     # (the same trick redlib uses); the encoded form reaches the same endpoint.
-    resp = reddit_get(
-        f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
-        params=params, timeout=timeout)
-    if resp.status_code == 403:
-        state, _ = _subreddit_error_state(resp)
-        if state == "quarantined":
-            resp = reddit_get(
-                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-                quarantine=True, params=params, timeout=timeout)
-    if resp.status_code == 403 and "json" not in resp.headers.get("content-type", ""):
-        # Network-level WAF block (HTML page) on the comment-tree endpoints; posts and
-        # listings still work, so take the post from by_id and the tree from elsewhere.
-        post_raw, comments, author_fullnames = _blocked_comments_fallback(post_id, comment_id, sort)
-    else:
-        if resp.status_code != 200:
-            raise UpstreamError.from_status(resp.status_code, "Post not found")
-        data     = resp.json()
-        posts    = data[0]["data"]["children"]
+    comments_error = None
+    try:
+        resp = reddit_get(
+            f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
+            params=params, timeout=timeout)
+        if resp.status_code == 403:
+            state, _ = _subreddit_error_state(resp)
+            if state == "quarantined":
+                resp = reddit_get(
+                    f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+                    quarantine=True, params=params, timeout=timeout)
+        if resp.status_code == 403 and "json" not in resp.headers.get("content-type", ""):
+            # Network-level WAF block (HTML page) on the comment-tree endpoints; posts and
+            # listings still work, so take the post from by_id and the tree from elsewhere.
+            post_raw, comments, author_fullnames = _blocked_comments_fallback(post_id, comment_id, sort)
+        else:
+            if resp.status_code != 200:
+                raise UpstreamError.from_status(resp.status_code, "Post not found")
+            data     = resp.json()
+            posts    = data[0]["data"]["children"]
+            if not posts:
+                raise UpstreamError("Post not found", 404)
+            post_raw = posts[0]["data"]
+            author_fullnames = {}
+            comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
+    except Exception as e:
+        # The post and its comments load independently: when the combined fetch fails,
+        # still show the post (via by_id) and report the comments as failed.
+        log.warning("comment fetch failed post=%s: %s", post_id, e)
+        try:
+            resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json",
+                              params={"raw_json": 1}, timeout=timeout)
+            posts = resp.json()["data"]["children"] if resp.status_code == 200 else []
+        except Exception:
+            posts = []
         if not posts:
-            raise UpstreamError("Post not found", 404)
-        post_raw = posts[0]["data"]
-        author_fullnames = {}
-        comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
+            raise e if isinstance(e, UpstreamError) else UpstreamError("Post not found", 502)
+        post_raw, comments, author_fullnames = posts[0]["data"], [], {}
+        comments_error = "Couldn't load comments"
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view
-    hydrate_linked_posts([post])
+    try:
+        hydrate_linked_posts([post])
+    except Exception as e:
+        log.warning("linked post hydration failed post=%s: %s", post_id, e)
 
-    avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
-    return {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
+    try:
+        avatar_prefetch = _embed_comment_avatars(comments, author_fullnames) if with_avatars else {}
+    except Exception as e:
+        log.warning("comment avatars failed post=%s: %s", post_id, e)
+        avatar_prefetch = {}
+    result = {"post": post, "comments": comments, "avatar_prefetch": avatar_prefetch}
+    if comments_error:
+        result["comments_error"] = comments_error
+    return result
 
 
 @bp.route("/api/r/<subreddit>/comments/<post_id>")
@@ -140,8 +166,9 @@ def get_comments(subreddit, post_id):
         comment_id = request.args.get('comment')
         sort = request.args.get('sort', 'confidence')
         with_avatars = request.args.get('avatars') == '1'
-        return cached_json(fetch_comments(subreddit, post_id, comment_id, sort, with_avatars=with_avatars),
-                           CACHE_TTL_FEED)
+        data = fetch_comments(subreddit, post_id, comment_id, sort, with_avatars=with_avatars)
+        # A post whose comments failed must not be cached, so a reload retries them.
+        return cached_json(data, 0 if data.get("comments_error") else CACHE_TTL_FEED)
     except UpstreamError as e:
         return e.response()
     except Exception:

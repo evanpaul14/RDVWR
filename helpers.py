@@ -314,7 +314,7 @@ def is_same_site_request():
 def cached_json(data, seconds):
     resp = make_response(jsonify(data))
     # Data fetched as the logged-in account (vote state etc.) must never reach a shared cache.
-    resp.headers['Cache-Control'] = ('private, no-store' if reddit_login.request_account_active()
+    resp.headers['Cache-Control'] = ('private, no-store' if reddit_login.request_account_active() or not seconds
                                      else f'public, max-age={seconds}')
     return resp
 
