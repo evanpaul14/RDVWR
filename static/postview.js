@@ -184,6 +184,14 @@ function buildCommentSortBar(active) {
   ).join('')}</div>`;
 }
 
+// Comments render in isolation: a failed or malformed tree shows a retry state in
+// the comments area instead of taking the post down with it.
+function commentsAreaHtml(data, commentId) {
+  if (data.comments_error) return errState(escHtml(data.comments_error), 'comments');
+  try { return buildCommentsHtml(data, commentId); }
+  catch { return errState('Failed to display comments', 'comments'); }
+}
+
 function buildCommentsHtml(data, commentId) {
   const p = data.post;
   const showContext = state._pvShowingContext;
@@ -293,7 +301,7 @@ export async function changeCommentSort(sort) {
     if (!res.ok) { area.innerHTML = errState('Failed to load comments', 'comments'); return; }
     const data = await res.json();
     state._pvData = data;
-    area.innerHTML = buildCommentsHtml(data, state._pvCommentId);
+    area.innerHTML = commentsAreaHtml(data, state._pvCommentId);
     initMedia(area);
     initGifVideos(area);
     initGifImages(area);
@@ -396,13 +404,13 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       </div>
       ${buildCommentSortBar(state.currentCommentSort)}
       <div class="pv-comments-area">
-        ${buildCommentsHtml(data, commentId)}
+        ${commentsAreaHtml(data, commentId)}
       </div>`;
 
     initMedia(pvContent);
     initGifVideos(pvContent);
     initGifImages(pvContent);
-    initCommentAvatars(pvContent, data.avatar_prefetch);
+    try { initCommentAvatars(pvContent, data.avatar_prefetch); } catch {}
     if (restorePvScroll) pvScroll.scrollTop = restorePvScroll;
   } catch {
     pvContent.innerHTML = errState('Network error', 'post');

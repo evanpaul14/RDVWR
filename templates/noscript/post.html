@@ -19,6 +19,8 @@
           {% if page.thread_link %}<div class="thread-banner"><a href="{{ page.thread_link }}">&larr; View full thread</a></div>{% endif %}
           {% for c in page.comments %}{{ comments.comment(c, page.post, page.comment_sort) }}{% endfor %}
         </div>
+      {% elif page.comments_error %}
+        {{ ui.empty_state(page.comments_error) }}
       {% else %}
         {{ ui.empty_state('No comments yet') }}
       {% endif %}

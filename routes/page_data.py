@@ -234,6 +234,7 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
                                      "_comment_id": comment_id or ''}
     return _page("post", post["title"], {
         "post": post, "comments": comments, "comment_sort": sort, "thread_link": thread_link,
+        "comments_error": data.get("comments_error"),
         "sort_links": {s: page_url(thread_path, sort=s, context=1 if show_context else '', more=more_ids)
                        for s in ('confidence', 'top', 'new', 'controversial', 'old', 'qa')},
     }, scope_sub=sub, **hydration)
