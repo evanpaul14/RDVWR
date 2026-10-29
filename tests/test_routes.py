@@ -2112,3 +2112,19 @@ class TestGqlHashes:
         with patch.object(gql_client.SESSION, "post") as post:
             gql_client._dispatch_workflow()
         post.assert_not_called()
+
+
+class TestGqlCommentScores:
+    def _node(self, **kw):
+        return {"id": "t1_abc", "score": 42, "voteState": "NONE", "content": {"markdown": "hi"}, **kw}
+
+    def test_score_and_vote_state_map_to_rest_fields(self):
+        import gql_client
+        assert gql_client._comment(self._node(), 0)["score"] == 42
+        assert gql_client._comment(self._node(voteState="UPVOTE"), 0)["likes"] is True
+        assert gql_client._comment(self._node(voteState="DOWNVOTE"), 0)["likes"] is False
+        assert gql_client._comment(self._node(), 0)["likes"] is None
+
+    def test_missing_score_is_zero(self):
+        import gql_client
+        assert gql_client._comment(self._node(score=None), 0)["score"] == 0
