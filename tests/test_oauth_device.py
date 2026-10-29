@@ -154,3 +154,33 @@ class TestResetIdentity:
         d.qos = 1.0  # force a low value
         d.reset_identity()
         assert 1.0 <= d.qos <= 100.0
+
+
+class TestRedditGetWafRetry:
+    @staticmethod
+    def _device(status, ctype):
+        d = MagicMock()
+        d.api_headers.return_value = {}
+        d.session.get.return_value = MagicMock(status_code=status, headers={"content-type": ctype})
+        return d
+
+    def _get(self, devices):
+        with patch.object(app_module, "USER_TOKEN_PROVIDER", None), \
+             patch.object(app_module, "REDDIT_OAUTH", True), \
+             patch.object(app_module, "_get_device", side_effect=devices):
+            return app_module.reddit_get("https://www.reddit.com/by_id/t3_x.json")
+
+    def test_html_403_retries_on_the_next_device(self):
+        bad, good = self._device(403, "text/html"), self._device(200, "application/json")
+        assert self._get([bad, good]).status_code == 200
+        assert good.session.get.call_count == 1
+
+    def test_gives_up_after_three_html_403s(self):
+        devs = [self._device(403, "text/html") for _ in range(3)]
+        assert self._get(devs).status_code == 403
+        assert all(d.session.get.call_count == 1 for d in devs)
+
+    def test_json_403_is_not_retried(self):
+        private, spare = self._device(403, "application/json"), self._device(200, "application/json")
+        assert self._get([private, spare]).status_code == 403
+        assert spare.session.get.call_count == 0

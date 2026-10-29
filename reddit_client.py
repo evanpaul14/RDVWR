@@ -534,6 +534,12 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
             device.reset_identity()
             device.expires_at = 0.0  # force this device to re-auth with its new identity
             continue
+        if resp.status_code == 403:
+            ctype = resp.headers.get("content-type") or ""
+            log.warning("reddit 403 on %s via device %s (%s, %s) content-type=%r attempt=%d",
+                        url, device.device_id[:8], device.impersonate, device.user_agent, ctype, attempt + 1)
+            if attempt < 2 and "json" not in ctype:
+                continue  # the WAF's HTML block page: the pool's next device may get through
         if resp.status_code == 401 and attempt < 2:
             device.expires_at = 0.0  # force this device to re-auth next use
             continue
