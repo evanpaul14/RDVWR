@@ -116,6 +116,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
     state.searchType = 'posts';
   }
   if (route.type !== 'home') state.homeMode = false;
+  if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
   if (route.type !== 'duplicates') state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
   if (route.type !== 'saved') state.savedMode = false;
