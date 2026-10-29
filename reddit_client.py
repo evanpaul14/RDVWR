@@ -283,11 +283,11 @@ _ANDROID_APP_VERSIONS = [
 _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
 _CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131", "firefox133"]
 _TOKEN_POOL_SIZE          = 3
-_TOKEN_ROTATE_SECS        = 1800  # rotate device identity every 30 min
+_TOKEN_ROTATE_SECS        = 600   # rotate device identity every 10 min (plus per-device jitter)
 # Preemptively rotate a device once Reddit reports its per-token request budget is
 # this low, rather than waiting for it to run out and get 429s (mirrors redlib's
 # OAUTH_RATELIMIT_REMAINING approach).
-_RATELIMIT_LOW_WATERMARK = 10
+_RATELIMIT_LOW_WATERMARK = 30
 
 
 class _OAuthDevice:
@@ -296,6 +296,8 @@ class _OAuthDevice:
         self.token       = None
         self.expires_at  = 0.0
         self.acquired_at = 0.0
+        # Jitter so the pool's devices don't all rotate in the same instant.
+        self.rotate_secs = _TOKEN_ROTATE_SECS * random.uniform(0.75, 1.25)
         self.device_id   = str(_uuid_mod.uuid4())
         self.impersonate = random.choice(_CFFI_PROFILES)
         self.qos         = random.uniform(1.0, 100.0)
@@ -315,7 +317,7 @@ class _OAuthDevice:
             return True
         return (not self.token
                 or now >= self.expires_at
-                or now - self.acquired_at >= _TOKEN_ROTATE_SECS)
+                or now - self.acquired_at >= self.rotate_secs)
 
     def api_headers(self):
         codecs = "available-codecs=video/avc, video/hevc"
