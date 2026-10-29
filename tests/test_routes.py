@@ -2128,3 +2128,10 @@ class TestGqlCommentScores:
     def test_missing_score_is_zero(self):
         import gql_client
         assert gql_client._comment(self._node(score=None), 0)["score"] == 0
+
+    def test_hidden_score_flag(self):
+        import gql_client
+        assert gql_client._comment(self._node(isScoreHidden=True), 0)["score_hidden"] is True
+        assert gql_client._comment(self._node(), 0)["score_hidden"] is False
+        assert comments_routes._parse_comment_fields({"id": "a", "score_hidden": True})["score_hidden"] is True
+        assert comments_routes._parse_comment_fields({"id": "a"})["score_hidden"] is False

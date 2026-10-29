@@ -476,8 +476,8 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
         ${isStickied ? '<span class="badge badge-sticky">📌 stickied</span>' : ''}
         ${renderAuthorFlair(c)}
         ${votingEnabled()
-          ? voteCtlHtml('t1_' + c.id, c.likes, c.score, `<span class="vote-score">${fmtNum(c.score)}</span>`, 'comment-score')
-          : `<span class="comment-score">▲ ${fmtNum(c.score)}</span>`}
+          ? voteCtlHtml('t1_' + c.id, c.likes, c.score, c.score_hidden ? '' : `<span class="vote-score">${fmtNum(c.score)}</span>`, 'comment-score')
+          : c.score_hidden ? '' : `<span class="comment-score">▲ ${fmtNum(c.score)}</span>`}
         <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}" title="${fmtDateTime(c.created_utc)}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
         ${renderAwards(c.awards)}
       </div>
