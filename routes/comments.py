@@ -1,4 +1,5 @@
 """Post comment trees and 'load more' children."""
+import time
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request
 from media_detection import process_post, _parse_awards, DISABLE_NSFW
@@ -66,10 +67,24 @@ def _parse_comment_tree(c, author_fullnames):
     return comment
 
 
+# Attempts at by_id before giving up: Reddit's WAF 403s it now and then, independently of
+# which device token sent the request, so a retry on the pool's next device usually works.
+BY_ID_ATTEMPTS = 4
+
+
 def _by_id_post(post_id):
     """A post's raw data from by_id; raises UpstreamError when Reddit won't give it."""
-    resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1},
-                      timeout=12, rotate_on_403=True)
+    for attempt in range(BY_ID_ATTEMPTS):
+        resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1},
+                          timeout=12)
+        if resp.status_code == 200:
+            break
+        if resp.status_code not in (403, 429) and resp.status_code < 500:
+            break
+        log.warning("by_id %s returned %s (attempt %d/%d)", post_id, resp.status_code,
+                    attempt + 1, BY_ID_ATTEMPTS)
+        if attempt < BY_ID_ATTEMPTS - 1:
+            time.sleep(0.3 * (attempt + 1))
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     posts = resp.json()["data"]["children"]
@@ -144,21 +159,25 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
             post_raw, comments, author_fullnames = _gql_comments(post_id, comment_id, sort)
         except Exception as e:
             log.warning("gql comments failed post=%s: %s", post_id, e)
-            post_raw, comments, author_fullnames = _listing_comments(
-                subreddit, post_id, comment_id, sort, timeout)
+            # Reddit's WAF blocks the comment-tree endpoint for OAuth device tokens, so the
+            # archive goes first and the listing is only the last resort.
+            try:
+                post_raw, comments, author_fullnames = _blocked_comments_fallback(post_id, comment_id)
+            except Exception as archive_err:
+                log.warning("archived comments failed post=%s: %s", post_id, archive_err)
+                post_raw, comments, author_fullnames = _listing_comments(
+                    subreddit, post_id, comment_id, sort, timeout)
     except Exception as e:
         # The post and its comments load independently: when the combined fetch fails,
         # still show the post (via by_id) and report the comments as failed.
         log.warning("comment fetch failed post=%s: %s", post_id, e)
         try:
-            resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json",
-                              params={"raw_json": 1}, timeout=timeout, rotate_on_403=True)
-            posts = resp.json()["data"]["children"] if resp.status_code == 200 else []
+            posts = [_by_id_post(post_id)]
         except Exception:
             posts = []
         if not posts:
             raise e if isinstance(e, UpstreamError) else UpstreamError("Post not found", 502)
-        post_raw, comments, author_fullnames = posts[0]["data"], [], {}
+        post_raw, comments, author_fullnames = posts[0], [], {}
         comments_error = "Couldn't load comments"
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
