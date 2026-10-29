@@ -487,9 +487,11 @@ def _record_ratelimit(device: _OAuthDevice, resp):
         pass
 
 
-def reddit_get(url, *, quarantine=False, **kwargs):
+def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
-    Pass quarantine=True to use the quarantine-opted-in session instead of OAuth."""
+    Pass quarantine=True to use the quarantine-opted-in session instead of OAuth.
+    Pass rotate_on_403=True to retry once on a fresh token and identity when Reddit answers
+    403 (often a WAF block tied to one device token); a second 403 is returned as is."""
     if not quarantine and USER_TOKEN_PROVIDER:
         user_token = USER_TOKEN_PROVIDER()
         if user_token:
@@ -508,6 +510,7 @@ def reddit_get(url, *, quarantine=False, **kwargs):
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
     extra_headers = kwargs.pop("headers", {})
+    rotated = False
     for attempt in range(3):
         device = _get_device()
         device.drift_qos()
@@ -520,6 +523,13 @@ def reddit_get(url, *, quarantine=False, **kwargs):
         _record_ratelimit(device, resp)
         if resp.status_code == 429:
             time.sleep(min(int(resp.headers.get("Retry-After", 5)), 5))
+            continue
+        if resp.status_code == 403 and rotate_on_403 and not rotated and attempt < 2:
+            rotated = True
+            log.warning("reddit 403 on %s via device %s; cycling token and retrying",
+                        url, device.device_id[:8])
+            device.reset_identity()
+            device.expires_at = 0.0  # force this device to re-auth with its new identity
             continue
         if resp.status_code == 401 and attempt < 2:
             device.expires_at = 0.0  # force this device to re-auth next use
