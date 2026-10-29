@@ -14,7 +14,7 @@ from unittest.mock import patch, MagicMock
 import helpers
 import reddit_client
 from app import app
-from routes import media as media_routes, embeds as embeds_routes
+from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes
 
 
 # ── Mock helpers ──────────────────────────────────────────────────────────────
@@ -65,6 +65,14 @@ def no_oauth(monkeypatch):
     """Force reddit_get to use SESSION (not cffi) so SESSION.get mocks work."""
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
     helpers._view_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def no_gql(monkeypatch):
+    """Comments try GraphQL first; fail it by default so tests don't hit the network."""
+    def boom(*a, **kw):
+        raise RuntimeError("GraphQL comment fetch failed")
+    monkeypatch.setattr(comments_routes, "fetch_gql_comments", boom)
 
 
 @pytest.fixture
@@ -195,6 +203,13 @@ class TestSubredditFeed:
         assert resp.status_code == 403
 
     @patch.object(reddit_client.SESSION, "get")
+    def test_waf_403_is_not_reported_as_private(self, mock_get, client):
+        mock_get.return_value = _session_get(status_code=403, headers={"Content-Type": "text/html"})
+        resp = client.get("/api/r/pics")
+        assert resp.status_code == 403
+        assert resp.get_json()["error"] == "Reddit returned 403"
+
+    @patch.object(reddit_client.SESSION, "get")
     def test_after_param_forwarded(self, mock_get, client):
         mock_get.return_value = _session_get(_make_listing([], after="t3_next"))
         resp = client.get("/api/r/python?after=t3_abc")
@@ -302,6 +317,26 @@ class TestComments:
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/r/testsubreddit/comments/abc123")
         assert resp.status_code == 404
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_graphql_is_tried_first(self, mock_get, client, monkeypatch):
+        post = {**_make_post(), "permalink": "/r/testsubreddit/comments/abc123/title/"}
+        mock_get.return_value = _session_get({"data": {"children": [{"kind": "t3", "data": post}]}})
+        monkeypatch.setattr(comments_routes, "fetch_gql_comments",
+                            lambda *a, **kw: ([{"id": "c1", "replies": []}], {}))
+        resp = client.get("/api/r/testsubreddit/comments/abc123")
+        assert resp.status_code == 200
+        assert [c["id"] for c in resp.get_json()["comments"]] == ["c1"]
+        assert "comments_error" not in resp.get_json()
+        urls = [c[0][0] for c in mock_get.call_args_list]
+        assert urls == ["https://www.reddit.com/by_id/t3_abc123.json"]
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_graphql_failure_falls_back_to_comment_endpoint(self, mock_get, client):
+        mock_get.return_value = _session_get(self._comments_response())
+        resp = client.get("/api/r/testsubreddit/comments/abc123")
+        assert resp.status_code == 200
+        assert any("%2Fcomments/abc123.json" in c[0][0] for c in mock_get.call_args_list)
 
 
 # ── /api/r/<sub>/morechildren/<id> ───────────────────────────────────────────
