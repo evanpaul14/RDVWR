@@ -68,7 +68,8 @@ def _parse_comment_tree(c, author_fullnames):
 
 def _by_id_post(post_id):
     """A post's raw data from by_id; raises UpstreamError when Reddit won't give it."""
-    resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1}, timeout=12)
+    resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1},
+                      timeout=12, rotate_on_403=True)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     posts = resp.json()["data"]["children"]
@@ -110,7 +111,7 @@ def _listing_comments(subreddit, post_id, comment_id, sort, timeout):
     # (the same trick redlib uses); the encoded form reaches the same endpoint.
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
-        params=params, timeout=timeout)
+        params=params, timeout=timeout, rotate_on_403=True)
     if resp.status_code == 403:
         state, _ = _subreddit_error_state(resp)
         if state == "quarantined":
@@ -151,7 +152,7 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
         log.warning("comment fetch failed post=%s: %s", post_id, e)
         try:
             resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json",
-                              params={"raw_json": 1}, timeout=timeout)
+                              params={"raw_json": 1}, timeout=timeout, rotate_on_403=True)
             posts = resp.json()["data"]["children"] if resp.status_code == 200 else []
         except Exception:
             posts = []
