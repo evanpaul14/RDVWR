@@ -62,7 +62,7 @@ class TestNeedsRefresh:
         d = _OAuthDevice()
         d.token = "tok"
         d.expires_at = time.time() + 3600
-        d.acquired_at = time.time() - _TOKEN_ROTATE_SECS - 1
+        d.acquired_at = time.time() - d.rotate_secs - 1
         assert d.needs_refresh() is True
 
     def test_false_when_fresh(self):
