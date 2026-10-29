@@ -124,7 +124,7 @@
         ${f?'<span class="comment-op">OP</span>':""}
         ${u?'<span class="badge badge-sticky">\u{1F4CC} stickied</span>':""}
         ${Pn(o)}
-        ${xs()?rt("t1_"+o.id,o.likes,o.score,`<span class="vote-score">${w(o.score)}</span>`,"comment-score"):`<span class="comment-score">\u25B2 ${w(o.score)}</span>`}
+        ${xs()?rt("t1_"+o.id,o.likes,o.score,o.score_hidden?"":`<span class="vote-score">${w(o.score)}</span>`,"comment-score"):o.score_hidden?"":`<span class="comment-score">\u25B2 ${w(o.score)}</span>`}
         <a class="comment-time" href="${y}" data-nav="${y}" title="${we(o.created_utc)}">${Z(o.created_utc)}</a>${o.edited_utc?' <span class="edited-mark">*edited</span>':""}
         ${He(o.awards)}
       </div>

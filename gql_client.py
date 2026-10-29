@@ -146,6 +146,7 @@ def _comment(n, depth):
         "body":                  _resolve_media(n.get("content") or {}),
         "body_html":             "",
         "score":                 n.get("score") or 0,
+        "score_hidden":          bool(n.get("isScoreHidden")),
         "likes":                 True if vote == "UPVOTE" else False if vote == "DOWNVOTE" else None,
         "created_utc":           _epoch(n.get("createdAt")) or 0,
         "edited_utc":            _epoch(n.get("editedAt")),

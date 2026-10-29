@@ -335,6 +335,18 @@ class TestPostPage:
         assert "more=gql%3AY3Vyc29y" in ns and "Load 7 more comments" in ns
 
     @patch.object(reddit_client.SESSION, "get")
+    def test_hidden_comment_score_is_not_shown(self, mock_get, client):
+        post = _comments_payload()[0]
+        mock_get.side_effect = _reddit({r"/by_id/t3_abc123": {"data": {"children": post["data"]["children"]}}})
+        shown = {**_gql_comment("g1", "Visible"), "score": 1234}
+        hidden = {**_gql_comment("g2", "Hidden"), "score": 4321, "score_hidden": True}
+        with patch("routes.comments.fetch_gql_comments", return_value=([shown, hidden], {})):
+            ns = _noscript(client.get("/r/testsub/comments/abc123"))
+        assert "1.2K" in ns
+        assert "4.3K" not in ns
+        assert ns.count('class="comment-score"') == 1
+
+    @patch.object(reddit_client.SESSION, "get")
     def test_gql_more_stub_expands_via_cursor(self, mock_get, client):
         post = _comments_payload()[0]
         mock_get.side_effect = _reddit({
