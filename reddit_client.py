@@ -281,7 +281,8 @@ _ANDROID_APP_VERSIONS = [
     "Version 2022.20.0/Build 487703",
 ]
 _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
-_CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131", "firefox133"]
+# No firefox profile: Reddit 403s every OAuth request sent with a firefox133 TLS fingerprint.
+_CFFI_PROFILES            = ["chrome120", "chrome124", "chrome131"]
 _TOKEN_POOL_SIZE          = 3
 _TOKEN_ROTATE_SECS        = 600   # rotate device identity every 10 min (plus per-device jitter)
 # Preemptively rotate a device once Reddit reports its per-token request budget is
