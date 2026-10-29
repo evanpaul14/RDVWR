@@ -8,7 +8,7 @@ from archive import fetch_archived_comment_tree
 from gql_client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
-                     UpstreamError, log)
+                     parallel, UpstreamError, log)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
@@ -65,26 +65,69 @@ def _parse_comment_tree(c, author_fullnames):
     return comment
 
 
-def _blocked_comments_fallback(post_id, comment_id, sort):
-    """(post_raw, comments, author_fullnames) when Reddit's WAF blocks the comment endpoint:
-    the post from by_id, the tree from the app's GraphQL API, else from the Arctic Shift archive."""
+def _by_id_post(post_id):
+    """A post's raw data from by_id; raises UpstreamError when Reddit won't give it."""
     resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1}, timeout=12)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     posts = resp.json()["data"]["children"]
     if not posts:
         raise UpstreamError("Post not found", 404)
+    return posts[0]["data"]
+
+
+def _gql_comments(post_id, comment_id, sort):
+    """(post_raw, comments, author_fullnames): the post from by_id and the tree from the
+    app's GraphQL API, fetched together."""
+    post_raw, (comments, author_fullnames) = parallel(
+        lambda: _by_id_post(post_id),
+        lambda: fetch_gql_comments(post_id, sort, comment_id=comment_id))
+    return post_raw, comments, author_fullnames
+
+
+def _blocked_comments_fallback(post_id, comment_id):
+    """(post_raw, comments, author_fullnames) when Reddit's WAF blocks the comment endpoint
+    and GraphQL failed too: the post from by_id, the tree from the Arctic Shift archive."""
+    post_raw = _by_id_post(post_id)
     try:
-        comments, author_fullnames = fetch_gql_comments(post_id, sort, comment_id=comment_id)
+        author_fullnames = {}
+        comments = [_parse_comment_tree(c, author_fullnames)
+                    for c in fetch_archived_comment_tree(post_id, comment_id)]
     except Exception as e:
-        log.warning("gql comment tree failed post=%s: %s", post_id, e)
-        try:
-            author_fullnames = {}
-            comments = [_parse_comment_tree(c, author_fullnames)
-                        for c in fetch_archived_comment_tree(post_id, comment_id)]
-        except Exception as e:
-            log.warning("archived comment tree failed post=%s: %s", post_id, e)
-            raise UpstreamError("Reddit is blocking comment loading right now", 403)
+        log.warning("archived comment tree failed post=%s: %s", post_id, e)
+        raise UpstreamError("Reddit is blocking comment loading right now", 403)
+    return post_raw, comments, author_fullnames
+
+
+def _listing_comments(subreddit, post_id, comment_id, sort, timeout):
+    """(post_raw, comments, author_fullnames) from Reddit's comment-tree endpoint."""
+    params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
+    if comment_id:
+        params["comment"] = comment_id
+        params["context"] = 8
+    # %2F before "comments": Reddit's WAF 403s the plain path for OAuth device tokens
+    # (the same trick redlib uses); the encoded form reaches the same endpoint.
+    resp = reddit_get(
+        f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
+        params=params, timeout=timeout)
+    if resp.status_code == 403:
+        state, _ = _subreddit_error_state(resp)
+        if state == "quarantined":
+            resp = reddit_get(
+                f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+                quarantine=True, params=params, timeout=timeout)
+    if resp.status_code == 403 and "json" not in resp.headers.get("content-type", ""):
+        # Network-level WAF block (HTML page) on the comment-tree endpoints; posts and
+        # listings still work, so take the post from by_id and the tree from the archive.
+        return _blocked_comments_fallback(post_id, comment_id)
+    if resp.status_code != 200:
+        raise UpstreamError.from_status(resp.status_code, "Post not found")
+    data  = resp.json()
+    posts = data[0]["data"]["children"]
+    if not posts:
+        raise UpstreamError("Post not found", 404)
+    author_fullnames = {}
+    comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
     return posts[0]["data"], comments, author_fullnames
 
 
@@ -93,37 +136,14 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     `comment_id`, the tree is that comment's thread (plus a few parents of context)."""
     if sort not in COMMENT_SORTS:
         sort = 'confidence'
-    params = {"raw_json": 1, "limit": COMMENTS_LIMIT, "sort": sort}
-    if comment_id:
-        params["comment"] = comment_id
-        params["context"] = 8
-    # %2F before "comments": Reddit's WAF 403s the plain path for OAuth device tokens
-    # (the same trick redlib uses); the encoded form reaches the same endpoint.
     comments_error = None
     try:
-        resp = reddit_get(
-            f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
-            params=params, timeout=timeout)
-        if resp.status_code == 403:
-            state, _ = _subreddit_error_state(resp)
-            if state == "quarantined":
-                resp = reddit_get(
-                    f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
-                    quarantine=True, params=params, timeout=timeout)
-        if resp.status_code == 403 and "json" not in resp.headers.get("content-type", ""):
-            # Network-level WAF block (HTML page) on the comment-tree endpoints; posts and
-            # listings still work, so take the post from by_id and the tree from elsewhere.
-            post_raw, comments, author_fullnames = _blocked_comments_fallback(post_id, comment_id, sort)
-        else:
-            if resp.status_code != 200:
-                raise UpstreamError.from_status(resp.status_code, "Post not found")
-            data     = resp.json()
-            posts    = data[0]["data"]["children"]
-            if not posts:
-                raise UpstreamError("Post not found", 404)
-            post_raw = posts[0]["data"]
-            author_fullnames = {}
-            comments = [_parse_comment_tree(c, author_fullnames) for c in data[1]["data"]["children"]]
+        try:
+            post_raw, comments, author_fullnames = _gql_comments(post_id, comment_id, sort)
+        except Exception as e:
+            log.warning("gql comments failed post=%s: %s", post_id, e)
+            post_raw, comments, author_fullnames = _listing_comments(
+                subreddit, post_id, comment_id, sort, timeout)
     except Exception as e:
         # The post and its comments load independently: when the combined fetch fails,
         # still show the post (via by_id) and report the comments as failed.

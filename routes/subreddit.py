@@ -110,7 +110,8 @@ def _subreddit_error_state(resp):
         return reason, message
     if resp.status_code == 404:
         return "not_found", "Subreddit not found"
-    if resp.status_code == 403:
+    # A 403 that isn't JSON is Reddit's WAF block page, not a private subreddit.
+    if resp.status_code == 403 and "json" in resp.headers.get("content-type", ""):
         return "private", "Subreddit is private"
     return "error", f"Reddit returned {resp.status_code}"
 
