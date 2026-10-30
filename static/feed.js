@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings, personalizedHomeMode } from './settings.js';
-import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit } from './utils.js';
+import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit, BASE } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
 import { getSavedPosts } from './saved.js';
@@ -36,7 +36,7 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
   ).join('');
   const isPop = sub.toLowerCase() === 'popular';
   const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
-  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="/r/${escHtml(sub)}/wiki" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
+  const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="${BASE}/r/${escHtml(sub)}/wiki" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
   return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
 }
 
@@ -248,7 +248,7 @@ export async function loadSubscribed(sort='hot', time='all', after=null, base='/
   document.getElementById('ctx-stats').innerHTML = subs.length
     ? `<details class="ctx-subs">
         <summary><span>${subs.length}</span> subreddit${subs.length === 1 ? '' : 's'} ▾</summary>
-        <div class="ctx-subs-list">${subs.map(sub => `<a class="ctx-subs-item" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`).join('')}</div>
+        <div class="ctx-subs-list">${subs.map(sub => `<a class="ctx-subs-item" href="${BASE}/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`).join('')}</div>
       </details>`
     : 'no subreddits yet';
   ctxInfo.classList.add('visible');
@@ -493,7 +493,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
         document.getElementById('ctx-icon-wrap').innerHTML = '';
         document.getElementById('ctx-title').textContent = p.title;
         document.getElementById('ctx-stats').innerHTML =
-          `<a class="ctx-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
+          `<a class="ctx-sub-link" href="${BASE}/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
         ctxInfo.classList.add('visible');
       } else {
         document.title = `Duplicates — RDVWR`;
@@ -501,7 +501,7 @@ export async function loadDuplicatesPage(sub, postId, after=null, append=false) 
       const backSub  = escHtml(sub);
       const backId   = escHtml(postId);
       feed.innerHTML = `<div class="dupes-header">
-        <a class="dupes-back" href="/r/${backSub}/comments/${backId}" data-nav="/r/${backSub}/comments/${backId}">← back to post</a>
+        <a class="dupes-back" href="${BASE}/r/${backSub}/comments/${backId}" data-nav="/r/${backSub}/comments/${backId}">← back to post</a>
         <span class="dupes-count">${data.posts.length} other post${data.posts.length !== 1 ? 's' : ''} linking to this URL</span>
       </div>`;
       if (!data.posts.length) {

@@ -2,7 +2,7 @@
 // edit and delete, profile picture, sign out. Only reachable while the server says we're logged
 // in, which it does only for requests from its own machine.
 import { state } from './state.js';
-import { escHtml, fmtNum, fmtDate, errState, timeAgo } from './utils.js';
+import { escHtml, fmtNum, fmtDate, errState, timeAgo, BASE } from './utils.js';
 import { accountActive } from './vote.js';
 import { showSkeletons, setMainOpen } from './feed.js';
 import { renderPost, renderUserCommentCard, renderMd, waitForMdLibs } from './render.js';
@@ -50,7 +50,7 @@ function avatarHtml(icon) {
 
 const actionsHtml = () => `<div class="acct-ctx-actions" id="acct-ctx-actions">
   <div class="acct-head-links">
-    <a class="settings-action-btn" href="/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">View public profile</a>
+    <a class="settings-action-btn" href="${BASE}/user/${encodeURIComponent(me())}" data-nav="/user/${encodeURIComponent(me())}">View public profile</a>
     <form method="post" action="/auth/reddit/logout"><input type="hidden" name="next" value="/"><button class="settings-action-btn" type="submit">Sign out</button></form>
   </div>
   <div class="acct-msg" role="status"></div>
@@ -221,7 +221,7 @@ feed.addEventListener('click', async e => {
 sortBar.addEventListener('click', e => {
   const tabBtn = state.accountMode && e.target.closest('[data-acct-tab]');
   if (!tabBtn || tabBtn.dataset.acctTab === state.accountTab) return;
-  history.pushState({}, '', tabBtn.dataset.acctTab === 'posts' ? '/account' : '/account?tab=comments');
+  history.pushState({}, '', BASE + (tabBtn.dataset.acctTab === 'posts' ? '/account' : '/account?tab=comments'));
   loadAccount(tabBtn.dataset.acctTab);
 });
 

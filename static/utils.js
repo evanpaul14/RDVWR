@@ -7,6 +7,17 @@ export const AUTOCOMPLETE_DEBOUNCE = 280;
 export const TOUCH_MOVE_THRESHOLD  = 10;
 export const GALLERY_SWIPE_MIN     = 40;
 
+// URL prefix when served under a subpath (<meta name="rdvwr-base">, e.g. "/rdvwr"), else "".
+// Routes, data-nav and the router all use unprefixed app paths; BASE is added only where a
+// path reaches the browser (fetch, pushState, href/src, window.open).
+export const BASE = (document.querySelector('meta[name="rdvwr-base"]')?.content || '').replace(/\/$/, '');
+export function appPath(p) { return BASE && typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') ? BASE + p : p; }
+export function stripBase(p) {
+  if (!BASE) return p;
+  if (p === BASE) return '/';
+  return p.startsWith(BASE + '/') ? p.slice(BASE.length) : p;
+}
+
 // Opens a real reddit.com URL in a new tab. Tags the URL so the rdvwr browser
 // extension's redirect-to-rdvwr logic (background.js) knows not to bounce
 // this navigation straight back — otherwise clicking "open in reddit" from
@@ -36,7 +47,7 @@ export function proxyMedia(url) {
   if (!_PROXY_MEDIA || !url) return url;
   try {
     const u = new URL(url);
-    if (u.protocol === 'https:' && _PROXY_HOSTS.has(u.hostname)) return `/api/m/${u.hostname}${u.pathname}${u.search}`;
+    if (u.protocol === 'https:' && _PROXY_HOSTS.has(u.hostname)) return `${BASE}/api/m/${u.hostname}${u.pathname}${u.search}`;
   } catch {}
   return url;
 }
@@ -49,7 +60,7 @@ export function proxyHls(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
-    if (u.protocol === 'https:' && u.hostname === 'v.redd.it') return `/api/m/${u.hostname}${u.pathname}${u.search}`;
+    if (u.protocol === 'https:' && u.hostname === 'v.redd.it') return `${BASE}/api/m/${u.hostname}${u.pathname}${u.search}`;
   } catch {}
   return url;
 }
@@ -61,7 +72,7 @@ export function isLocalUrl(url) {
 // filenames and the download endpoints. Accepts relative or absolute (img.src) forms.
 export function realMediaUrl(url) {
   if (!url) return url;
-  const path = url.startsWith(location.origin + '/') ? url.slice(location.origin.length) : url;
+  const path = stripBase(url.startsWith(location.origin + '/') ? url.slice(location.origin.length) : url);
   if (path.startsWith('/api/img?url=')) return decodeURIComponent(path.slice('/api/img?url='.length));
   const m = path.match(/^\/api\/m\/([^/]+)(\/.*)?$/);
   return m ? `https://${m[1]}${m[2] || '/'}` : url;

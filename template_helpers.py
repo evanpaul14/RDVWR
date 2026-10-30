@@ -12,6 +12,7 @@ import reddit_login
 from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME
 from reddit_html import EXTERNAL_MEDIA_CLASS, linkify_plain_text
 from ns_prefs import all_prefs, get_pref
+from base_path import BASE_PATH
 
 
 def timeago(utc):
@@ -215,6 +216,6 @@ def register(app):
 
     @app.context_processor
     def _inject_globals():
-        return dict(asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
+        return dict(base_path=BASE_PATH, asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
                     default_settings=DEFAULT_SETTINGS, reddit_login=reddit_login.login_status(), disable_personalized_home=DISABLE_PERSONALIZED_HOME,
                     ns=all_prefs())

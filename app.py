@@ -4,6 +4,7 @@ import logging
 from flask import Flask, g, jsonify, request
 from flask_compress import Compress
 import template_helpers
+import base_path
 from helpers import CACHE_TTL_STATIC, is_same_site_request
 from routes import register_all
 
@@ -16,6 +17,7 @@ Compress(app)
 
 
 template_helpers.register(app)
+base_path.register(app)
 
 
 @app.before_request

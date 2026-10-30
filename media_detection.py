@@ -3,6 +3,7 @@ import re
 import time as _time
 import logging
 from urllib.parse import quote as url_quote, urlparse
+from base_path import app_path
 from reddit_html import clean_reddit_html
 
 log = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def proxy_if_reddit_preview(url):
     if not url:
         return url
     if (urlparse(url).hostname or '') in REDDIT_PREVIEW_HOSTS:
-        return f"/api/img?url={url_quote(url, safe='')}"
+        return app_path(f"/api/img?url={url_quote(url, safe='')}")
     return url
 
 
@@ -60,7 +61,7 @@ def proxy_hls(url):
     parsed = urlparse(url)
     if parsed.hostname == 'v.redd.it':
         qs = f"?{parsed.query}" if parsed.query else ""
-        return f"/api/m/{parsed.hostname}{parsed.path}{qs}"
+        return app_path(f"/api/m/{parsed.hostname}{parsed.path}{qs}")
     return url
 
 

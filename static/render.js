@@ -1,4 +1,4 @@
-import { escHtml, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl } from './utils.js';
+import { escHtml, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl, BASE } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -18,7 +18,7 @@ function _loadMdLibs() {
   _mdLibsPromise = new Promise(resolve => {
     for (const file of ['marked.min.js', 'purify.min.js']) {
       const s = document.createElement('script');
-      s.src = `/static/${file}`;
+      s.src = `${BASE}/static/${file}`;
       s.onload = () => { if (++loaded === 2) { _mdLibsReady = true; resolve(); } };
       document.head.appendChild(s);
     }
@@ -54,7 +54,7 @@ function _initMarked() {
     try {
       const h = new URL(href).hostname;
       if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
-        href = `/api/img?url=${encodeURIComponent(href)}`;
+        href = `${BASE}/api/img?url=${encodeURIComponent(href)}`;
       else
         href = proxyMedia(href);
     } catch (_) {}
@@ -63,7 +63,7 @@ function _initMarked() {
   r.link = (href, title, text) => {
     const decodedText = text ? text.replace(/&amp;/g, '&') : text;
     const proxied = href && ((href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
-      ? `/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href));
+      ? `${BASE}/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href));
     // Unproxied image links stay plain links under the "link instead of embedding" setting.
     if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && !(settings.linkExternalMedia && !isLocalUrl(proxied))) {
       const img = `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
@@ -91,9 +91,9 @@ function embedRedditCommentVideos(text) {
 export function linkifyReddit(text) {
   return text
     .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)r\/([A-Za-z0-9_]+(?:\/comments\/[A-Za-z0-9_]+)?)/g,
-      (m, skip, slash, sub) => skip ? skip : `[r/${sub}](/r/${sub})`)
+      (m, skip, slash, sub) => skip ? skip : `[r/${sub}](${BASE}/r/${sub})`)
     .replace(/(`[^`]*`|\[[^\]]*\]\([^\)]*\))|(?<![\w/])(\/?)u\/([A-Za-z0-9_-]+)/g,
-      (m, skip, slash, user) => skip ? skip : `[u/${user}](/user/${user})`);
+      (m, skip, slash, user) => skip ? skip : `[u/${user}](${BASE}/user/${user})`);
 }
 
 export function waitForMdLibs() { return _loadMdLibs(); }
@@ -144,7 +144,7 @@ function renderCrosspostEmbed(orig, full=false, headerHtml=null) {
   const mediaHtml = orig.id ? (full ? mediaHtmlFull(orig) : mediaHtmlCard(orig)) : '';
   const excerptHtml = orig.selftext?.trim()
     ? `<div class="xp-excerpt md${full ? ' xp-excerpt-full' : ''}">${renderMd(orig.selftext)}</div>` : '';
-  const header = headerHtml || `↪ crossposted from <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
+  const header = headerHtml || `↪ crossposted from <a href="${BASE}/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
   const title  = orig.title || (headerHtml ? 'View post' : '');
   return `<div class="crosspost-embed${full ? ' crosspost-embed-full' : ''}">
     <div class="crosspost-embed-header">${header}</div>
@@ -158,7 +158,7 @@ export function renderCrosspostFull(orig) { return renderCrosspostEmbed(orig, tr
 // ── Link-to-post embed (plain link posts pointing at another Reddit post) ──────
 function renderLinkedPostEmbed(linked, full=false) {
   const sub    = escHtml(linked.subreddit || '');
-  const header = `↪ links to a post in <a href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
+  const header = `↪ links to a post in <a href="${BASE}/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>`;
   return renderCrosspostEmbed(linked, full, header);
 }
 
@@ -292,14 +292,14 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
     : !p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it')
     ? `<span class="min-domain">(${escHtml(p.domain)})</span>` : '';
   const editedHtml = p.edited_utc ? ` <span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
-  const subLink    = showSub ? `<a class="min-sub" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a> · ` : '';
+  const subLink    = showSub ? `<a class="min-sub" href="${BASE}/r/${sub}" data-nav="/r/${sub}">r/${sub}</a> · ` : '';
 
   return `
     <div class="post post-minimal${visitedClass}"${nsfwAttr} data-post-id="${id}">
       <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>${fmtNum(p.score)}</div>
       <div class="min-body">
         <div class="min-title-row">${badges}<a class="min-title${titleExtra}" href="${postNav}" data-nav="${postNav}">${escHtml(p.title)}</a>${domainHtml ? ' '+domainHtml : ''}${flairHtml ? ' '+flairHtml : ''}</div>
-        <div class="min-meta">${subLink}<a class="min-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button> · ${saveBtnHtml(p, { minimal: true })}</div>
+        <div class="min-meta">${subLink}<a class="min-author" href="${BASE}/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button> · ${saveBtnHtml(p, { minimal: true })}</div>
       </div>
       ${thumbHtml}
     </div>`;
@@ -327,9 +327,9 @@ export function renderPost(p, idx, showSub=false) {
   const extHref = linksOut ? mediaLinkHref(p) : p.url;
   const extDomain = linksOut ? mediaLinkDomain(p) : p.domain;
   const domainHtml = linksOut || (!p.is_self && p.domain && !p.domain.startsWith('self.') && !p.domain.endsWith('redd.it') && !_isVReddIt(p.url) && !isGalleryUrl) ? `<a class="ext-link" href="${escHtml(extHref)}" target="_blank" rel="noopener"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(extDomain)}</a>` : '';
-  const subHtml = showSub ? `<a class="post-sub-link" href="/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>` : '';
+  const subHtml = showSub ? `<a class="post-sub-link" href="${BASE}/r/${sub}" data-nav="/r/${sub}">r/${sub}</a>` : '';
   const metaTop = (subHtml || tags) ? `<div class="post-meta-top">${subHtml}${tags}</div>` : '';
-  const titleLink = `<a class="${titleClass}" href="/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
+  const titleLink = `<a class="${titleClass}" href="${BASE}/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">${escHtml(p.title)}</a>`;
   const editedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited</span>` : '';
   const footer = `
       <div class="post-footer">
@@ -341,13 +341,13 @@ export function renderPost(p, idx, showSub=false) {
             <span class="score-num">${fmtNum(p.score)}</span>`}
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
-          <a class="post-author" href="/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a>
+          <a class="post-author" href="${BASE}/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a>
           <span class="meta-item" title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
           ${renderAwards(p.awards)}
         </div>
         <div class="footer-right">
           ${domainHtml}
-          <a class="comments-link" href="/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">
+          <a class="comments-link" href="${BASE}/r/${sub}/comments/${id}" data-nav="/r/${sub}/comments/${id}">
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M14 8c0 3.314-2.686 6-6 6a6.03 6.03 0 0 1-2.83-.706L2 14l.706-3.17A6.03 6.03 0 0 1 2 8c0-3.314 2.686-6 6-6s6 2.686 6 6Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             ${fmtNum(p.num_comments)} comments
           </a>
@@ -469,7 +469,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
             ? (c.author_icon ? `<img class="comment-avatar" src="${escHtml(c.author_icon)}" alt="" loading="lazy">` : '')
             : `<img class="comment-avatar comment-avatar-lazy" data-author="${escHtml(c.author)}" alt="">`
         ) : ''}
-        <a class="comment-author${isMod?' is-mod':''}" href="/user/${escHtml(c.author)}" data-user="${escHtml(c.author)}" data-nav="/user/${escHtml(c.author)}">${escHtml(c.author)}</a>
+        <a class="comment-author${isMod?' is-mod':''}" href="${BASE}/user/${escHtml(c.author)}" data-user="${escHtml(c.author)}" data-nav="/user/${escHtml(c.author)}">${escHtml(c.author)}</a>
         ${isMod      ? '<span class="comment-mod">MOD</span>'        : ''}
         ${isAdmin    ? '<span class="comment-admin">ADMIN</span>'    : ''}
         ${isOP       ? '<span class="comment-op">OP</span>'         : ''}
@@ -495,7 +495,7 @@ export function renderUserCommentCard(c, idx) {
   const commentPath = `${postPath}/_/${escHtml(c.id)}`;
   return `<div class="user-comment-card" tabindex="0" role="button" data-nav="${commentPath}" style="animation-delay:${delay}ms">
     <div class="ucc-context">
-      <span>in <a href="/r/${escHtml(c.subreddit)}" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
+      <span>in <a href="${BASE}/r/${escHtml(c.subreddit)}" data-nav="/r/${escHtml(c.subreddit)}">r/${escHtml(c.subreddit)}</a></span>
       <span>·</span>
       <a href="${postPath}" data-nav="${postPath}" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.link_title)}</a>
     </div>
@@ -530,7 +530,7 @@ export function renderUserCard(u, idx) {
   const iconHtml = u.icon
     ? `<img src="${escHtml(u.icon)}" alt="" data-onerror="fallback-letter" data-fallback="${letter}">`
     : `<span>${letter}</span>`;
-  return `<a class="user-card" style="animation-delay:${delay}ms" href="/user/${escHtml(u.name)}" data-nav="/user/${escHtml(u.name)}">
+  return `<a class="user-card" style="animation-delay:${delay}ms" href="${BASE}/user/${escHtml(u.name)}" data-nav="/user/${escHtml(u.name)}">
     <div class="user-card-icon">${iconHtml}</div>
     <div class="user-card-body">
       <div class="user-card-name">u/${escHtml(u.name)}</div>
@@ -549,7 +549,7 @@ export function renderLiveUpdate(u, isNew=false) {
   return `<div class="live-update${u.stricken ? ' live-update-stricken' : ''}${isNew ? ' live-update-new' : ''}">
     <div class="live-update-meta">
       <span class="live-update-time" title="${new Date(u.created_utc * 1000).toISOString()}">${timeAgo(u.created_utc)}</span>
-      <a class="live-update-author" href="/user/${escHtml(u.author)}" data-user="${escHtml(u.author)}" data-nav="/user/${escHtml(u.author)}">u/${escHtml(u.author)}</a>
+      <a class="live-update-author" href="${BASE}/user/${escHtml(u.author)}" data-user="${escHtml(u.author)}" data-nav="/user/${escHtml(u.author)}">u/${escHtml(u.author)}</a>
       ${u.stricken ? '<span class="live-update-retracted">retracted</span>' : ''}
     </div>
     ${body}

@@ -9,6 +9,7 @@ rewritten to that form in an after-request pass, which covers every route at onc
 import re
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, current_app, request, Response
+from base_path import app_path
 from reddit_client import SESSION, HEADERS
 from helpers import STREAM_CHUNK_SIZE, log
 
@@ -37,7 +38,7 @@ _REWRITE_TYPES   = ('application/json', 'text/html')
 
 
 def proxy_path(host, rest):
-    return f"/api/m/{host}/{rest}"
+    return app_path(f"/api/m/{host}/{rest}")
 
 
 @bp.route("/api/m/<host>/<path:rest>")
@@ -93,7 +94,7 @@ def _rewrite_match(m):
     if key in _TEXT_KEYS:
         return m.group(0)
     key_prefix = m.group(0)[:m.start(2) - m.start(0) - len(b'"https://')]
-    return key_prefix + b'"/api/m/' + host + b'/'
+    return key_prefix + b'"' + app_path('/api/m/').encode() + host + b'/'
 
 
 @bp.after_app_request

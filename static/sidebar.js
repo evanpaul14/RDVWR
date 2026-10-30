@@ -1,10 +1,10 @@
-import { escHtml, fmtNum, fmtDate, timeAgo } from './utils.js';
+import { escHtml, fmtNum, fmtDate, timeAgo, BASE } from './utils.js';
 import { renderMd, waitForMdLibs } from './render.js';
 
 function renderWidget(w) {
   const title = w.name ? `<div class="sidebar-section-title">${escHtml(w.name)}</div>` : '';
   if (w.kind === 'community-list') {
-    const items = w.items.map(c => `<a class="sidebar-community" href="/r/${escHtml(c.name)}" data-nav="/r/${escHtml(c.name)}">`+
+    const items = w.items.map(c => `<a class="sidebar-community" href="${BASE}/r/${escHtml(c.name)}" data-nav="/r/${escHtml(c.name)}">`+
       (c.icon ? `<img class="sidebar-community-icon" src="${escHtml(c.icon)}" alt="" loading="lazy">` : `<span class="sidebar-community-icon sidebar-community-icon--blank"></span>`)+
       `<span class="sidebar-community-name">r/${escHtml(c.name)}</span>`+
       (c.subscribers ? `<span class="sidebar-community-subs">${fmtNum(c.subscribers)}</span>` : '')+
@@ -180,7 +180,7 @@ export async function toggleUserSidebar(username) {
     const activeSubs = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
     if (activeSubs.length) {
       const items = activeSubs.map(([s]) =>
-        `<a class="sidebar-community" href="/r/${escHtml(s)}" data-nav="/r/${escHtml(s)}">`+
+        `<a class="sidebar-community" href="${BASE}/r/${escHtml(s)}" data-nav="/r/${escHtml(s)}">`+
         `<span class="sidebar-community-name">r/${escHtml(s)}</span>`+
         `</a>`).join('');
       html += `<div class="sidebar-section">
