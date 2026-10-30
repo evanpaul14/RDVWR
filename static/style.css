@@ -1285,12 +1285,6 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .sidebar-rule-num {
   font-family:var(--mono); font-size:10px; color:var(--ac); flex-shrink:0; min-width:16px;
 }
-.sidebar-mods { display:flex; flex-direction:column; gap:5px; }
-.sidebar-mod-name {
-  font-family:var(--mono); font-size:11px; color:var(--ac); text-decoration:none;
-}
-.sidebar-mod-name:hover { text-decoration:underline; }
-.sidebar-mod-more { font-family:var(--mono); font-size:11px; color:var(--tx3); margin-top:2px; }
 
 .sidebar-community-list { display:flex; flex-direction:column; gap:8px; }
 .sidebar-community {

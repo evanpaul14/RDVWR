@@ -23,7 +23,6 @@ def no_oauth(monkeypatch):
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
     helpers._view_cache.clear()
     helpers._fetch_cache.clear()
-    monkeypatch.setattr("routes.subreddit._moderators_blocked_until", 0.0)
 
 
 @pytest.fixture(autouse=True)

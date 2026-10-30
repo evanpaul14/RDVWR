@@ -23,7 +23,7 @@ Single-page Reddit viewer. Python/Flask backend proxies Reddit API; ES module fr
 Keep each Python file under ~500 lines — add new endpoints to the matching `routes/` blueprint (or a new one registered in `routes/__init__.py`) rather than growing `app.py`.
 
 **Backend routes** (all `GET /api/...`):
-- `/r/<sub>` feed, `/r/<sub>/about`, `/r/<sub>/rules`, `/r/<sub>/about/moderators`
+- `/r/<sub>` feed, `/r/<sub>/about`, `/r/<sub>/rules`
 - `/r/<sub>/comments/<id>`, `/r/<sub>/morechildren/<id>`, `/r/<sub>/duplicates/<id>`
 - `/r/<sub>/wiki`, `/r/<sub>/wiki/<page>`
 - `/search`, `/search/communities`, `/search/users`, `/subreddit-search`

@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
 from ns_prefs import get_pref
 from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
-from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_moderators, fetch_widgets,
+from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
 from routes.comments import fetch_comments, fetch_morechildren
 from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments
@@ -30,7 +30,7 @@ SSR_TIMEOUT = 6   # shorter than the /api/* endpoints' — a page shouldn't hang
 
 FEED_SORT_ORDER = ('best', 'hot', 'new', 'top', 'rising', 'controversial')
 TIMED_SORTS     = ('top', 'controversial')
-# Pseudo-subreddits with no about/rules/moderators/wiki of their own.
+# Pseudo-subreddits with no about/rules/wiki of their own.
 LISTING_SUBS    = ('popular', 'all')
 
 PROFILE_TABS  = ('overview', 'posts', 'comments')
@@ -128,10 +128,10 @@ def build_subreddit(sub, sort, t, after, quarantine_opt_in=False):
     def optional(fetch, default):
         return (lambda: fetch(sub, timeout=SSR_TIMEOUT)) if real_sub else (lambda: default)
 
-    (feed, err), (about, _), rules, mods, widgets = parallel(
+    (feed, err), (about, _), rules, widgets = parallel(
         lambda: _attempt(fetch_feed, sub, sort, t, after, quarantine_opt_in),
         lambda: _attempt(fetch_about, sub) if single else (None, None),
-        optional(fetch_rules, []), optional(fetch_moderators, []), optional(fetch_widgets, []))
+        optional(fetch_rules, []), optional(fetch_widgets, []))
 
     if err and err.state == 'not_found':
         # Same as the JS app: an unknown subreddit name becomes a community search.
@@ -146,7 +146,7 @@ def build_subreddit(sub, sort, t, after, quarantine_opt_in=False):
 
     opt_in = 1 if quarantine_opt_in else ''
     return _page("subreddit", f"r/{sub}", {
-        "sub": sub, "about": about, "rules": rules, "mods": mods, "widgets": widgets,
+        "sub": sub, "about": about, "rules": rules, "widgets": widgets,
         "nav": _feed_nav(f"/r/{sub}", sort, t, feed and feed["after"], quarantine_opt_in=opt_in),
         "posts": feed["posts"] if feed else [], "error": err,
         "continue_url": page_url(f"/r/{sub}/{sort}", t=t if sort in TIMED_SORTS else '', quarantine_opt_in=1)
