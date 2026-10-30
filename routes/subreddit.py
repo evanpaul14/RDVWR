@@ -402,7 +402,9 @@ def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     display = meta_data.get("display_name") or meta_data.get("name") or multiname
     if not subs:
         return {"posts": [], "after": None, "title": display}
-    combined = "+".join(subs[:100])
+    # percent-encoded "+": a literal one makes oauth.reddit.com redirect to the HTML front page
+    # (see fetch_feed)
+    combined = "%2B".join(subs[:100])
     resp = reddit_get(
         f"https://www.reddit.com/r/{combined}/{sort}.json",
         params=params, timeout=timeout)
