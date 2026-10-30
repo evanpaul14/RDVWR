@@ -90,6 +90,7 @@ def _set_csp_header(resp):
         f"style-src 'self' 'unsafe-inline'; "
         f"img-src 'self' https: data:; "
         f"media-src 'self' https: blob:; "
+        f"worker-src 'self' blob:; "
         f"font-src 'self'; "
         f"connect-src 'self'; "
         f"frame-src https:; "

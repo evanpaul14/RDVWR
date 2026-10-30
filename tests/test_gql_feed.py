@@ -236,3 +236,91 @@ def test_fetch_feed_graphql_failure_reports_the_original_block():
         with pytest.raises(UpstreamError) as e:
             subreddit_routes.fetch_feed("waf_sub2", "hot")
     assert e.value.status == 403
+
+
+# ── about / rules ─────────────────────────────────────────────────────────────
+
+import gql_subreddit
+from gql_subreddit import fetch_gql_about, fetch_gql_rules
+
+
+def about_node(**over):
+    n = {"__typename": "Subreddit", "title": "Pics", "publicDescriptionText": "Photos", "subscribersCount": 1234.0,
+         "isSubscribed": False, "type": "PUBLIC", "isQuarantined": False,
+         "styles": {"legacyIcon": {"url": "https://b.thumbs.redditmedia.com/i.png"}},
+         "description": {"markdown": "**side**", "richtext": rt({"e": "par", "c": [{"e": "text", "t": "side", "f": [[1, 0, 4]]}]})}}
+    n.update(over)
+    return n
+
+
+def about_response(node):
+    return lambda *a, **k: {"data": {"subredditInfoByName": node}}
+
+
+def test_gql_about_maps_to_rest_shape():
+    with patch.object(gql_subreddit, "gql_query", about_response(about_node())):
+        a = fetch_gql_about("pics")
+    assert (a["title"], a["description"], a["subscribers"], a["state"], a["active"]) == ("Pics", "Photos", 1234, None, 0)
+    assert a["sidebar"] == "**side**" and "<strong>side</strong>" in a["sidebar_html"]
+    assert a["icon"] == "https://b.thumbs.redditmedia.com/i.png"
+
+
+@pytest.mark.parametrize("node,status,state", [
+    ({"__typename": "UnavailableSubreddit", "forbiddenReason": "BANNED"}, 404, "banned"),
+    ({"__typename": "UnavailableSubreddit", "forbiddenReason": "GOLD_ONLY"}, 403, "private"),
+    ({"__typename": "UnavailableSubreddit", "forbiddenReason": "QUARANTINED"}, 403, "quarantined"),
+    (None, 404, "not_found"),
+])
+def test_gql_about_unavailable(node, status, state):
+    with patch.object(gql_subreddit, "gql_query", about_response(node)):
+        with pytest.raises(UpstreamError) as e:
+            fetch_gql_about("x")
+    assert (e.value.status, e.value.state) == (status, state)
+
+
+def test_gql_about_quarantined_and_restricted_states():
+    with patch.object(gql_subreddit, "gql_query", about_response(about_node(isQuarantined=True))):
+        assert fetch_gql_about("x")["state"] == "quarantined"
+    with patch.object(gql_subreddit, "gql_query", about_response(about_node(type="RESTRICTED"))):
+        assert fetch_gql_about("x")["state"] == "restricted"
+
+
+def test_gql_rules():
+    node = {"rules": [{"name": "Be nice", "content": {"markdown": "No *rudeness*"}}, {"name": "No spam", "content": None}]}
+    with patch.object(gql_subreddit, "gql_query", about_response(node)):
+        assert fetch_gql_rules("x") == [{"short_name": "Be nice", "description": "No *rudeness*"},
+                                        {"short_name": "No spam", "description": ""}]
+
+
+def test_fetch_about_falls_back_to_graphql_on_waf_block():
+    canned = {"title": "T", "state": None}
+    with patch.object(subreddit_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(subreddit_routes, "fetch_gql_about", return_value=canned):
+        assert subreddit_routes.fetch_about("about_waf1") == canned
+
+
+def test_fetch_about_graphql_failure_reports_the_block():
+    with patch.object(subreddit_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(subreddit_routes, "fetch_gql_about", side_effect=RuntimeError("boom")):
+        with pytest.raises(UpstreamError) as e:
+            subreddit_routes.fetch_about("about_waf2")
+    assert e.value.status == 403
+
+
+def test_fetch_rules_falls_back_to_graphql_on_waf_block():
+    rules = [{"short_name": "a", "description": "b"}]
+    with patch.object(subreddit_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(subreddit_routes, "fetch_gql_rules", return_value=rules):
+        assert subreddit_routes.fetch_rules("rules_waf1") == rules
+
+
+def test_fetch_rules_still_best_effort_when_graphql_fails():
+    with patch.object(subreddit_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(subreddit_routes, "fetch_gql_rules", side_effect=RuntimeError("boom")):
+        assert subreddit_routes.fetch_rules("rules_waf2") == []
+
+
+def test_csp_allows_blob_workers_for_hls():
+    from app import app
+    csp = app.test_client().get("/").headers["Content-Security-Policy"]
+    assert "worker-src 'self' blob:" in csp
