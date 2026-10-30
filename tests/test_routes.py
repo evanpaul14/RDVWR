@@ -529,18 +529,33 @@ class TestUserAbout:
         assert resp.status_code == 404
 
     @patch.object(reddit_client.SESSION, "get")
-    def test_graphql_answers_without_touching_rest(self, mock_get, client, monkeypatch):
-        about = {"name": "gqluser", "karma_total": 7}
-        monkeypatch.setattr(users_routes, "fetch_gql_user_about", lambda *a, **kw: about)
-        resp = client.get("/api/user/gqluser/about")
-        assert resp.get_json() == about
-        mock_get.assert_not_called()
+    def test_rest_is_tried_first_and_graphql_left_alone(self, mock_get, client, monkeypatch):
+        mock_get.return_value = _session_get({"data": {"name": "restuser", "link_karma": 1, "comment_karma": 2}})
+        gql = MagicMock(side_effect=AssertionError("GraphQL must not run when REST answers"))
+        monkeypatch.setattr(users_routes, "fetch_gql_user_about", gql)
+        assert client.get("/api/user/restuser/about").get_json()["name"] == "restuser"
+        gql.assert_not_called()
 
     @patch.object(reddit_client.SESSION, "get")
-    def test_unknown_to_graphql_falls_back_to_rest(self, mock_get, client, monkeypatch):
+    def test_waf_block_falls_back_to_graphql(self, mock_get, client, monkeypatch):
+        about = {"name": "gqluser", "karma_total": 7}
+        mock_get.return_value = _session_get(status_code=403, headers={"Content-Type": "text/html"})
+        monkeypatch.setattr(users_routes, "fetch_gql_user_about", lambda *a, **kw: about)
+        assert client.get("/api/user/gqluser/about").get_json() == about
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_waf_block_with_graphql_failing_reports_the_block(self, mock_get, client, monkeypatch):
+        mock_get.return_value = _session_get(status_code=403, headers={"Content-Type": "text/html"})
         monkeypatch.setattr(users_routes, "fetch_gql_user_about", lambda *a, **kw: None)
-        mock_get.return_value = _session_get({"data": {"name": "restuser", "link_karma": 1, "comment_karma": 2}})
-        assert client.get("/api/user/restuser/about").get_json()["name"] == "restuser"
+        assert client.get("/api/user/gqluser2/about").status_code == 403
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_missing_user_does_not_ask_graphql(self, mock_get, client, monkeypatch):
+        mock_get.return_value = _session_get(status_code=404)
+        gql = MagicMock(side_effect=AssertionError("a 404 is not a block"))
+        monkeypatch.setattr(users_routes, "fetch_gql_user_about", gql)
+        assert client.get("/api/user/nobody_zzq/about").status_code == 404
+        gql.assert_not_called()
 
     def test_graphql_profile_mapping(self):
         import gql_client

@@ -4,9 +4,10 @@ from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from gql_client import fetch_gql_user_about
 from gql_posts import fetch_gql_user_posts
+from gql_user import fetch_gql_user_comments, fetch_gql_user_overview, OVERVIEW_PREFIX
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
-                     hydrate_linked_posts, is_waf_block, log, UpstreamError)
+                     fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
 
@@ -25,16 +26,11 @@ def get_posts_live_info():
     if not ids:
         return jsonify({})
     try:
-        resp = reddit_get(
-            "https://www.reddit.com/api/info.json",
-            params={"id": ",".join(f"t3_{i}" for i in ids), "raw_json": 1},
-            timeout=8)
-        if not resp.ok:
+        by_id = fetch_posts_by_id(ids)
+        if not by_id:
             return jsonify({})
-        out = {}
-        for c in resp.json().get("data", {}).get("children", []):
-            d = c["data"]
-            out[d["id"]] = {"score": d.get("score", 0), "num_comments": d.get("num_comments", 0)}
+        out = {pid: {"score": d.get("score", 0), "num_comments": d.get("num_comments", 0)}
+               for pid, d in by_id.items()}
         return cached_json(out, 30)
     except Exception as e:
         log.warning("live-info fetch failed: %s", e)
@@ -43,17 +39,18 @@ def get_posts_live_info():
 
 @fetch_cache(CACHE_TTL_FEED)
 def fetch_user_about(username, timeout=10):
-    """GraphQL first: Reddit's WAF 403s the REST endpoint for the device tokens far more
-    often. REST is the fallback, and the only source of the moderator / verified badges."""
-    try:
-        about = fetch_gql_user_about(username, timeout=timeout)
-        if about:
-            return about
-    except Exception as e:
-        log.warning("gql user about failed user=%s: %s", username, e)
+    """REST first (the only source of the moderator / verified badges). When Reddit's WAF
+    blocks it, the app's GraphQL profile query answers instead."""
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/about.json",
         params={"raw_json": 1}, timeout=timeout)
+    if is_waf_block(resp):
+        try:
+            about = fetch_gql_user_about(username, timeout=timeout)
+            if about:
+                return about
+        except Exception as e:
+            log.warning("gql user about failed user=%s: %s", username, e)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "User not found")
     d    = resp.json()["data"]
@@ -131,16 +128,17 @@ def _fetch_listing_with_archive(username, after, do_live_request, parse_live_ite
     live listing, transparently falling back to the Arctic Shift archive on 403/404 or
     an empty result (both usually mean a suspended/shadowbanned/deleted account whose
     data only survives in the archive). When Reddit's WAF blocks the request instead,
-    `fetch_gql` (the app's GraphQL listing, returning {"posts", "after"}) is tried first.
+    `fetch_gql` (the app's GraphQL listing, returning (items, next_after)) is tried first.
     Returns (items, next_after, archived)."""
     if after.startswith("arc:"):
         return (*_archived(fetch_archived(FEED_LIMIT, before=int(after[4:])), hydrate), True)
     resp = do_live_request()
     if fetch_gql and is_waf_block(resp):
         try:
-            feed = fetch_gql()
-            hydrate_linked_posts(feed["posts"])
-            return feed["posts"], feed["after"], False
+            items, next_after = fetch_gql()
+            if hydrate:
+                hydrate_linked_posts(items)
+            return items, next_after, False
         except Exception as e:
             log.warning("gql listing failed for %s: %s", username, e)
     if resp.status_code in (403, 404):
@@ -167,6 +165,10 @@ def _fetch_listing_with_archive(username, after, do_live_request, parse_live_ite
     return items, listing.get("after"), False
 
 
+def _pair(feed, key):
+    return feed[key], feed["after"]
+
+
 def _listing_params(sort, t, after):
     params = {"limit": FEED_LIMIT, "raw_json": 1, "sort": sort}
     add_time_param(params, sort, t, sorts_with_time=("top",))
@@ -186,7 +188,7 @@ def fetch_user_posts(username, sort='new', t='', after='', timeout=10):
         parse_live_items=extract_posts,
         fetch_archived=lambda limit, before=None: _fetch_archived_posts(username, limit, before=before),
         hydrate=True,
-        fetch_gql=lambda: fetch_gql_user_posts(username, sort, t, after),
+        fetch_gql=lambda: _pair(fetch_gql_user_posts(username, sort, t, after), "posts"),
     )
     return {"posts": posts, "after": next_after, **({"archived": True} if archived else {})}
 
@@ -204,6 +206,7 @@ def fetch_user_comments(username, sort='new', t='', after='', timeout=10):
                                             params=_listing_params(sort, t, after), timeout=timeout),
         parse_live_items=_parse_comment_listing,
         fetch_archived=lambda limit, before=None: _fetch_archived_comments(username, limit, before=before),
+        fetch_gql=lambda: _pair(fetch_gql_user_comments(username, sort, t, after), "comments"),
     )
     return {"comments": comments, "after": next_after, **({"archived": True} if archived else {})}
 
@@ -232,6 +235,12 @@ def get_user_comments_api(username):
     return _user_listing_endpoint(fetch_user_comments, username)
 
 
+def _gql_overview(username, sort, t, after):
+    feed = fetch_gql_user_overview(username, sort, t, after)
+    hydrate_linked_posts([i["data"] for i in feed["items"] if i["type"] == "post"])
+    return feed
+
+
 @fetch_cache(CACHE_TTL_FEED)
 def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
     """A user's mixed posts+comments feed: {"items": [{"type", "data"}], "after"}, plus
@@ -245,10 +254,19 @@ def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_
     if after.startswith("arc:"):
         items, next_after = _fetch_archived_overview(username, before=int(after[4:]))
         return {"items": items, "after": next_after, "archived": True}
+    if after.startswith(OVERVIEW_PREFIX):   # a composite cursor only GraphQL can continue
+        return _gql_overview(username, sort, t, after)
 
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/overview.json",
         params=_listing_params(sort, t, after), timeout=timeout)
+    if is_waf_block(resp):
+        try:
+            return _gql_overview(username, sort, t, after)
+        except UpstreamError:
+            raise
+        except Exception as e:
+            log.warning("gql overview failed for %s: %s", username, e)
     if resp.status_code in (403, 404):
         if allow_archive:
             try:
