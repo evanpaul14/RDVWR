@@ -60,11 +60,27 @@ def test_reddit_video_gets_hls_and_muxed_fallback():
     assert out["video_url"] == "https://packaged-media.redd.it/abc/m.mp4"
 
 
-def test_gif_becomes_video_preview():
+def test_gif_is_served_from_its_url_not_as_video():
     media = {"typeHint": "GIFVIDEO", "animated": {"mp4_source": {"url": "https://preview.redd.it/g.gif?format=mp4"}}}
     out = process_post(gql_post_to_rest(gql_post(url="https://i.redd.it/g.gif", media=media)))
-    assert out["is_video"] and out["video_url"] == "https://preview.redd.it/g.gif?format=mp4"
-    assert out["hls_url"] is None
+    assert out["gif_url"] == "https://i.redd.it/g.gif" and not out["is_video"]
+
+
+def test_reddit_copy_of_external_clip_is_a_preview_not_a_video_post():
+    media = {"typeHint": "EMBED", "streaming": {"hlsUrl": "https://v.redd.it/abc/HLSPlaylist.m3u8?f=sd", "isGif": True},
+             "packagedMedia": {"muxedMp4s": {"recommended": {"url": "https://packaged-media.redd.it/abc/m.mp4"}}},
+             "video": {"embedHtml": "<iframe></iframe>"}}
+    out = process_post(gql_post_to_rest(gql_post(url="https://www.redgifs.com/watch/somename", domain="redgifs.com",
+                                                 media=media)))
+    assert out["redgifs_id"] == "somename" and not out["is_video"] and out["video_url"] is None
+    assert "HLSPlaylist.m3u8" in out["redgifs_fallback_hls"]
+    assert out["redgifs_fallback_url"] == "https://packaged-media.redd.it/abc/m.mp4"
+
+
+def test_embed_without_html_still_gets_the_embed_url():
+    out = process_post(gql_post_to_rest(gql_post("t3_tw1", url="https://clips.twitch.tv/SomeClip", domain="clips.twitch.tv",
+                                                 media={"typeHint": "EMBED"})))
+    assert out["embed_url"] == "https://www.redditmedia.com/mediaembed/tw1"
 
 
 def test_poll():
@@ -76,7 +92,7 @@ def test_poll():
 
 
 def test_crosspost_carries_parent_media():
-    parent = gql_post("t3_par", subreddit={"name": "src"}, url="https://v.redd.it/par", media={
+    parent = gql_post("t3_par", subreddit={"name": "src"}, url="https://v.redd.it/par", domain="v.redd.it", media={
         "typeHint": "VIDEO", "streaming": {"hlsUrl": "https://v.redd.it/par/HLSPlaylist.m3u8"}})
     out = process_post(gql_post_to_rest(gql_post(crosspostRoot={"post": parent})))
     assert out["crosspost_from"]["subreddit"] == "src" and out["crosspost_from"]["hls_url"]
@@ -92,13 +108,64 @@ def test_gallery():
     assert "width%3D640" in out["gallery"][0]["thumb"]
 
 
-def test_selftext_html_escapes_and_links():
+def test_selftext_falls_back_to_paragraphs_and_escapes():
     post = gql_post(isSelfPost=True, content={"markdown": "hi <b>x</b>\nsee https://example.com/a?b=1\n\nsecond"})
-    out = process_post(gql_post_to_rest(post))
-    html = out["selftext_html"]   # already sanitized by process_post
+    html = process_post(gql_post_to_rest(post))["selftext_html"]   # already sanitized by process_post
     assert "<b>" not in html and "&lt;b&gt;x&lt;/b&gt;" in html
     assert 'href="https://example.com/a?b=1"' in html
     assert html.count("<p>") == 2
+
+
+def rt(*blocks):
+    import json
+    return json.dumps({"document": list(blocks)})
+
+
+def test_selftext_renders_richtext_formatting_lists_and_code():
+    par = {"e": "par", "c": [{"e": "text", "t": "bold and code", "f": [[1, 0, 4], [64, 9, 4]]},
+                             {"e": "link", "t": "a link", "u": "https://example.com/"}]}
+    lst = {"e": "list", "o": True, "c": [{"e": "li", "c": [{"e": "par", "c": [{"e": "text", "t": "one"}]}]}]}
+    code = {"e": "code", "c": [{"e": "raw", "t": "a < b"}, {"e": "raw", "t": "c"}]}
+    quote = {"e": "blockquote", "c": [{"e": "par", "c": [{"e": "text", "t": "quoted", "f": [[2, 0, 6]]}]}]}
+    spoiler = {"e": "par", "c": [{"e": "spoilertext", "c": [{"e": "text", "t": "secret"}]}]}
+    post = gql_post(isSelfPost=True, content={"markdown": "x", "richtext": rt(par, lst, code, quote, spoiler)})
+    html = process_post(gql_post_to_rest(post))["selftext_html"]
+    assert "<strong>bold</strong> and <code>code</code>" in html
+    assert 'href="https://example.com/"' in html and "<ol>" in html and "<li><p>one</p></li>" in html
+    assert "<pre><code>a &lt; b\nc</code></pre>" in html
+    assert "<blockquote><p><em>quoted</em></p></blockquote>" in html
+    assert 'class="spoiler"' in html and "secret" in html
+
+
+def test_richtext_table_and_heading():
+    from gql_richtext import richtext_html
+    cell = lambda t: {"c": [{"e": "text", "t": t}]}
+    doc = rt({"e": "h", "l": 2, "c": [{"e": "raw", "t": "Title"}]},
+             {"e": "table", "h": [cell("A"), cell("B")], "c": [[cell("1"), cell("2")]]})
+    assert richtext_html(doc) == ("<h2>Title</h2><table><thead><tr><th>A</th><th>B</th></tr></thead>"
+                                  "<tbody><tr><td>1</td><td>2</td></tr></tbody></table>")
+
+
+def test_richtext_format_offsets_count_utf16_units():
+    from gql_richtext import richtext_html
+    doc = rt({"e": "par", "c": [{"e": "text", "t": "\U0001F600 bold", "f": [[1, 3, 4]]}]})   # the emoji is 2 units
+    assert richtext_html(doc) == "<p>\U0001F600 <strong>bold</strong></p>"
+
+
+def test_richtext_garbage_gives_empty_html():
+    from gql_richtext import richtext_html
+    assert richtext_html("not json") == "" and richtext_html(None) == "" and richtext_html("{}") == ""
+
+
+def test_selftext_image_refs_become_urls():
+    content = {"markdown": "look\n\n![img](abc123)", "richtextMedia": [{"id": "abc123", "url": "https://i.redd.it/abc123.png"}]}
+    out = process_post(gql_post_to_rest(gql_post(isSelfPost=True, content=content)))
+    assert "![img](https://i.redd.it/abc123.png)" in out["selftext"]
+
+
+def test_profile_post_subreddit_from_permalink():
+    n = gql_post(subreddit=None, permalink="/user/someone/comments/abc/title/")
+    assert gql_post_to_rest(n)["subreddit"] == "u_someone"
 
 
 def test_youtube_embed():
