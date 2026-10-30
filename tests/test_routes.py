@@ -65,6 +65,7 @@ def no_oauth(monkeypatch):
     """Force reddit_get to use SESSION (not cffi) so SESSION.get mocks work."""
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
     helpers._view_cache.clear()
+    helpers._fetch_cache.clear()
 
 
 @pytest.fixture(autouse=True)

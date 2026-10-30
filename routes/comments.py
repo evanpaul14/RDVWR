@@ -7,7 +7,7 @@ from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
 from archive import fetch_archived_comment_tree
 from gql_client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
-from helpers import (CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
+from helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
                      parallel, UpstreamError, log)
 from routes.subreddit import _subreddit_error_state
@@ -148,6 +148,7 @@ def _listing_comments(subreddit, post_id, comment_id, sort, timeout):
     return posts[0]["data"], comments, author_fullnames
 
 
+@fetch_cache(CACHE_TTL_FEED, skip=lambda r: r.get('comments_error'))
 def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
     """A post plus its comment tree: {"post", "comments", "avatar_prefetch"}. With
     `comment_id`, the tree is that comment's thread (plus a few parents of context)."""

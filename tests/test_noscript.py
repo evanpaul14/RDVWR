@@ -22,6 +22,7 @@ from tests.test_routes import MockResponse, _make_listing, _make_post
 def no_oauth(monkeypatch):
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
     helpers._view_cache.clear()
+    helpers._fetch_cache.clear()
 
 
 @pytest.fixture

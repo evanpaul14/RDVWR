@@ -3,7 +3,7 @@ import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
-from helpers import (CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
+from helpers import (fetch_cache, CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
                      hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("search", __name__)
@@ -41,6 +41,7 @@ def subreddit_search():
 
 # ── Search API ───────────────────────────────────────────────────────────────
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='', timeout=10):
     """Post search, optionally restricted to one subreddit: {"posts", "after"}."""
     if sort not in SEARCH_SORTS:
