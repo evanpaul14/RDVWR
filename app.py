@@ -60,6 +60,16 @@ def _gate_api():
 # Double-submit cookie for the same-site gate: app.js echoes this back as a request
 # header on every fetch() (see app.js), so the gate has a fallback that doesn't depend
 # on Sec-Fetch-Site/Origin/Referer, which some browser privacy hardening strips entirely.
+# Versioned assets (?v=<mtime>, see template_helpers.asset_v) never change under a given URL,
+# and the fonts are referenced by fixed filename from the CSS, so neither needs revalidating.
+@app.after_request
+def _cache_static(resp):
+    if request.endpoint == 'static' and resp.status_code == 200 and (
+            'v' in request.args or request.path.startswith('/static/fonts/')):
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return resp
+
+
 @app.after_request
 def _set_csrf_cookie(resp):
     if 'rdvwr_csrf' not in request.cookies:
