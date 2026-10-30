@@ -25,6 +25,12 @@ def no_oauth(monkeypatch):
     helpers._fetch_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def no_gql_user(monkeypatch):
+    from routes import users
+    monkeypatch.setattr(users, "fetch_gql_user_about", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("gql down")))
+
+
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
