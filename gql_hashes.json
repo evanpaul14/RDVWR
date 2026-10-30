@@ -2,5 +2,7 @@
   "PostComments": "314f29c2494fd78c7844ef2c6b09acb4bef5b37ab50b4ddc01691d6d5c8433f8",
   "UserProfile": "a05c628c5469c6b107c85988a8b1d0b79a2e7b6150ebd3a449c67e226e975ddc",
   "SubredditFeedSdui": "50ed38f9c3da9eb787fa178a098ab4491e082b061627c36e8b06d07d2b2946fe",
-  "PostsByIds": "29a8d4c6e135fffb95fc4cd303c57ad926c6c5ff582f4c4577c8a69b7f322d91"
+  "PostsByIds": "29a8d4c6e135fffb95fc4cd303c57ad926c6c5ff582f4c4577c8a69b7f322d91",
+  "SubredditInfoByName": "8c1815b07b762aee3c086cc84306f14b3907018e9ee152046c8e4d08ad4c7b88",
+  "GetRulesBySubredditName": "675e60778d6ed90a3da0abe9103518446b1dab7c082b37c871c1c1d5df593612"
 }

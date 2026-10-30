@@ -7,6 +7,7 @@ from media_detection import process_post, extract_posts, clean_url
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
 from gql_posts import fetch_gql_feed
+from gql_subreddit import fetch_gql_about, fetch_gql_rules
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
@@ -237,6 +238,13 @@ def fetch_about(subreddit, timeout=10):
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}/about.json",
         params={"raw_json": 1}, timeout=timeout)
+    if _is_waf_block(resp):
+        try:
+            return fetch_gql_about(subreddit)
+        except UpstreamError:
+            raise
+        except Exception as e:
+            log.warning("gql about failed sub=%s: %s", subreddit, e)
     if resp.status_code != 200:
         raise _subreddit_error(resp)
     d      = resp.json()["data"]
@@ -276,6 +284,8 @@ def fetch_rules(subreddit, timeout=10):
         resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/about/rules.json",
             params={"raw_json": 1}, timeout=timeout)
+        if _is_waf_block(resp):
+            return fetch_gql_rules(subreddit)
         if resp.status_code != 200:
             return []
         return [{"short_name": r.get("short_name", ""), "description": r.get("description", "")}
