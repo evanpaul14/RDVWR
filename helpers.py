@@ -319,11 +319,15 @@ def cached_json(data, seconds):
     return resp
 
 _view_cache = TTLCache(500, name='view')
+_inflight = {}
+_inflight_lock = threading.Lock()
+INFLIGHT_WAIT = 30  # seconds a follower waits on the request already fetching its key
 
 def server_cache(ttl):
     """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
     request path+query, so identical requests (repeat visits, multiple tabs)
-    don't re-hit Reddit within the window."""
+    don't re-hit Reddit within the window. Concurrent misses for one key are
+    coalesced: one request fetches, the rest wait for it and read the cache."""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -339,13 +343,33 @@ def server_cache(ttl):
                 # Serve the stored JSON bytes as-is rather than re-serializing the payload.
                 return Response(hit, mimetype='application/json',
                                 headers={'Cache-Control': f'public, max-age={ttl}'})
-            resp = f(*args, **kwargs)
-            cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
-            if (isinstance(resp, Response) and resp.status_code == 200 and resp.is_json
-                    and not resp.direct_passthrough and not resp.is_streamed
-                    and 'no-store' not in cache_control and 'private' not in cache_control):
-                _view_cache.set(key, resp.get_data(), ttl)
-            return resp
+            with _inflight_lock:
+                leader = _inflight.get(key)
+                if leader is None:
+                    _inflight[key] = leader = threading.Event()
+                    is_leader = True
+                else:
+                    is_leader = False
+            if not is_leader:
+                leader.wait(INFLIGHT_WAIT)
+                hit = _view_cache.get(key)
+                if hit is not _CACHE_MISS:
+                    return Response(hit, mimetype='application/json',
+                                    headers={'Cache-Control': f'public, max-age={ttl}'})
+                # The leader failed or its response wasn't cacheable: fetch for ourselves.
+                return f(*args, **kwargs)
+            try:
+                resp = f(*args, **kwargs)
+                cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
+                if (isinstance(resp, Response) and resp.status_code == 200 and resp.is_json
+                        and not resp.direct_passthrough and not resp.is_streamed
+                        and 'no-store' not in cache_control and 'private' not in cache_control):
+                    _view_cache.set(key, resp.get_data(), ttl)
+                return resp
+            finally:
+                with _inflight_lock:
+                    _inflight.pop(key, None)
+                leader.set()
         return wrapper
     return decorator
 
