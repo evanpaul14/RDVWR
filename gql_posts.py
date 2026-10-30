@@ -180,6 +180,23 @@ def gql_post_to_rest(n):
 
 
 _POST_ID_RE = re.compile(r"-(t3_\w+)$")
+_FULLNAME_RE = re.compile(r"^t[13]_[a-z0-9]+$")
+
+
+def to_gql_cursor(after):
+    """A REST `after` fullname (t3_abc) as GraphQL's cursor, which is its base64; anything
+    else (already a GraphQL cursor) is unchanged."""
+    return base64.b64encode(after.encode()).decode() if after and _FULLNAME_RE.match(after) else after
+
+
+def from_gql_cursor(cursor):
+    """A GraphQL cursor as the REST fullname it encodes, so a client can carry on paging over
+    REST once it recovers. Opaque cursors (search offsets, hashes) are unchanged."""
+    try:
+        decoded = base64.b64decode(cursor, validate=True).decode()
+    except (ValueError, UnicodeDecodeError, TypeError):
+        return cursor
+    return decoded if _FULLNAME_RE.match(decoded) else cursor
 
 
 def _cell_post_id(cell):
@@ -212,7 +229,7 @@ def _feed_page(operation, root, variables, missing, timeout):
 
 def _listing(operation, root, variables, missing, after, timeout):
     """{"posts", "after"}: ids from SDUI pages until FEED_LIMIT of them, then their posts."""
-    ids, cursor = [], after or None
+    ids, cursor = [], to_gql_cursor(after) or None
     for _ in range(MAX_FEED_PAGES):
         page_ids, cursor = _feed_page(operation, root, {**variables, **({"after": cursor} if cursor else {})},
                                       missing, timeout)
@@ -220,11 +237,12 @@ def _listing(operation, root, variables, missing, after, timeout):
         if not cursor or len(ids) >= FEED_LIMIT:
             break
     if not ids:
-        return {"posts": [], "after": cursor}
+        return {"posts": [], "after": from_gql_cursor(cursor) if cursor else None}
     data = gql_query("PostsByIds", {"ids": ids, **POSTS_FLAGS}, timeout)
     by_id = {n["id"]: n for n in (data.get("data") or {}).get("postsInfoByIds") or []
              if n.get("postTitle") is not None}
-    return {"posts": posts_from_nodes([by_id[i] for i in ids if i in by_id]), "after": cursor}
+    return {"posts": posts_from_nodes([by_id[i] for i in ids if i in by_id]),
+            "after": from_gql_cursor(cursor) if cursor else None}
 
 
 def posts_from_nodes(nodes):
@@ -253,6 +271,38 @@ def fetch_gql_feed(subreddit, sort, t="", after="", timeout=15):
         return _listing("PopularFeedSdui", "popularV3", _sorted(sort, t), "Subreddit not found", after, timeout)
     return _listing("SubredditFeedSdui", "subredditV3", {"subredditName": subreddit, **_sorted(sort, t)},
                     "Subreddit not found", after, timeout)
+
+
+def fetch_gql_post(post_id, timeout=15):
+    """One post as the dict by_id returns in `data`. Raises UpstreamError (404) when Reddit
+    has no such post or won't show it."""
+    data = gql_query("PostsByIds", {"ids": [f"t3_{post_id}"], **POSTS_FLAGS}, timeout)
+    for n in (data.get("data") or {}).get("postsInfoByIds") or []:
+        if n.get("postTitle") is not None:
+            return gql_post_to_rest(n)
+    raise UpstreamError("Post not found", 404)
+
+
+def fetch_gql_posts_by_id(post_ids, timeout=15):
+    """{post id: REST-shaped post dict} for the posts Reddit will show (like api/info.json)."""
+    data = gql_query("PostsByIds", {"ids": [f"t3_{i}" for i in post_ids], **POSTS_FLAGS}, timeout)
+    out = {}
+    for n in (data.get("data") or {}).get("postsInfoByIds") or []:
+        if n.get("postTitle") is not None:
+            post = gql_post_to_rest(n)
+            out[post["id"]] = post
+    return out
+
+
+def fetch_gql_multireddit(username, multiname, sort="hot", t="", after="", timeout=15):
+    """{"posts", "after"} for a user's multireddit. The app lists it by path; a multireddit
+    that doesn't exist answers an empty feed, which is reported as a 404 on the first page."""
+    feed = _listing("CustomFeedSdui", "customFeedV3",
+                    {"path": f"/user/{username}/m/{multiname}", **_sorted(sort, t)},
+                    "Multireddit not found", after, timeout)
+    if not feed["posts"] and not feed["after"] and not after:
+        raise UpstreamError("Multireddit not found", 404, "not_found")
+    return feed
 
 
 def fetch_gql_frontpage(sort, t="", after="", timeout=15):

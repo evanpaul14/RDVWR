@@ -164,19 +164,32 @@ def is_waf_block(resp):
     return resp.status_code in (403, 429) and "json" not in resp.headers.get("content-type", "")
 
 
+def fetch_posts_by_id(ids):
+    """{post id: raw REST-shaped post dict} for these ids, {} when they can't be fetched.
+    REST first (api/info.json); Reddit's WAF block page falls back to the app's GraphQL API."""
+    resp = reddit_get('https://www.reddit.com/api/info.json',
+                      params={'id': ','.join(f"t3_{i}" for i in ids), 'raw_json': 1}, timeout=8)
+    if is_waf_block(resp):
+        try:
+            from gql_posts import fetch_gql_posts_by_id   # imported here: gql_posts imports helpers
+            return fetch_gql_posts_by_id(ids)
+        except Exception as e:
+            log.warning("gql posts-by-id failed: %s", e)
+            return {}
+    if not resp.ok:
+        return {}
+    return {c['data']['id']: c['data'] for c in resp.json()['data']['children']}
+
+
 def hydrate_linked_posts(posts):
     """Batch-fetch full data (title/media) for plain link-posts that point at another
     Reddit post, so they can be rendered with the same embed as real crossposts."""
     targets = [p for p in posts if p.get('linked_post')][:100]
     if not targets:
         return
-    ids_str = ','.join(f"t3_{p['linked_post']['id']}" for p in targets)
+    ids = [p['linked_post']['id'] for p in targets]
     try:
-        resp = reddit_get('https://www.reddit.com/api/info.json',
-                           params={'id': ids_str, 'raw_json': 1}, timeout=8)
-        if not resp.ok:
-            return
-        by_id = {c['data']['id']: c['data'] for c in resp.json()['data']['children']}
+        by_id = fetch_posts_by_id(ids)
         for p in targets:
             raw = by_id.get(p['linked_post']['id'])
             if raw:

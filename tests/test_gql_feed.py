@@ -501,3 +501,256 @@ def test_search_posts_error_still_reported_when_graphql_fails():
         with pytest.raises(UpstreamError) as e:
             search_routes.fetch_search_posts("waf q4")
     assert e.value.status == 403
+
+
+# ── single post (post page) ───────────────────────────────────────────────────
+
+from routes import comments as comments_routes
+
+
+def test_fetch_gql_post_returns_the_rest_shape():
+    with patch.object(gql_posts, "gql_query", lambda op, v, t=15: {"data": {"postsInfoByIds": [gql_post("t3_one")]}}):
+        post = gql_posts.fetch_gql_post("one")
+    assert (post["id"], post["title"]) == ("one", "A title")
+
+
+def test_fetch_gql_post_missing_or_unavailable():
+    for nodes in ([], [{"__typename": "UnavailablePost", "id": "t3_x", "postTitle": None}]):
+        with patch.object(gql_posts, "gql_query", lambda op, v, t=15, n=nodes: {"data": {"postsInfoByIds": n}}):
+            with pytest.raises(UpstreamError) as e:
+                gql_posts.fetch_gql_post("x")
+        assert e.value.status == 404
+
+
+def test_by_id_post_uses_rest_first():
+    ok = MagicMock(status_code=200, headers={"content-type": "application/json"})
+    ok.json.return_value = {"data": {"children": [{"data": {"id": "abc"}}]}}
+    with patch.object(comments_routes, "reddit_get", return_value=ok), \
+         patch.object(comments_routes, "fetch_gql_post", side_effect=AssertionError("REST answered")) as gql:
+        assert comments_routes._by_id_post("abc") == {"id": "abc"}
+    gql.assert_not_called()
+
+
+def test_by_id_post_falls_back_to_graphql_on_waf_block():
+    with patch.object(comments_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(comments_routes.time, "sleep"), \
+         patch.object(comments_routes, "fetch_gql_post", return_value={"id": "abc"}):
+        assert comments_routes._by_id_post("abc") == {"id": "abc"}
+
+
+def test_by_id_post_graphql_failure_reports_the_block():
+    with patch.object(comments_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(comments_routes.time, "sleep"), \
+         patch.object(comments_routes, "fetch_gql_post", side_effect=RuntimeError("boom")):
+        with pytest.raises(UpstreamError) as e:
+            comments_routes._by_id_post("abc")
+    assert e.value.status == 403
+
+
+def test_by_id_post_missing_post_does_not_ask_graphql():
+    gone = MagicMock(status_code=404, headers={"content-type": "application/json"})
+    with patch.object(comments_routes, "reddit_get", return_value=gone), \
+         patch.object(comments_routes, "fetch_gql_post", side_effect=AssertionError("a 404 is not a block")):
+        with pytest.raises(UpstreamError) as e:
+            comments_routes._by_id_post("abc")
+    assert e.value.status == 404
+
+
+# ── cursors ───────────────────────────────────────────────────────────────────
+
+def test_cursor_conversion_round_trips_fullnames_and_leaves_opaque_cursors_alone():
+    b64 = base64.b64encode(b"t3_1xiqx8c").decode()
+    assert gql_posts.from_gql_cursor(b64) == "t3_1xiqx8c" and gql_posts.to_gql_cursor("t3_1xiqx8c") == b64
+    assert gql_posts.from_gql_cursor("t1_abc") == "t1_abc"   # a plain fullname isn't base64: left alone
+    for opaque in ("MjQ=", "YzA5YTZlMjE1MzhiNDE2ZjZhMDQ3ZjRkNGVjZDljOGU=", "c1", "", None):
+        assert gql_posts.from_gql_cursor(opaque) == opaque and gql_posts.to_gql_cursor(opaque) == opaque
+
+
+def test_feed_returns_rest_style_cursor_and_accepts_one_back():
+    b64 = base64.b64encode(b"t3_zzz").decode()
+    fake = listing_fake([profile_page([f"t3_{i:02d}" for i in range(26)], b64, True)])   # enough posts to stop paging
+    with patch.object(gql_posts, "gql_query", fake):
+        feed = gql_posts.fetch_gql_user_posts("someone", "new", "", "t3_prev")
+    assert feed["after"] == "t3_zzz"
+    assert fake.calls[0][1]["after"] == base64.b64encode(b"t3_prev").decode()
+
+
+# ── user comments / overview ──────────────────────────────────────────────────
+
+import gql_user
+
+
+def comment_node(cid="t1_c1", preview="hello", **over):
+    n = {"__typename": "Comment", "id": cid, "createdAt": "2026-10-29T10:00:00.000000+0000", "score": 5,
+         "content": {"preview": preview},
+         "postInfo": {"id": "t3_p1", "title": "A post", "subreddit": {"prefixedName": "r/pics"}}}
+    n.update(over)
+    return n
+
+
+def comments_response(nodes, cursor=None, has_next=False, user=True):
+    edges = [{"node": n} for n in nodes]
+    return lambda *a, **k: {"data": {"redditorInfoByName": {"comments": {
+        "edges": edges, "pageInfo": {"endCursor": cursor, "hasNextPage": has_next}}} if user else None}}
+
+
+def test_user_comments_map_to_the_ui_shape():
+    with patch.object(gql_user, "gql_query", comments_response([comment_node(preview="hi <b>there</b>")], None)):
+        out = gql_user.fetch_gql_user_comments("someone")
+    c = out["comments"][0]
+    assert (c["id"], c["author"], c["subreddit"], c["link_id"], c["score"]) == ("c1", "someone", "pics", "p1", 5)
+    assert c["link_title"] == "A post" and c["link_permalink"] == "https://www.reddit.com/r/pics/comments/p1/"
+    assert c["body"] == "hi <b>there</b>" and "<b>" not in c["body_html"] and c["created_utc"] > 0
+    assert out["after"] is None
+
+
+def test_long_comment_previews_are_marked_as_cut():
+    cut = "x" * 300
+    with patch.object(gql_user, "gql_query", comments_response([comment_node(preview=cut), comment_node("t1_c2", "short")])):
+        a, b = gql_user.fetch_gql_user_comments("u")["comments"]
+    assert a["body"] == cut + "…" and b["body"] == "short"
+
+
+def test_user_comments_variables_and_cursor():
+    seen = {}
+
+    def fake(op, variables, timeout=15):
+        seen.update(op=op, v=variables)
+        return comments_response([comment_node()], base64.b64encode(b"t1_next").decode(), True)()
+    with patch.object(gql_user, "gql_query", fake):
+        out = gql_user.fetch_gql_user_comments("u", "top", "week", "t1_prev")
+    assert seen["op"] == "SubmittedComments"
+    assert seen["v"] == {"name": "u", "sort": "TOP", "pageSize": 25, "range": "WEEK",
+                         "after": base64.b64encode(b"t1_prev").decode()}
+    assert out["after"] == "t1_next"
+    with patch.object(gql_user, "gql_query", fake):   # the time range only applies to top
+        gql_user.fetch_gql_user_comments("u", "new", "week")
+    assert "range" not in seen["v"]
+
+
+def test_user_comments_missing_user():
+    with patch.object(gql_user, "gql_query", comments_response([], user=False)):
+        with pytest.raises(UpstreamError) as e:
+            gql_user.fetch_gql_user_comments("nobody")
+    assert e.value.status == 404
+
+
+def test_overview_merges_newest_first_and_packs_both_cursors():
+    posts = {"posts": [{"id": "p_old", "created_utc": 100, "score": 1}, {"id": "p_new", "created_utc": 300, "score": 9}], "after": "t3_np"}
+    comments = {"comments": [{"id": "c_mid", "created_utc": 200, "score": 50}], "after": "t1_nc"}
+    with patch.object(gql_user, "fetch_gql_user_posts", return_value=posts), \
+         patch.object(gql_user, "fetch_gql_user_comments", return_value=comments):
+        out = gql_user.fetch_gql_user_overview("u", "new")
+        assert [i["data"]["id"] for i in out["items"]] == ["p_new", "c_mid", "p_old"]
+        assert [i["type"] for i in out["items"]] == ["post", "comment", "post"]
+        top = gql_user.fetch_gql_user_overview("u", "top")
+    assert [i["data"]["id"] for i in top["items"]] == ["c_mid", "p_new", "p_old"]   # by score
+    assert out["after"].startswith("gql2:") and gql_user._decode(out["after"]) == {"p": "t3_np", "c": "t1_nc"}
+
+
+def test_overview_continues_each_side_and_stops_when_both_are_done():
+    after = "gql2:" + base64.urlsafe_b64encode(b'{"p": "t3_np", "c": ""}').decode()
+    posts = MagicMock(return_value={"posts": [{"id": "p", "created_utc": 1}], "after": None})
+    comments = MagicMock()
+    with patch.object(gql_user, "fetch_gql_user_posts", posts), patch.object(gql_user, "fetch_gql_user_comments", comments):
+        out = gql_user.fetch_gql_user_overview("u", "new", "", after)
+    assert posts.call_args.args[3] == "t3_np"     # continued from its cursor
+    comments.assert_not_called()                  # the finished side isn't asked again
+    assert [i["data"]["id"] for i in out["items"]] == ["p"] and out["after"] is None
+
+
+def test_user_comments_and_overview_routes_use_graphql_on_waf_block():
+    comments = {"comments": [{"id": "c"}], "after": None}
+    with patch.object(users_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(users_routes, "fetch_gql_user_comments", return_value=comments), \
+         patch.object(users_routes, "_fetch_archived_comments") as archive:
+        assert users_routes.fetch_user_comments("cmtuser1", "new") == comments
+    archive.assert_not_called()
+    overview = {"items": [{"type": "post", "data": {"id": "p"}}], "after": None}
+    with patch.object(users_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(users_routes, "fetch_gql_user_overview", return_value=overview), \
+         patch.object(users_routes, "hydrate_linked_posts"):
+        assert users_routes.fetch_user_overview("ovuser1") == overview
+
+
+def test_overview_gql_cursor_goes_straight_to_graphql_even_if_rest_is_back():
+    overview = {"items": [], "after": None}
+    with patch.object(users_routes, "reddit_get", side_effect=AssertionError("REST can't use a gql2 cursor")), \
+         patch.object(users_routes, "fetch_gql_user_overview", return_value=overview), \
+         patch.object(users_routes, "hydrate_linked_posts"):
+        assert users_routes.fetch_user_overview("ovuser2", "new", "", "gql2:abc") == overview
+
+
+def test_overview_falls_back_to_the_archive_when_graphql_fails():
+    with patch.object(users_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(users_routes, "fetch_gql_user_overview", side_effect=RuntimeError("boom")), \
+         patch.object(users_routes, "_fetch_archived_overview", return_value=([{"type": "post", "data": {}}], None)):
+        out = users_routes.fetch_user_overview("ovuser3")
+    assert out["archived"] is True
+
+
+# ── multireddit, link hydration, avatars ──────────────────────────────────────
+
+import helpers, routes.avatars as avatars_routes
+
+
+def test_multireddit_feed_and_missing():
+    page = {"data": {"customFeedV3": {"elements": {"edges": [{"node": {"cells": [title_cell("t3_aaa")]}}], "pageInfo": {}}}}}
+    fake = listing_fake([page])
+    with patch.object(gql_posts, "gql_query", fake):
+        feed = gql_posts.fetch_gql_multireddit("kn0thing", "good", "hot")
+    assert fake.calls[0] == ("CustomFeedSdui", {"path": "/user/kn0thing/m/good", "sort": "HOT"})
+    assert [p["id"] for p in feed["posts"]] == ["aaa"]
+    empty = {"data": {"customFeedV3": {"elements": {"edges": [], "pageInfo": {"endCursor": ""}}}}}
+    with patch.object(gql_posts, "gql_query", lambda *a, **k: empty):
+        with pytest.raises(UpstreamError) as e:
+            gql_posts.fetch_gql_multireddit("nobody", "nothing")
+        assert e.value.status == 404
+        assert gql_posts.fetch_gql_multireddit("nobody", "nothing", after="t3_x")["posts"] == []   # later pages may be empty
+
+
+def test_fetch_multireddit_graphql_fallback_when_rest_is_blocked():
+    feed = {"posts": [{"id": "m"}], "after": None}
+    with patch.object(subreddit_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(subreddit_routes, "fetch_gql_multireddit", return_value=feed), \
+         patch.object(subreddit_routes, "hydrate_linked_posts"):
+        assert subreddit_routes.fetch_multireddit("kn0thing", "good", "hot") == {**feed, "title": "good"}
+
+
+def test_fetch_multireddit_rest_first_then_listing_block_keeps_the_rest_title():
+    meta = MagicMock(status_code=200, headers={"content-type": "application/json"})
+    meta.json.return_value = {"data": {"display_name": "Good Stuff", "subreddits": [{"name": "aww"}]}}
+    feed = {"posts": [], "after": None}
+    with patch.object(subreddit_routes, "reddit_get", side_effect=[meta, waf_response()]), \
+         patch.object(subreddit_routes, "fetch_gql_multireddit", return_value=feed), \
+         patch.object(subreddit_routes, "hydrate_linked_posts"):
+        assert subreddit_routes.fetch_multireddit("kn0thing", "good", "hot")["title"] == "Good Stuff"
+
+
+def test_posts_by_id_rest_first_then_graphql_on_block():
+    ok = MagicMock(status_code=200, ok=True, headers={"content-type": "application/json"})
+    ok.json.return_value = {"data": {"children": [{"data": {"id": "abc"}}]}}
+    with patch.object(helpers, "reddit_get", return_value=ok):
+        assert helpers.fetch_posts_by_id(["abc"]) == {"abc": {"id": "abc"}}
+    with patch.object(helpers, "reddit_get", return_value=waf_response()), \
+         patch.object(gql_posts, "fetch_gql_posts_by_id", return_value={"abc": {"id": "abc"}}) as gql:
+        assert helpers.fetch_posts_by_id(["abc"]) == {"abc": {"id": "abc"}}
+    gql.assert_called_once_with(["abc"])
+    with patch.object(helpers, "reddit_get", return_value=waf_response()), \
+         patch.object(gql_posts, "fetch_gql_posts_by_id", side_effect=RuntimeError("boom")):
+        assert helpers.fetch_posts_by_id(["abc"]) == {}
+
+
+def test_fetch_gql_posts_by_id_skips_unavailable_posts():
+    nodes = [gql_post("t3_ok"), {"__typename": "UnavailablePost", "id": "t3_gone", "postTitle": None}]
+    with patch.object(gql_posts, "gql_query", lambda *a, **k: {"data": {"postsInfoByIds": nodes}}):
+        assert list(gql_posts.fetch_gql_posts_by_id(["ok", "gone"])) == ["ok"]
+
+
+def test_avatar_falls_back_to_graphql_profile_on_waf_block():
+    with patch.object(avatars_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(avatars_routes, "fetch_gql_user_about", return_value={"icon": "https://styles.redditmedia.com/a.png"}):
+        assert avatars_routes._fetch_user_icon("avatar_waf_user") == "https://styles.redditmedia.com/a.png"
+    with patch.object(avatars_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(avatars_routes, "fetch_gql_user_about", side_effect=RuntimeError("boom")):
+        assert avatars_routes._fetch_user_icon("avatar_waf_user2") is None

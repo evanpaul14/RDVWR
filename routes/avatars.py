@@ -4,7 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, jsonify, request
 from media_detection import clean_url
 from reddit_client import reddit_get
-from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, log
+from gql_client import fetch_gql_user_about
+from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, is_waf_block, log
 
 bp = Blueprint("avatars", __name__)
 
@@ -37,6 +38,8 @@ def _fetch_user_icon(username):
         if resp.status_code == 200:
             d = resp.json().get("data", {})
             icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or None
+        elif is_waf_block(resp):   # Reddit blocks this IP's REST requests: ask the app's GraphQL API
+            icon = (fetch_gql_user_about(username, timeout=6) or {}).get("icon") or None
     except Exception as e:
         log.warning("avatar fetch failed user=%s: %s", username, e)
         icon = None

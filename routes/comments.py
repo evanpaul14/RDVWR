@@ -7,9 +7,10 @@ from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
 from archive import fetch_archived_comment_tree
 from gql_client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
+from gql_posts import fetch_gql_post
 from helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
-                     parallel, UpstreamError, log)
+                     is_waf_block, parallel, UpstreamError, log)
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 
@@ -85,6 +86,13 @@ def _by_id_post(post_id):
                     attempt + 1, BY_ID_ATTEMPTS)
         if attempt < BY_ID_ATTEMPTS - 1:
             time.sleep(0.3 * (attempt + 1))
+    if is_waf_block(resp):
+        try:   # Reddit blocks this IP's REST requests: the app's GraphQL API still answers
+            return fetch_gql_post(post_id)
+        except UpstreamError:
+            raise
+        except Exception as e:
+            log.warning("gql post failed post=%s: %s", post_id, e)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code, "Post not found")
     posts = resp.json()["data"]["children"]

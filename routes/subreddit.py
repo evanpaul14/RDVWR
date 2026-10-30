@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
-from gql_posts import fetch_gql_feed
+from gql_posts import fetch_gql_feed, fetch_gql_multireddit
 from gql_subreddit import fetch_gql_about, fetch_gql_rules
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
@@ -367,6 +367,21 @@ def get_wiki(subreddit, page='index'):
         return error_response(500)
 
 
+def _multireddit_via_graphql(username, multiname, sort, t, after, title=None):
+    """The multireddit from the app's GraphQL API (REST is blocked), or None when that fails
+    too. A multireddit that doesn't exist raises its 404. The app doesn't name a multireddit,
+    so without the REST title it's shown under its path name."""
+    try:
+        feed = fetch_gql_multireddit(username, multiname, sort, t, after)
+    except UpstreamError:
+        raise
+    except Exception as e:
+        log.warning("gql multireddit failed user=%s multi=%s: %s", username, multiname, e)
+        return None
+    hydrate_linked_posts(feed["posts"])
+    return {**feed, "title": title or multiname}
+
+
 def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     """A user multireddit's combined listing: {"posts", "after", "title"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}
@@ -376,6 +391,10 @@ def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     meta = reddit_get(
         f"https://www.reddit.com/api/multi/user/{username}/m/{multiname}.json",
         params={"raw_json": 1}, timeout=timeout)
+    if is_waf_block(meta):
+        feed = _multireddit_via_graphql(username, multiname, sort, t, after)
+        if feed:
+            return feed
     if meta.status_code != 200:
         raise UpstreamError.from_status(meta.status_code, "Multireddit not found")
     meta_data = meta.json().get("data", {})
@@ -387,6 +406,10 @@ def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     resp = reddit_get(
         f"https://www.reddit.com/r/{combined}/{sort}.json",
         params=params, timeout=timeout)
+    if is_waf_block(resp):
+        feed = _multireddit_via_graphql(username, multiname, sort, t, after, display)
+        if feed:
+            return feed
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
