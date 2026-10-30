@@ -754,3 +754,14 @@ def test_avatar_falls_back_to_graphql_profile_on_waf_block():
     with patch.object(avatars_routes, "reddit_get", return_value=waf_response()), \
          patch.object(avatars_routes, "fetch_gql_user_about", side_effect=RuntimeError("boom")):
         assert avatars_routes._fetch_user_icon("avatar_waf_user2") is None
+
+
+def test_multireddit_joins_subreddits_with_an_encoded_plus():
+    meta = MagicMock(status_code=200, headers={"content-type": "application/json"})
+    meta.json.return_value = {"data": {"display_name": "Mix", "subreddits": [{"name": "aww"}, {"name": "pics"}]}}
+    listing = MagicMock(status_code=200, headers={"content-type": "application/json"})
+    listing.json.return_value = {"data": {"children": [], "after": None}}
+    with patch.object(subreddit_routes, "reddit_get", side_effect=[meta, listing]) as get, \
+         patch.object(subreddit_routes, "hydrate_linked_posts"):
+        subreddit_routes.fetch_multireddit("someone", "mix_encoded", "hot")
+    assert get.call_args_list[1].args[0] == "https://www.reddit.com/r/aww%2Bpics/hot.json"
