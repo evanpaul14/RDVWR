@@ -11,7 +11,8 @@ import html as html_lib
 import json
 import re
 from datetime import datetime
-from gql_client import gql_query
+from gql_client import gql_query, _resolve_media
+from gql_richtext import richtext_html
 from helpers import FEED_LIMIT, UpstreamError, log
 from media_detection import extract_posts
 
@@ -27,6 +28,12 @@ def _epoch(iso):
         return datetime.fromisoformat(iso).timestamp() if iso else 0
     except ValueError:
         return 0
+
+
+def _subreddit_of(permalink):
+    """The community from a permalink, for profile posts (u/name -> "u_name")."""
+    m = re.match(r"/(r|user)/([^/]+)/", permalink or "")
+    return "" if not m else m.group(2) if m.group(1) == "r" else f"u_{m.group(2)}"
 
 
 def _url(source):
@@ -68,42 +75,43 @@ def _gallery(items):
     return {"items": data}, meta
 
 
-def _selftext_html(markdown):
-    """Paragraphs and auto-linked URLs, entity-escaped the way REST's selftext_html is (which
-    clean_reddit_html unescapes before sanitizing). The app's `content.html` is bare text, so
-    the server-rendered pages get only this plain version (the JS app renders the markdown)."""
-    paras = []
-    for para in re.split(r"\n\s*\n", markdown.strip()):
-        text = html_lib.escape(para.strip()).replace("\n", "<br>")
-        paras.append("<p>" + URL_RE.sub(r'<a href="\1">\1</a>', text) + "</p>")
-    return html_lib.escape("".join(paras))
+def _selftext_html(content):
+    """Post body HTML, entity-escaped the way REST's selftext_html is (clean_reddit_html
+    unescapes it before sanitizing). Rendered from the rich text; failing that, plain
+    paragraphs with auto-linked URLs from the markdown."""
+    body = richtext_html(content.get("richtext"),
+                         {m["id"]: m["url"] for m in content.get("richtextMedia") or [] if m.get("url")})
+    if not body:
+        paras = []
+        for para in re.split(r"\n\s*\n", (content.get("markdown") or "").strip()):
+            text = html_lib.escape(para.strip()).replace("\n", "<br>")
+            paras.append("<p>" + URL_RE.sub(r'<a href="\1">\1</a>', text) + "</p>")
+        body = "".join(paras)
+    return html_lib.escape(body)
 
 
-def _video_fields(p, media):
-    """Reddit-hosted video and gif posts, as REST's media.reddit_video / reddit_video_preview."""
+def _video_fields(p, n, media):
+    """Reddit-hosted video, the Reddit copy of an external clip, and embeds, in REST's shapes."""
     streaming, packaged = media.get("streaming"), media.get("packagedMedia") or {}
     if streaming:
         muxed = packaged.get("muxedMp4s") or {}
-        p["is_video"] = True
-        p["media"] = {"reddit_video": {
-            "fallback_url": _url(muxed.get("recommended")) or _url(muxed.get("medium"))
-                            or _url(media.get("download")),
-            "hls_url": streaming.get("hlsUrl"), "is_gif": bool(streaming.get("isGif"))}}
-    animated = media.get("animated")
-    if animated:
-        mp4 = next((_url(animated.get(k)) for k in ("mp4_source", "mp4_xlarge", "mp4_large")
-                    if _url(animated.get(k))), None)
-        if mp4:
-            p["preview"] = {**(p.get("preview") or {"images": []}),
-                            "reddit_video_preview": {"fallback_url": mp4, "is_gif": True}}
-    embed = media.get("video")
-    if embed and embed.get("embedHtml"):
+        video = {"fallback_url": _url(muxed.get("recommended")) or _url(muxed.get("medium"))
+                                 or _url(media.get("download")),
+                 "hls_url": streaming.get("hlsUrl"), "is_gif": bool(streaming.get("isGif"))}
+        if n.get("domain") == "v.redd.it":
+            p["is_video"] = True
+            p["media"] = {"reddit_video": video}
+        else:   # RedGifs, Imgur...: REST only exposes Reddit's copy as a preview, is_video stays False
+            p["preview"] = {**(p.get("preview") or {"images": []}), "reddit_video_preview": video}
+    if media.get("typeHint") == "EMBED":
+        embed = media.get("video") or {}
         dims = embed.get("dimensions") or {}
-        attr = embed.get("attribution") or {}
-        p["secure_media"] = {"oembed": {"html": embed["embedHtml"], "provider_name": attr.get("providerName", ""),
-                                        "height": dims.get("height"), "width": dims.get("width")}}
         p["secure_media_embed"] = {"media_domain_url": f"https://www.redditmedia.com/mediaembed/{p['id']}",
                                    "height": dims.get("height"), "width": dims.get("width")}
+        if embed.get("embedHtml"):
+            p["secure_media"] = {"oembed": {"html": embed["embedHtml"],
+                                            "provider_name": (embed.get("attribution") or {}).get("providerName", ""),
+                                            "height": dims.get("height"), "width": dims.get("width")}}
 
 
 def gql_post_to_rest(n):
@@ -114,22 +122,22 @@ def gql_post_to_rest(n):
         richtext = json.loads(flair.get("richtext") or "[]")
     except ValueError:
         richtext = []
-    markdown = (n.get("content") or {}).get("markdown") or ""
+    content = n.get("content") or {}
     p = {
         "id": n["id"].removeprefix("t3_"),
         "title": n.get("postTitle", ""),
         "author": (n.get("authorInfo") or {}).get("name") or "[deleted]",
-        "subreddit": (n.get("subreddit") or {}).get("name", ""),
+        "subreddit": (n.get("subreddit") or {}).get("name") or _subreddit_of(n.get("permalink")),
         "score": n.get("score") or 0,
         "likes": {"UPVOTE": True, "DOWNVOTE": False}.get(n.get("voteState")),
         "upvote_ratio": n.get("upvoteRatio") or 0,
         "num_comments": n.get("commentCount") or 0,
-        "created_utc": _epoch(n.get("createdAt")),
+        "created_utc": int(_epoch(n.get("createdAt"))),
         "url": n.get("url") or _url(n.get("outboundLink")) or "",
         "permalink": n.get("permalink", ""),
         "is_self": bool(n.get("isSelfPost")),
-        "selftext": markdown,
-        "selftext_html": _selftext_html(markdown) if markdown else "",
+        "selftext": _resolve_media(content),
+        "selftext_html": _selftext_html(content) if content.get("markdown") else "",
         "is_video": False,
         "post_hint": {"IMAGE": "image", "VIDEO": "hosted:video", "EMBED": "rich:video",
                       "GIFVIDEO": "image"}.get(media.get("typeHint"), ""),
@@ -137,7 +145,7 @@ def gql_post_to_rest(n):
         "link_flair_text": flair.get("text") or "",
         "link_flair_richtext": richtext,
         "link_flair_type": flair.get("type") or "text",
-        "link_flair_background_color": (flair.get("template") or {}).get("backgroundColor") or "",
+        "link_flair_background_color": ((flair.get("template") or {}).get("backgroundColor") or "").lower(),
         "link_flair_text_color": (flair.get("textColor") or "dark").lower(),
         "domain": n.get("domain", ""),
         "stickied": bool(n.get("isStickied")),
@@ -152,7 +160,7 @@ def gql_post_to_rest(n):
     preview = _preview(media.get("still"))
     if preview:
         p["preview"] = preview
-    _video_fields(p, media)
+    _video_fields(p, n, media)
     items = (n.get("gallery") or {}).get("items")
     if items:
         p["is_gallery"] = True
