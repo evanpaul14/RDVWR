@@ -324,3 +324,180 @@ def test_csp_allows_blob_workers_for_hls():
     from app import app
     csp = app.test_client().get("/").headers["Content-Security-Policy"]
     assert "worker-src 'self' blob:" in csp
+
+
+# ── popular / front page / user posts ─────────────────────────────────────────
+
+from routes import home as home_routes, users as users_routes, search as search_routes
+import gql_search
+
+
+def test_cell_post_id_reads_any_cell_kind():
+    cell = {"id": base64.b64encode(b"MetadataCell-t3_abc123").decode()}
+    assert gql_posts._cell_post_id(cell) == "t3_abc123"
+    assert gql_posts._cell_post_id({"id": "!!not base64!!"}) is None
+    assert gql_posts._cell_post_id({}) is None
+
+
+def listing_fake(pages, posts_by_op=None):
+    """A gql_query fake: SDUI pages from `pages` in order, then PostsByIds for whatever ids come."""
+    calls, queue = [], list(pages)
+
+    def fake(op, variables, timeout=15):
+        calls.append((op, variables))
+        if op == "PostsByIds":
+            return {"data": {"postsInfoByIds": [gql_post(i) for i in variables["ids"]]}}
+        return queue.pop(0)
+    fake.calls = calls
+    return fake
+
+
+def test_all_and_popular_use_the_popular_feed():
+    page = {"data": {"popularV3": {"elements": {"edges": [{"node": {"cells": [title_cell("t3_aaa")]}}],
+                                                "pageInfo": {"endCursor": None}}}}}
+    for name in ("all", "popular", "ALL"):
+        fake = listing_fake([page])
+        with patch.object(gql_posts, "gql_query", fake):
+            feed = fetch_gql_feed(name, "hot")
+        assert fake.calls[0][0] == "PopularFeedSdui" and "subredditName" not in fake.calls[0][1]
+        assert [p["id"] for p in feed["posts"]] == ["aaa"]
+
+
+def test_frontpage_uses_popular_feed_with_sort_and_time():
+    page = {"data": {"popularV3": {"elements": {"edges": [], "pageInfo": {}}}}}
+    fake = listing_fake([page])
+    with patch.object(gql_posts, "gql_query", fake):
+        assert gql_posts.fetch_gql_frontpage("top", "week") == {"posts": [], "after": None}
+    assert fake.calls[0] == ("PopularFeedSdui", {"sort": "TOP", "time": "WEEK"})
+
+
+def profile_page(ids, cursor="", has_next=False):
+    edges = [{"node": {"cells": [{"__typename": "MetadataCell", "id": base64.b64encode(f"MetadataCell-{i}".encode()).decode()}]}}
+             for i in ids]
+    return {"data": {"profileFeed": {"elements": {"edges": edges, "pageInfo": {"endCursor": cursor, "hasNextPage": has_next}}}}}
+
+
+def test_user_posts_stop_when_reddit_says_there_is_no_next_page():
+    # the cursor is non-empty but hasNextPage is false: it must not be followed or returned
+    fake = listing_fake([profile_page(["t3_a", "t3_b"], "stale", False)])
+    with patch.object(gql_posts, "gql_query", fake):
+        feed = gql_posts.fetch_gql_user_posts("someone", "new")
+    assert [p["id"] for p in feed["posts"]] == ["a", "b"] and feed["after"] is None
+    assert fake.calls[0] == ("SubmittedPostsFeedSdui", {"username": "someone", "sort": "NEW"})
+    assert len([c for c in fake.calls if c[0] == "SubmittedPostsFeedSdui"]) == 1
+
+
+def test_user_posts_follow_the_cursor_and_include_profile_posts():
+    fake = listing_fake([profile_page([f"t3_{i:02d}" for i in range(14)], "c1", True),
+                         profile_page([f"t3_{i:02d}" for i in range(14, 28)], "c2", True)])
+    with patch.object(gql_posts, "gql_query", fake):
+        feed = gql_posts.fetch_gql_user_posts("someone", "top", "all")
+    assert len(feed["posts"]) == 28 and feed["after"] == "c2"
+    assert fake.calls[1][1]["after"] == "c1" and fake.calls[0][1]["time"] == "ALL"
+
+
+def test_missing_user():
+    with patch.object(gql_posts, "gql_query", lambda *a, **k: {"data": {"profileFeed": {"elements": None}}}):
+        with pytest.raises(UpstreamError) as e:
+            gql_posts.fetch_gql_user_posts("nobody", "new")
+    assert e.value.status == 404
+
+
+def test_fetch_frontpage_falls_back_on_waf_block():
+    canned = {"posts": [{"id": "x"}], "after": "c"}
+    with patch.object(home_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(home_routes, "fetch_gql_frontpage", return_value=canned), \
+         patch.object(home_routes, "hydrate_linked_posts"):
+        assert home_routes.fetch_frontpage("hot", "", "", ) == canned
+
+
+def test_user_posts_use_graphql_before_the_archive_on_waf_block():
+    canned = {"posts": [{"id": "x"}], "after": "c"}
+    with patch.object(users_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(users_routes, "fetch_gql_user_posts", return_value=canned), \
+         patch.object(users_routes, "hydrate_linked_posts"), \
+         patch.object(users_routes, "_fetch_archived_posts") as archive:
+        out = users_routes.fetch_user_posts("gqluser1", "new")
+    assert out == {"posts": [{"id": "x"}], "after": "c"} and "archived" not in out
+    archive.assert_not_called()
+
+
+def test_user_posts_fall_back_to_the_archive_when_graphql_fails_too():
+    with patch.object(users_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(users_routes, "fetch_gql_user_posts", side_effect=RuntimeError("boom")), \
+         patch.object(users_routes, "_fetch_archived_posts", return_value=[]):
+        with pytest.raises(UpstreamError) as e:
+            users_routes.fetch_user_posts("gqluser2", "new")
+    assert e.value.status == 404
+
+
+# ── search ────────────────────────────────────────────────────────────────────
+
+def search_response(nodes, cursor=None, has_next=False, key="posts"):
+    edges = [{"node": n} for n in nodes]
+    return lambda *a, **k: {"data": {"search": {"general": {key: {
+        "edges": edges, "pageInfo": {"endCursor": cursor, "hasNextPage": has_next}}}}}}
+
+
+def test_search_posts_variables_and_paging():
+    seen = {}
+
+    def fake(op, variables, timeout=15):
+        seen.update(op=op, v=variables)
+        return search_response([gql_post("t3_s1")], "MjQ=", True)()
+    with patch.object(gql_search, "gql_query", fake):
+        out = gql_search.fetch_gql_search_posts("cats", "top", "week", "aww", "MTA=")
+    assert seen["op"] == "SearchPosts"
+    assert seen["v"]["query"] == "subreddit:aww cats" and seen["v"]["sort"] == "TOP"
+    assert seen["v"]["filters"] == [{"key": "time_range", "value": "week"}] and seen["v"]["afterCursor"] == "MTA="
+    assert [p["id"] for p in out["posts"]] == ["s1"] and out["after"] == "MjQ="
+
+
+def test_search_posts_last_page_has_no_cursor():
+    with patch.object(gql_search, "gql_query", search_response([gql_post("t3_s1")], "stale", False)):
+        assert gql_search.fetch_gql_search_posts("cats")["after"] is None
+
+
+def test_search_users_carry_total_karma():
+    node = {"name": "spez", "karma": {"total": 941287},
+            "profile": {"createdAt": "2005-06-06T04:00:00.000000+0000",
+                        "styles": {"legacyIcon": {"url": "https://styles.redditmedia.com/i.png"}}}}
+    with patch.object(gql_search, "gql_query", search_response([node], key="authors")):
+        out = gql_search.fetch_gql_search_users("spez")
+    u = out["users"][0]
+    assert (u["name"], u["karma_total"], u["icon"]) == ("spez", 941287, "https://styles.redditmedia.com/i.png")
+    assert u["created_utc"] > 0
+
+
+def test_search_communities():
+    data = {"data": {"targetableCommunityInfo": [
+        {"subredditInfo": {"name": "Python"}, "description": "Pythons", "subscriberCount": 12, "iconUrl": "https://x/i.png"},
+        {"subredditInfo": None, "description": "no name", "subscriberCount": 1}]}}
+    with patch.object(gql_search, "gql_query", lambda *a, **k: data):
+        out = gql_search.fetch_gql_search_communities("python")
+    assert out["communities"] == [{"name": "Python", "title": "Python", "description": "Pythons", "subscribers": 12,
+                                   "over_18": False, "icon": "https://x/i.png"}] and out["after"] is None
+
+
+def test_search_routes_fall_back_on_waf_block():
+    posts = {"posts": [{"id": "p"}], "after": None}
+    with patch.object(search_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(search_routes, "fetch_gql_search_posts", return_value=posts), \
+         patch.object(search_routes, "hydrate_linked_posts"):
+        assert search_routes.fetch_search_posts("waf q1") == posts
+    users = {"users": [{"name": "u"}], "after": None}
+    with patch.object(search_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(search_routes, "fetch_gql_search_users", return_value=users):
+        assert search_routes.fetch_search_users("waf q2") == users
+    comms = {"communities": [{"name": "c"}], "after": None}
+    with patch.object(search_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(search_routes, "fetch_gql_search_communities", return_value=comms):
+        assert search_routes.fetch_search_communities("waf q3") == comms
+
+
+def test_search_posts_error_still_reported_when_graphql_fails():
+    with patch.object(search_routes, "reddit_get", return_value=waf_response()), \
+         patch.object(search_routes, "fetch_gql_search_posts", side_effect=RuntimeError("boom")):
+        with pytest.raises(UpstreamError) as e:
+            search_routes.fetch_search_posts("waf q4")
+    assert e.value.status == 403

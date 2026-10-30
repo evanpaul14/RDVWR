@@ -155,7 +155,7 @@
     <div class="user-card-body">
       <div class="user-card-name">u/${c(e.name)}</div>
       <div class="user-card-stats">
-        <span>${_(e.karma_post||0)}</span> post karma \xB7 <span>${_(e.karma_comment||0)}</span> comment karma
+        ${e.karma_total!=null?`<span>${_(e.karma_total)}</span> karma`:`<span>${_(e.karma_post||0)}</span> post karma \xB7 <span>${_(e.karma_comment||0)}</span> comment karma`}
         ${e.created_utc?` \xB7 joined ${G(e.created_utc)}`:""}
       </div>
     </div>

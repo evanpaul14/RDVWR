@@ -3,8 +3,9 @@ import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
+from gql_search import fetch_gql_search_posts, fetch_gql_search_users, fetch_gql_search_communities
 from helpers import (fetch_cache, CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
-                     hydrate_linked_posts, log, UpstreamError)
+                     hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("search", __name__)
 
@@ -54,6 +55,13 @@ def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='
     if after:
         params["after"] = after
     resp = reddit_get(url, params=params, timeout=timeout)
+    if is_waf_block(resp):
+        try:   # NSFW results are unavailable through the fallback (see gql_search)
+            feed = fetch_gql_search_posts(q, sort, t, sub, after)
+            hydrate_linked_posts(feed["posts"])
+            return feed
+        except Exception as e:
+            log.warning("gql post search failed q=%r: %s", q, e)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
@@ -88,6 +96,8 @@ def _search_things(q, kind, after, timeout):
     if after:
         params["after"] = after
     resp = reddit_get("https://www.reddit.com/search.json", params=params, timeout=timeout)
+    if is_waf_block(resp):
+        return None, None
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
@@ -96,6 +106,8 @@ def _search_things(q, kind, after, timeout):
 
 def fetch_search_communities(q, after='', timeout=10):
     things, next_after = _search_things(q, "t5", after, timeout)
+    if things is None:   # REST blocked
+        return fetch_gql_search_communities(q)
     results = [{
         "name":        d.get("display_name", ""),
         "title":       d.get("title", ""),
@@ -109,6 +121,8 @@ def fetch_search_communities(q, after='', timeout=10):
 
 def fetch_search_users(q, after='', timeout=10):
     things, next_after = _search_things(q, "t2", after, timeout)
+    if things is None:   # REST blocked
+        return fetch_gql_search_users(q, after)
     results = [{
         "name":          d.get("name", ""),
         "icon":          clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or "",

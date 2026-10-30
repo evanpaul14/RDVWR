@@ -179,36 +179,43 @@ def gql_post_to_rest(n):
     return p
 
 
-def _feed_page(subreddit, sort, t, after, timeout):
-    """(post ids, next cursor) for one SDUI page."""
-    variables = {"subredditName": subreddit, "sort": sort.upper()}
-    if t:
-        variables["time"] = t.upper()
-    if after:
-        variables["after"] = after
-    data = gql_query("SubredditFeedSdui", variables, timeout)
-    elements = ((data.get("data") or {}).get("subredditV3") or {}).get("elements")
+_POST_ID_RE = re.compile(r"-(t3_\w+)$")
+
+
+def _cell_post_id(cell):
+    """The post a feed cell belongs to: cell ids are base64("<Kind>Cell-t3_<post id>")."""
+    try:
+        m = _POST_ID_RE.search(base64.b64decode(cell.get("id") or "").decode())
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return m and m.group(1)
+
+
+def _feed_page(operation, root, variables, missing, timeout):
+    """(post ids, next cursor) for one SDUI page. `root` is the query's top field, whose
+    `elements` hold the cells; a missing target answers elements: null."""
+    data = gql_query(operation, variables, timeout)
+    elements = ((data.get("data") or {}).get(root) or {}).get("elements")
     if not elements:
-        raise UpstreamError("Subreddit not found", 404, "not_found")
+        raise UpstreamError(missing, 404, "not_found")
     ids = []
     for edge in elements.get("edges") or []:
         node = edge.get("node") or {}
         if node.get("adPayload"):
             continue
-        for cell in node.get("cells") or []:
-            if cell.get("__typename") == "TitleCell":
-                # the cell id is base64("TitleCell-t3_<post id>")
-                ids.append(base64.b64decode(cell["id"]).decode().split("-", 1)[1])
-    return ids, (elements.get("pageInfo") or {}).get("endCursor")
+        post_id = next((i for i in map(_cell_post_id, node.get("cells") or []) if i), None)
+        if post_id:
+            ids.append(post_id)
+    page = elements.get("pageInfo") or {}
+    return ids, (page.get("endCursor") or None) if page.get("hasNextPage") is not False else None
 
 
-def fetch_gql_feed(subreddit, sort, t="", after="", timeout=15):
-    """{"posts", "after"} for a single subreddit: the same dict fetch_feed returns, minus
-    link hydration. Raises UpstreamError when Reddit has no such subreddit and RuntimeError
-    when the app's queries stop answering."""
+def _listing(operation, root, variables, missing, after, timeout):
+    """{"posts", "after"}: ids from SDUI pages until FEED_LIMIT of them, then their posts."""
     ids, cursor = [], after or None
     for _ in range(MAX_FEED_PAGES):
-        page_ids, cursor = _feed_page(subreddit, sort, t, cursor, timeout)
+        page_ids, cursor = _feed_page(operation, root, {**variables, **({"after": cursor} if cursor else {})},
+                                      missing, timeout)
         ids += [i for i in page_ids if i not in ids]
         if not cursor or len(ids) >= FEED_LIMIT:
             break
@@ -216,12 +223,44 @@ def fetch_gql_feed(subreddit, sort, t="", after="", timeout=15):
         return {"posts": [], "after": cursor}
     data = gql_query("PostsByIds", {"ids": ids, **POSTS_FLAGS}, timeout)
     by_id = {n["id"]: n for n in (data.get("data") or {}).get("postsInfoByIds") or []
-             if n.get("__typename") == "SubredditPost"}
+             if n.get("postTitle") is not None}
+    return {"posts": posts_from_nodes([by_id[i] for i in ids if i in by_id]), "after": cursor}
+
+
+def posts_from_nodes(nodes):
+    """process_post()ed posts (NSFW-filtered like extract_posts) from GraphQL post nodes."""
     children = []
-    for i in ids:
-        if i in by_id:
-            try:
-                children.append({"kind": "t3", "data": gql_post_to_rest(by_id[i])})
-            except (KeyError, TypeError, AttributeError) as e:
-                log.warning("gql feed: skipping malformed post %s: %s", i, e)
-    return {"posts": extract_posts({"children": children}), "after": cursor}
+    for n in nodes:
+        try:
+            children.append({"kind": "t3", "data": gql_post_to_rest(n)})
+        except (KeyError, TypeError, AttributeError) as e:
+            log.warning("gql feed: skipping malformed post %s: %s", n.get("id"), e)
+    return extract_posts({"children": children})
+
+
+def _sorted(sort, t):
+    variables = {"sort": sort.upper()}
+    if t:
+        variables["time"] = t.upper()
+    return variables
+
+
+def fetch_gql_feed(subreddit, sort, t="", after="", timeout=15):
+    """{"posts", "after"} for a single subreddit (r/all and r/popular use the popular feed):
+    the same dict fetch_feed returns, minus link hydration. Raises UpstreamError when Reddit
+    has no such subreddit and RuntimeError when the app's queries stop answering."""
+    if subreddit.lower() in ("all", "popular"):
+        return _listing("PopularFeedSdui", "popularV3", _sorted(sort, t), "Subreddit not found", after, timeout)
+    return _listing("SubredditFeedSdui", "subredditV3", {"subredditName": subreddit, **_sorted(sort, t)},
+                    "Subreddit not found", after, timeout)
+
+
+def fetch_gql_frontpage(sort, t="", after="", timeout=15):
+    """The logged-out front page, as fetch_frontpage returns it: the app's popular feed."""
+    return _listing("PopularFeedSdui", "popularV3", _sorted(sort, t), "Front page not found", after, timeout)
+
+
+def fetch_gql_user_posts(username, sort="new", t="", after="", timeout=15):
+    """A user's submissions: {"posts", "after"}. Raises UpstreamError when there's no such user."""
+    return _listing("SubmittedPostsFeedSdui", "profileFeed", {"username": username, **_sorted(sort, t)},
+                    "User not found or profile is private", after, timeout)

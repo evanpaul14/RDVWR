@@ -159,6 +159,11 @@ def parallel(*fns):
         return [f.result() for f in futures]
 
 
+def is_waf_block(resp):
+    """Reddit's "Blocked" page: a 403 (or 429) that isn't JSON, unlike a private subreddit's."""
+    return resp.status_code in (403, 429) and "json" not in resp.headers.get("content-type", "")
+
+
 def hydrate_linked_posts(posts):
     """Batch-fetch full data (title/media) for plain link-posts that point at another
     Reddit post, so they can be rendered with the same embed as real crossposts."""

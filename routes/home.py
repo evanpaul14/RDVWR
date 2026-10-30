@@ -10,8 +10,9 @@ from media_detection import process_post, extract_posts
 import reddit_login
 from reddit_client import reddit_get, PROXIES
 from shreddit import _parse_shreddit_post
+from gql_posts import fetch_gql_frontpage
 from helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
-                     cached_json, error_response, hydrate_linked_posts, log, UpstreamError)
+                     cached_json, error_response, hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
 
@@ -24,6 +25,13 @@ def fetch_frontpage(sort, t='', after='', timeout=10):
     if after:
         params["after"] = after
     resp = reddit_get(f"https://www.reddit.com/{sort}.json", params=params, timeout=timeout)
+    if is_waf_block(resp):
+        try:   # Reddit blocks this IP's REST requests: the app's GraphQL popular feed still answers
+            feed = fetch_gql_frontpage(sort, t, after)
+            hydrate_linked_posts(feed["posts"])
+            return feed
+        except Exception as e:
+            log.warning("gql front page failed: %s", e)
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]

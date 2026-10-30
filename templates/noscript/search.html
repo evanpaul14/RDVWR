@@ -50,7 +50,7 @@
           <div class="user-card-icon">{% if u.icon %}<img src="{{ u.icon }}" alt="" loading="lazy">{% else %}<span>{{ (u.name or '?')[0] | upper }}</span>{% endif %}</div>
           <div class="user-card-body">
             <div class="user-card-name">u/{{ u.name }}</div>
-            <div class="user-card-stats"><span>{{ u.karma_post | fmtnum }}</span> post karma &middot; <span>{{ u.karma_comment | fmtnum }}</span> comment karma{% if u.created_utc %} &middot; joined {{ u.created_utc | fmtdate }}{% endif %}</div>
+            <div class="user-card-stats">{% if u.karma_total is defined %}<span>{{ u.karma_total | fmtnum }}</span> karma{% else %}<span>{{ u.karma_post | fmtnum }}</span> post karma &middot; <span>{{ u.karma_comment | fmtnum }}</span> comment karma{% endif %}{% if u.created_utc %} &middot; joined {{ u.created_utc | fmtdate }}{% endif %}</div>
           </div>
         </a>
       {% else %}

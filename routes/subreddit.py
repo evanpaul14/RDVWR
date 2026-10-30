@@ -11,7 +11,7 @@ from gql_subreddit import fetch_gql_about, fetch_gql_rules
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
-                     hydrate_linked_posts, log, UpstreamError)
+                     hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("subreddit", __name__)
 
@@ -119,11 +119,6 @@ def _subreddit_error_state(resp):
     return "error", f"Reddit returned {resp.status_code}"
 
 
-def _is_waf_block(resp):
-    """Reddit's "Blocked" page: a 403 (or 429) that isn't JSON, unlike a private subreddit's."""
-    return resp.status_code in (403, 429) and "json" not in resp.headers.get("content-type", "")
-
-
 def _subreddit_error(resp):
     """Classify a non-200 subreddit response into an UpstreamError."""
     state, message = _subreddit_error_state(resp)
@@ -187,7 +182,7 @@ def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout
         params["after"] = after
     resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=timeout)
     if resp.status_code != 200:
-        if _is_waf_block(resp) and '+' not in subreddit:
+        if is_waf_block(resp) and '+' not in subreddit:
             # Reddit blocks this IP's REST requests: the app's GraphQL endpoint still answers
             try:
                 feed = fetch_gql_feed(subreddit, sort, t, after)
@@ -238,7 +233,7 @@ def fetch_about(subreddit, timeout=10):
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}/about.json",
         params={"raw_json": 1}, timeout=timeout)
-    if _is_waf_block(resp):
+    if is_waf_block(resp):
         try:
             return fetch_gql_about(subreddit)
         except UpstreamError:
@@ -284,7 +279,7 @@ def fetch_rules(subreddit, timeout=10):
         resp = reddit_get(
             f"https://www.reddit.com/r/{subreddit}/about/rules.json",
             params={"raw_json": 1}, timeout=timeout)
-        if _is_waf_block(resp):
+        if is_waf_block(resp):
             return fetch_gql_rules(subreddit)
         if resp.status_code != 200:
             return []
