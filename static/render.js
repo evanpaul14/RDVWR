@@ -535,7 +535,7 @@ export function renderUserCard(u, idx) {
     <div class="user-card-body">
       <div class="user-card-name">u/${escHtml(u.name)}</div>
       <div class="user-card-stats">
-        <span>${fmtNum(u.karma_post||0)}</span> post karma · <span>${fmtNum(u.karma_comment||0)}</span> comment karma
+        ${u.karma_total != null ? `<span>${fmtNum(u.karma_total)}</span> karma` : `<span>${fmtNum(u.karma_post||0)}</span> post karma · <span>${fmtNum(u.karma_comment||0)}</span> comment karma`}
         ${u.created_utc ? ` · joined ${fmtDate(u.created_utc)}` : ''}
       </div>
     </div>

@@ -3,9 +3,10 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
 from gql_client import fetch_gql_user_about
+from gql_posts import fetch_gql_user_posts
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
-                     hydrate_linked_posts, log, UpstreamError)
+                     hydrate_linked_posts, is_waf_block, log, UpstreamError)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
 
@@ -125,14 +126,23 @@ def _archived(items, hydrate):
 
 
 def _fetch_listing_with_archive(username, after, do_live_request, parse_live_items,
-                                fetch_archived, hydrate=False):
+                                fetch_archived, hydrate=False, fetch_gql=None):
     """Shared control flow for a user's posts and comments listings: serve from Reddit's
     live listing, transparently falling back to the Arctic Shift archive on 403/404 or
     an empty result (both usually mean a suspended/shadowbanned/deleted account whose
-    data only survives in the archive). Returns (items, next_after, archived)."""
+    data only survives in the archive). When Reddit's WAF blocks the request instead,
+    `fetch_gql` (the app's GraphQL listing, returning {"posts", "after"}) is tried first.
+    Returns (items, next_after, archived)."""
     if after.startswith("arc:"):
         return (*_archived(fetch_archived(FEED_LIMIT, before=int(after[4:])), hydrate), True)
     resp = do_live_request()
+    if fetch_gql and is_waf_block(resp):
+        try:
+            feed = fetch_gql()
+            hydrate_linked_posts(feed["posts"])
+            return feed["posts"], feed["after"], False
+        except Exception as e:
+            log.warning("gql listing failed for %s: %s", username, e)
     if resp.status_code in (403, 404):
         try:
             items = fetch_archived(FEED_LIMIT)
@@ -176,6 +186,7 @@ def fetch_user_posts(username, sort='new', t='', after='', timeout=10):
         parse_live_items=extract_posts,
         fetch_archived=lambda limit, before=None: _fetch_archived_posts(username, limit, before=before),
         hydrate=True,
+        fetch_gql=lambda: fetch_gql_user_posts(username, sort, t, after),
     )
     return {"posts": posts, "after": next_after, **({"archived": True} if archived else {})}
 
