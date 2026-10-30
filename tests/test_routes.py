@@ -14,7 +14,7 @@ from unittest.mock import patch, MagicMock
 import helpers
 import reddit_client
 from app import app
-from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes, users as users_routes
+from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes, users as users_routes, subreddit as subreddit_routes
 
 
 # ── Mock helpers ──────────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ def no_oauth(monkeypatch):
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
     helpers._view_cache.clear()
     helpers._fetch_cache.clear()
+    monkeypatch.setattr("routes.subreddit._moderators_blocked_until", 0.0)
 
 
 @pytest.fixture(autouse=True)
@@ -504,6 +505,17 @@ class TestSubredditSearch:
         mock_get.return_value = _session_get(_autocomplete_listing([f"sub{i}" for i in range(20)]))
         resp = client.get("/api/subreddit-search?q=sub")
         assert len(resp.get_json()["subs"]) <= 8
+
+
+class TestModeratorsBlock:
+    @patch.object(reddit_client.SESSION, "get")
+    def test_403_pauses_lookups_for_other_subreddits(self, mock_get, client, monkeypatch):
+        monkeypatch.setattr(subreddit_routes, "_moderators_blocked_until", 0.0)
+        mock_get.return_value = _session_get(status_code=403)
+        assert client.get("/api/r/aaa/about/moderators").get_json() == {"moderators": []}
+        assert client.get("/api/r/bbb/about/moderators").get_json() == {"moderators": []}
+        assert mock_get.call_count == 1
+        monkeypatch.setattr(subreddit_routes, "_moderators_blocked_until", 0.0)
 
 
 # ── /api/user/<username>/about ───────────────────────────────────────────────
