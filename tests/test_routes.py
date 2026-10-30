@@ -14,7 +14,7 @@ from unittest.mock import patch, MagicMock
 import helpers
 import reddit_client
 from app import app
-from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes
+from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes, users as users_routes
 
 
 # ── Mock helpers ──────────────────────────────────────────────────────────────
@@ -74,6 +74,14 @@ def no_gql(monkeypatch):
     def boom(*a, **kw):
         raise RuntimeError("GraphQL comment fetch failed")
     monkeypatch.setattr(comments_routes, "fetch_gql_comments", boom)
+
+
+@pytest.fixture(autouse=True)
+def no_gql_user(monkeypatch):
+    """User about tries GraphQL first; fail it by default so tests don't hit the network."""
+    def boom(*a, **kw):
+        raise RuntimeError("GraphQL user fetch failed")
+    monkeypatch.setattr(users_routes, "fetch_gql_user_about", boom)
 
 
 @pytest.fixture
@@ -519,6 +527,37 @@ class TestUserAbout:
         mock_get.return_value = _session_get(status_code=404)
         resp = client.get("/api/user/doesnotexist_xyzabc/about")
         assert resp.status_code == 404
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_graphql_answers_without_touching_rest(self, mock_get, client, monkeypatch):
+        about = {"name": "gqluser", "karma_total": 7}
+        monkeypatch.setattr(users_routes, "fetch_gql_user_about", lambda *a, **kw: about)
+        resp = client.get("/api/user/gqluser/about")
+        assert resp.get_json() == about
+        mock_get.assert_not_called()
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_unknown_to_graphql_falls_back_to_rest(self, mock_get, client, monkeypatch):
+        monkeypatch.setattr(users_routes, "fetch_gql_user_about", lambda *a, **kw: None)
+        mock_get.return_value = _session_get({"data": {"name": "restuser", "link_karma": 1, "comment_karma": 2}})
+        assert client.get("/api/user/restuser/about").get_json()["name"] == "restuser"
+
+    def test_graphql_profile_mapping(self):
+        import gql_client
+        node = {"name": "spez", "isGilded": True, "isEmployee": True, "snoovatarIcon": None,
+                "karma": {"fromPosts": 184704, "fromComments": 756554.0, "total": 941258.0},
+                "profile": {"createdAt": "2005-06-06T04:00:00.000000+0000", "publicDescriptionText": "Reddit CEO",
+                            "styles": {"icon": "https://styles.redditmedia.com/a.png",
+                                       "legacyIcon": {"url": "https://styles.redditmedia.com/b.png"}}}}
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = {"data": {"redditorInfoByName": node}}
+        with patch.object(gql_client, "_post", return_value=resp):
+            about = gql_client.fetch_gql_user_about("spez")
+            assert (about["karma_post"], about["karma_comment"], about["karma_total"]) == (184704, 756554, 941258)
+            assert about["description"] == "Reddit CEO" and about["is_premium"] and about["is_employee"]
+            assert about["icon"].endswith("b.png") and about["created_utc"] == 1118030400
+            resp.json.return_value = {"data": {"redditorInfoByName": None}}
+            assert gql_client.fetch_gql_user_about("nobody") is None
 
 
 # ── /api/user/<username>/posts ───────────────────────────────────────────────

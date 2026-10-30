@@ -2,6 +2,7 @@
 from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
+from gql_client import fetch_gql_user_about
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, log, UpstreamError)
@@ -41,6 +42,14 @@ def get_posts_live_info():
 
 @fetch_cache(CACHE_TTL_FEED)
 def fetch_user_about(username, timeout=10):
+    """GraphQL first: Reddit's WAF 403s the REST endpoint for the device tokens far more
+    often. REST is the fallback, and the only source of the moderator / verified badges."""
+    try:
+        about = fetch_gql_user_about(username, timeout=timeout)
+        if about:
+            return about
+    except Exception as e:
+        log.warning("gql user about failed user=%s: %s", username, e)
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/about.json",
         params={"raw_json": 1}, timeout=timeout)

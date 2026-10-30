@@ -217,3 +217,46 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
                              "children": [encode_cursor(more["cursor"])],
                              "count": more.get("count", 0), "depth": entry.get("depth", 0)})
     return roots, author_fullnames
+
+
+def fetch_gql_user_about(username, timeout=10):
+    """A user's profile as the dict routes/users.fetch_user_about builds, or None when
+    Reddit has no such user. The app's profile query has no moderator / verified / award-karma
+    fields, so those come back False / 0."""
+    variables = {"name": username, "includePremiumAvatarTreatment": False}
+    for attempt in range(2):
+        body = {"operationName": "UserProfile", "variables": variables,
+                "extensions": {"persistedQuery": {"version": 1, "sha256Hash": _hashes["UserProfile"]}}}
+        resp = _post(body, timeout)
+        data = resp.json() if resp.status_code == 200 else {}
+        if not data.get("errors") and "data" in data:
+            break
+        log.warning("gql user about failed user=%s status=%s errors=%s",
+                    username, resp.status_code, (data.get("errors") or [{}])[0].get("message"))
+        if attempt == 1 or not _refresh_hashes():
+            _dispatch_workflow()
+            raise RuntimeError("GraphQL user fetch failed")
+    user = data["data"].get("redditorInfoByName")
+    if not user:
+        return None
+    karma = user.get("karma") or {}
+    profile = user.get("profile") or {}
+    styles = profile.get("styles") or {}
+    icon = ((styles.get("legacyIcon") or {}).get("url") or styles.get("icon")
+            or (user.get("snoovatarIcon") or {}).get("url") or "")
+    post, comment = int(karma.get("fromPosts") or 0), int(karma.get("fromComments") or 0)
+    return {
+        "name":                user["name"],
+        "icon":                clean_url(icon),
+        "description":         profile.get("publicDescriptionText") or "",
+        "karma_post":          post,
+        "karma_comment":       comment,
+        "karma_award":         0,
+        "karma_total":         int(karma.get("total") or post + comment),
+        "created_utc":         _epoch(profile.get("createdAt")) or 0,
+        "is_premium":          bool(user.get("isGilded")),
+        "is_mod":              False,
+        "is_employee":         bool(user.get("isEmployee")),
+        "verified":            False,
+        "has_verified_email":  False,
+    }
