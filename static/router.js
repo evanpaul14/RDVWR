@@ -1,4 +1,5 @@
 import { settings } from './settings.js';
+import { stripBase } from './utils.js';
 
 const SORTS = new Set(['hot','new','top','rising','controversial','best']);
 
@@ -6,7 +7,7 @@ function _qs(path) {
   return new URLSearchParams(path.includes('?') ? path.split('?')[1] : location.search.slice(1));
 }
 
-export function parseRoute(path=location.pathname) {
+export function parseRoute(path=stripBase(location.pathname)) {
   const pathname = path.split('?')[0];
   const mDupes = pathname.match(/^\/r\/([^\/]+)\/duplicates\/([^\/]+)/i);
   if (mDupes) {

@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { escHtml, fmtDate, errState } from './utils.js';
+import { escHtml, fmtDate, errState, BASE } from './utils.js';
 import { setMainOpen } from './feed.js';
 
 const feed    = document.getElementById('feed');
@@ -10,7 +10,7 @@ export async function loadWikiPage(sub, page) {
   state.wikiMode = true; state.afterToken = null;
   setMainOpen(`https://www.reddit.com/r/${encodeURIComponent(sub)}/wiki/${encodeURIComponent(page)}`);
   feed.innerHTML = '<div class="state"><div class="state-icon">⌗</div><div class="state-title">Loading…</div></div>';
-  sortBar.innerHTML = `<a class="sort-btn" href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
+  sortBar.innerHTML = `<a class="sort-btn" href="${BASE}/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">← r/${escHtml(sub)}</a>`;
   sortBar.style.display = 'flex';
   document.title = `${page} — ${sub} wiki — RDVWR`;
   try {
@@ -23,7 +23,7 @@ export async function loadWikiPage(sub, page) {
     feed.innerHTML = `
       <div class="wiki-page">
         <div class="wiki-header">
-          <span class="wiki-sub"><a href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a></span>
+          <span class="wiki-sub"><a href="${BASE}/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a></span>
           <span class="wiki-sep">/</span>
           <span class="wiki-title">wiki/${escHtml(page)}</span>
         </div>

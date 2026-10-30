@@ -8,6 +8,7 @@ class/id attrs can survive — and otherwise renders the way the JS markdown ren
 hidden, and bare image links show the image."""
 import re
 import html as html_lib
+from base_path import app_path
 from html.parser import HTMLParser
 from urllib.parse import quote as url_quote, urlparse, parse_qs, urlencode
 
@@ -45,8 +46,8 @@ def local_reddit_path(href):
     search = _SUB_SEARCH_RE.match(path)
     if search and query.get('q'):
         restrict = query.get('restrict_sr', [''])[0] in ('on', '1', 'true')
-        return '/search?' + urlencode({'q': query['q'][0], **({'sub': search.group(1)} if restrict else {})})
-    return path
+        return app_path('/search?' + urlencode({'q': query['q'][0], **({'sub': search.group(1)} if restrict else {})}))
+    return app_path(path)
 
 
 # Plain-text "u/name" / "r/name" mentions and literal `[label](target)` markdown links
@@ -83,7 +84,7 @@ def _linkify_mentions(text):
             kind, name = m.group('kind'), m.group('name')
             if kind == 'r' and '-' in name:
                 continue
-            path = f"/{'user' if kind == 'u' else 'r'}/{name}"
+            path = app_path(f"/{'user' if kind == 'u' else 'r'}/{name}")
             piece = f'<a href="{path}">{kind}/{html_lib.escape(name)}</a>'
         out.append(html_lib.escape(text[last:m.start()]))
         out.append(piece)
@@ -102,7 +103,7 @@ def _inline_img_src(href):
     """(src, is_third_party) for a link that should render as an inline image, else None."""
     parsed = urlparse(href)
     if parsed.hostname in _INLINE_IMG_HOSTS and _INLINE_IMG_EXT_RE.search(parsed.path):
-        return '/api/img?url=' + url_quote(href, safe=''), False
+        return app_path('/api/img?url=' + url_quote(href, safe='')), False
     m = _GIPHY_PAGE_RE.match(href)
     if m:
         return f'https://media.giphy.com/media/{m.group(1)}/giphy.gif', True

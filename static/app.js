@@ -7,7 +7,7 @@ import { renderCommentTree } from './render.js';
 import { settings, saveSettings, personalizedHomeMode, applySettings, DEFAULTS } from './settings.js';
 import { clearVisited } from './visited.js';
 import { _markPostVisited, applyVisitedHiding, clearVisitedHiding } from './visited-ui.js';
-import { escHtml, fmtNum, setActiveButton, TOUCH_MOVE_THRESHOLD } from './utils.js';
+import { escHtml, fmtNum, setActiveButton, TOUCH_MOVE_THRESHOLD, BASE, appPath, stripBase } from './utils.js';
 import { parseRoute } from './router.js';
 import { openLightbox, closeLightbox } from './lightbox.js';
 import { hideAllAutocomplete, initAutocomplete } from './autocomplete.js';
@@ -40,7 +40,7 @@ import { closeSidebar, toggleSidebar, toggleUserSidebar } from './sidebar.js';
   window.fetch = (input, init = {}) => {
     const m = document.cookie.match(/(?:^|; )rdvwr_csrf=([^;]+)/);
     if (m) init = { ...init, headers: { ...(init.headers || {}), 'X-Rdvwr-Fetch': m[1] } };
-    return nativeFetch(input, init);
+    return nativeFetch(typeof input === 'string' ? appPath(input) : input, init);
   };
 })();
 
@@ -55,15 +55,15 @@ const postView          = document.getElementById('post-view');
 const pvContent         = document.getElementById('pv-content');
 // ── Navigation ────────────────────────────────────────────────────────────────
 export function navigateOrOpen(path, e) {
-  if (e && (e.ctrlKey || e.metaKey || e.button === 1)) { window.open(path, '_blank'); return; }
+  if (e && (e.ctrlKey || e.metaKey || e.button === 1)) { window.open(appPath(path), '_blank'); return; }
   navigate(path);
 }
 
 export function navigate(path, { replace=false }={}) {
   const pvScrollTop = document.getElementById('pv-scroll')?.scrollTop || 0;
   history.replaceState({ ...(history.state||{}), scrollY: window.scrollY, pvScrollTop }, '', location.href);
-  if (replace) history.replaceState(null,'',path);
-  else         history.pushState(null,'',path);
+  if (replace) history.replaceState(null,'',appPath(path));
+  else         history.pushState(null,'',appPath(path));
   renderRoute(parseRoute(path));
 }
 
@@ -285,7 +285,7 @@ function interceptNavLink(a, e) {
     const url = new URL(href, location.origin);
     if (url.origin !== location.origin) return false;
     e.preventDefault();
-    navigateOrOpen(url.pathname + url.search, e);
+    navigateOrOpen(stripBase(url.pathname) + url.search, e);
     return true;
   } catch { return false; }
 }
@@ -753,7 +753,7 @@ document.addEventListener('touchstart', e => {
     _longPressTimer = null;
     _longPressTriggered = true;
     if (navigator.vibrate) navigator.vibrate(40);
-    window.open(titleLink.dataset.nav, '_blank');
+    window.open(appPath(titleLink.dataset.nav), '_blank');
   }, 550);
 }, { passive: true });
 document.addEventListener('touchmove', e => {

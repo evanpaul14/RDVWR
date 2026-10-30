@@ -1,6 +1,6 @@
 import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl, isLocalUrl } from './utils.js';
+import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl, isLocalUrl, BASE } from './utils.js';
 
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
@@ -30,7 +30,7 @@ function _dlOk(url) {
   try { return _DL_HOSTS.has(new URL(realMediaUrl(url)).hostname); } catch { return false; }
 }
 function _dlHref(url, filename) {
-  return `/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
+  return `${BASE}/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
 }
 function _dlFilename(url) {
   try { return new URL(realMediaUrl(url)).pathname.split('/').filter(Boolean).pop() || 'media'; }
@@ -64,7 +64,7 @@ function _ensureHls() {
     // vendored build) doesn't keep serving stale bytes to browsers that already
     // cached this URL under the 1-week static max-age.
     const v = window.__HLS_JS_V__;
-    s.src = v ? `/static/hls.min.js?v=${encodeURIComponent(v)}` : '/static/hls.min.js';
+    s.src = v ? `${BASE}/static/hls.min.js?v=${encodeURIComponent(v)}` : `${BASE}/static/hls.min.js`;
     s.onload = resolve;
     s.onerror = reject;
     document.head.appendChild(s);

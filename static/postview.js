@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl } from './utils.js';
+import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl, BASE } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { accountActive, voteCtlHtml } from './vote.js';
@@ -37,7 +37,7 @@ function buildDownloadBtn(p) {
   let url = '', filename = '';
   if (p.is_video && p.video_url) {
     if (p.hls_url) {
-      const href = `/api/download/reddit-video?hls=${encodeURIComponent(realMediaUrl(p.hls_url))}&filename=${encodeURIComponent(p.id + '.mp4')}`;
+      const href = `${BASE}/api/download/reddit-video?hls=${encodeURIComponent(realMediaUrl(p.hls_url))}&filename=${encodeURIComponent(p.id + '.mp4')}`;
       return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(p.id + '.mp4')}" title="Download video">${_DL_SVG} download</a>`;
     }
     url = p.video_url; filename = `${p.id}.mp4`;
@@ -48,7 +48,7 @@ function buildDownloadBtn(p) {
     url = rawImg; filename = `${p.id}.${_pvDlExt(rawImg)}`;
   }
   if (!url || !_pvDlOk(url)) return '';
-  const href = `/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
+  const href = `${BASE}/api/download?url=${encodeURIComponent(realMediaUrl(url))}&filename=${encodeURIComponent(filename)}`;
   return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(filename)}" title="Download media">${_DL_SVG} download</a>`;
 }
 
@@ -319,7 +319,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
   pvScroll.scrollTop = 0;
   openPostView(skipAnim);
 
-  pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`;
+  pvBreadcrumb.innerHTML = `<a href="${BASE}/r/${escHtml(sub)}" data-nav="/r/${escHtml(sub)}">r/${escHtml(sub)}</a>`;
   pvOpen.href = '#';
 
   try {
@@ -341,7 +341,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
     const p = data.post;
     rememberPost(p);
     pvOpen.href = p.permalink;
-    pvBreadcrumb.innerHTML = `<a href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
+    pvBreadcrumb.innerHTML = `<a href="${BASE}/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
     document.title = p.title + ' — RDVWR';
 
     const titleClass = 'pv-title'+(p.is_self?' is-italic':'');
@@ -365,13 +365,13 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
     const articleUrl = settings.layout === 'minimal' ? '' : linksOut ? mediaLinkHref(p) : isArticle ? p.url : '';
 
     pvContent.innerHTML = `
-      <a class="pv-sub-link" href="/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
+      <a class="pv-sub-link" href="${BASE}/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>
       ${pvBadges ? `<div class="post-meta-top" style="margin-bottom:10px">${pvBadges}</div>` : ''}
       <h1 class="${titleClass}">${escHtml(p.title)}</h1>
       ${settings.layout === 'minimal' ? `
       <div class="pv-meta">
         <span class="up">▲ ${fmtNum(p.score)}</span>
-        <a class="meta-item link" href="/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
+        <a class="meta-item link" href="${BASE}/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         <button class="share-btn min-share" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">share</button>
@@ -383,10 +383,10 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
           ? voteCtlHtml('t3_' + p.id, p.likes, p.score, `<span class="up vote-score">${fmtNum(p.score)}</span>`)
           : `<span class="up">▲ ${fmtNum(p.score)}</span>`}
         <span>${p.upvote_ratio}% upvoted</span>
-        <a class="meta-item link" href="/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
+        <a class="meta-item link" href="${BASE}/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
-        ${!p.is_self && !p.crosspost_from && !p.linked_post ? `<a class="meta-item link" href="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
+        ${!p.is_self && !p.crosspost_from && !p.linked_post ? `<a class="meta-item link" href="${BASE}/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}
         <button class="share-btn" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="3" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="12" cy="13" r="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="4" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 3.87 5.5 7.13M5.5 8.87l5 3.26" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           share
@@ -516,7 +516,7 @@ function _showGalleryDlModal(gallery, postId) {
   modal.querySelector('.gdl-download-btn').addEventListener('click', () => {
     const urls = [...modal.querySelectorAll('.gdl-check:checked')].map(c => c.dataset.url).join(',');
     if (!urls) return;
-    window.location.href = `/api/download/gallery?urls=${encodeURIComponent(urls)}&name=${encodeURIComponent(postId)}`;
+    window.location.href = `${BASE}/api/download/gallery?urls=${encodeURIComponent(urls)}&name=${encodeURIComponent(postId)}`;
   });
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 

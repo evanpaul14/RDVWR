@@ -6,6 +6,7 @@ import time
 import threading
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
+from base_path import app_path
 from reddit_client import SESSION, HEADERS
 from helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
                      cached_json, error_response, server_cache, log)
@@ -67,7 +68,7 @@ def get_redgifs_token():
 def _redgifs_proxied(url):
     if not url: return None
     fname = url.rsplit("/", 1)[-1]
-    return f"/api/redgifs/media/{fname}"
+    return app_path(f"/api/redgifs/media/{fname}")
 
 @bp.route("/api/redgifs/<gif_id>")
 def get_redgifs(gif_id):

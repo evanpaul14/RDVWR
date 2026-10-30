@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="RDVWR">
 <title>{{ page_title or 'RDVWR' }}</title>
 <meta name="referrer" content="no-referrer">
+<meta name="rdvwr-base" content="{{ base_path }}">
 {% if proxy_media %}<meta name="rdvwr-proxy-media" content="1">{% endif %}
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 <link rel="alternate icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
