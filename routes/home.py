@@ -10,12 +10,13 @@ from media_detection import process_post, extract_posts
 import reddit_login
 from reddit_client import reddit_get, PROXIES
 from shreddit import _parse_shreddit_post
-from helpers import (CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
+from helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
                      cached_json, error_response, hydrate_linked_posts, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_frontpage(sort, t='', after='', timeout=10):
     """Reddit's anonymous (logged-out) front page: {"posts", "after"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}

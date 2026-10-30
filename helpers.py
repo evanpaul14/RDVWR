@@ -1,6 +1,7 @@
 """Shared constants, caching, and request helpers used across route modules."""
 import os
 import re
+import copy
 import json
 import time
 import secrets
@@ -370,6 +371,34 @@ def server_cache(ttl):
                 with _inflight_lock:
                     _inflight.pop(key, None)
                 leader.set()
+        return wrapper
+    return decorator
+
+
+_fetch_cache = TTLCache(500)
+
+def fetch_cache(ttl, empty_ttl=None, skip=None):
+    """Memoize a shared fetch_* helper's return value in-process for `ttl` seconds, so the
+    server-rendered pages get the same caching the /api/* endpoints have. `timeout` is left
+    out of the key; calls made as the logged-in account bypass the cache. Exceptions are
+    never cached. A falsy result is held for `empty_ttl` instead when given (for best-effort
+    fetchers that return [] on failure), and `skip(result)` can veto caching. Callers get a
+    private copy, so they can mutate what they receive."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if reddit_login.request_account_active():
+                return f(*args, **kwargs)
+            key = (f.__name__, args, tuple(sorted((k, v) for k, v in kwargs.items() if k != 'timeout')))
+            hit = _fetch_cache.get(key)
+            if hit is not _CACHE_MISS:
+                return copy.deepcopy(hit)
+            result = f(*args, **kwargs)
+            if not (skip and skip(result)):
+                hold = empty_ttl if (empty_ttl is not None and not result) else ttl
+                if hold:
+                    _fetch_cache.set(key, copy.deepcopy(result), hold)
+            return result
         return wrapper
     return decorator
 

@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
-from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
+from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, log, UpstreamError)
 from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
@@ -39,6 +39,7 @@ def get_posts_live_info():
         return jsonify({})
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_user_about(username, timeout=10):
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/about.json",
@@ -155,6 +156,7 @@ def _listing_params(sort, t, after):
     return params
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_user_posts(username, sort='new', t='', after='', timeout=10):
     """A user's submissions: {"posts", "after"}, plus "archived": True when served
     from the Arctic Shift archive."""
@@ -173,6 +175,7 @@ def _parse_comment_listing(listing):
     return [_normalize_comment(c["data"]) for c in listing["children"] if c.get("kind") == "t1"]
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_user_comments(username, sort='new', t='', after='', timeout=10):
     """A user's comments: {"comments", "after"}, plus "archived" like fetch_user_posts."""
     comments, next_after, archived = _fetch_listing_with_archive(
@@ -209,6 +212,7 @@ def get_user_comments_api(username):
     return _user_listing_endpoint(fetch_user_comments, username)
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
     """A user's mixed posts+comments feed: {"items": [{"type", "data"}], "after"}, plus
     "archived": True when served from the Arctic Shift archive.

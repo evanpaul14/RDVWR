@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
-from helpers import (CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
+from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, log, UpstreamError)
@@ -17,6 +17,7 @@ bp = Blueprint("subreddit", __name__)
 _WIDGET_KINDS = {"community-list", "calendar", "image", "textarea", "button", "menu"}
 
 
+@fetch_cache(CACHE_TTL_SUBREDDIT, empty_ttl=60)
 def fetch_widgets(subreddit, timeout=10):
     """A subreddit's sidebar widgets, in display order. Best-effort: [] on any failure."""
     try:
@@ -166,6 +167,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
         return [], None
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout=10):
     """A subreddit (or a+b combined) listing: {"posts", "after"}. Raises UpstreamError
     (with .state set, see _subreddit_error_state) when Reddit refuses it."""
@@ -212,6 +214,7 @@ def get_posts(subreddit):
         return error_response(500)
 
 
+@fetch_cache(CACHE_TTL_FEED)
 def fetch_about(subreddit, timeout=10):
     """A subreddit's header info. `sidebar` is the raw markdown the JS sidebar renders;
     `sidebar_html` is Reddit's pre-rendered, sanitized copy for the noscript page."""
@@ -250,6 +253,7 @@ def get_about(subreddit):
         return error_response(500)
 
 
+@fetch_cache(CACHE_TTL_SUBREDDIT)
 def fetch_rules(subreddit, timeout=10):
     """Best-effort: [] on any failure."""
     try:
@@ -272,6 +276,7 @@ def get_rules(subreddit):
     return cached_json({"rules": fetch_rules(subreddit)}, CACHE_TTL_SUBREDDIT)
 
 
+@fetch_cache(CACHE_TTL_SUBREDDIT, empty_ttl=60)
 def fetch_moderators(subreddit, timeout=10):
     """Best-effort: [] on any failure."""
     try:
