@@ -178,6 +178,26 @@ def _post(body, timeout):
     return resp
 
 
+def gql_query(operation, variables, timeout=15):
+    """The response body of a persisted query, healing a rotated hash like fetch_gql_comments
+    does. Raises RuntimeError when Reddit still rejects it; a body that has `errors` but also
+    carries data for a missing target (NOT_FOUND) is returned so the caller can classify it."""
+    for attempt in range(2):
+        body = {"operationName": operation, "variables": variables,
+                "extensions": {"persistedQuery": {"version": 1, "sha256Hash": _hashes[operation]}}}
+        resp = _post(body, timeout)
+        data = resp.json() if resp.status_code == 200 else {}
+        errors = data.get("errors") or []
+        if "data" in data and (not errors or all((e.get("extensions") or {}).get("code") == "NOT_FOUND"
+                                                 for e in errors)):
+            return data
+        log.warning("gql %s failed status=%s errors=%s", operation, resp.status_code,
+                    (errors or [{}])[0].get("message"))
+        if attempt == 1 or not _refresh_hashes():
+            _dispatch_workflow()
+            raise RuntimeError(f"GraphQL {operation} failed")
+
+
 def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, timeout=15):
     """(roots, author_fullnames): a post's comment tree, nested like fetch_comments builds it.
     "more" stubs carry one encoded cursor in `children`; pass the decoded cursor back as

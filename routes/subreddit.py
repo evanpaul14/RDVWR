@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
+from gql_posts import fetch_gql_feed
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
@@ -117,6 +118,11 @@ def _subreddit_error_state(resp):
     return "error", f"Reddit returned {resp.status_code}"
 
 
+def _is_waf_block(resp):
+    """Reddit's "Blocked" page: a 403 (or 429) that isn't JSON, unlike a private subreddit's."""
+    return resp.status_code in (403, 429) and "json" not in resp.headers.get("content-type", "")
+
+
 def _subreddit_error(resp):
     """Classify a non-200 subreddit response into an UpstreamError."""
     state, message = _subreddit_error_state(resp)
@@ -180,6 +186,16 @@ def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout
         params["after"] = after
     resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=timeout)
     if resp.status_code != 200:
+        if _is_waf_block(resp) and '+' not in subreddit:
+            # Reddit blocks this IP's REST requests: the app's GraphQL endpoint still answers
+            try:
+                feed = fetch_gql_feed(subreddit, sort, t, after)
+                hydrate_linked_posts(feed["posts"])
+                return feed
+            except UpstreamError:
+                raise
+            except Exception as e:
+                log.warning("gql feed failed sub=%s: %s", subreddit, e)
         if quarantine_opt_in and _subreddit_error_state(resp)[0] == "quarantined":
             posts, fallback_after = _quarantine_fallback_posts(subreddit, after or None)
             if posts:
