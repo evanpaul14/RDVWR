@@ -84,7 +84,7 @@ export function fmtNum(n) {
   return String(n);
 }
 export function timeAgo(utc) {
-  const s = Math.floor(Date.now()/1000) - utc;
+  const s = Math.round(Date.now()/1000 - utc);
   if (s < 60)       return `${s}s`;
   if (s < 3600)     return `${Math.floor(s/60)}m`;
   if (s < 86400)    return `${Math.floor(s/3600)}h`;
