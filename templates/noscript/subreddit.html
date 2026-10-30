@@ -24,7 +24,7 @@
   {{ ui.ctx_header('r/' ~ page.sub) }}
 {% endif %}
 
-{% if (about and (about.sidebar_html or about.description)) or page.rules or page.widgets or page.mods %}
+{% if (about and (about.sidebar_html or about.description)) or page.rules or page.widgets %}
   <div class="ns-about-panel">
     {% if about and (about.sidebar_html or about.description) %}
       <details class="ns-about"><summary>About community</summary>
@@ -37,11 +37,6 @@
       </details>
     {% endif %}
     {% for w in page.widgets %}{% include 'noscript/widget.html' %}{% endfor %}
-    {% if page.mods %}
-      <details class="ns-about"><summary>Moderators ({{ page.mods | length }})</summary>
-        <div class="sidebar-section"><div class="sidebar-mods">{% for m in page.mods %}<a class="sidebar-mod-name" href="/user/{{ m.name }}">u/{{ m.name }}</a>{% endfor %}</div></div>
-      </details>
-    {% endif %}
   </div>
 {% endif %}
 

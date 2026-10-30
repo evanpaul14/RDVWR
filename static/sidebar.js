@@ -75,15 +75,13 @@ export async function toggleSidebar(sub) {
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
   try {
-    const [, aboutRes, rulesRes, modsRes, widgetsRes] = await Promise.all([waitForMdLibs(),
+    const [, aboutRes, rulesRes, widgetsRes] = await Promise.all([waitForMdLibs(),
       fetch(`/api/r/${encodeURIComponent(sub)}/about`),
       fetch(`/api/r/${encodeURIComponent(sub)}/rules`),
-      fetch(`/api/r/${encodeURIComponent(sub)}/about/moderators`),
       fetch(`/api/r/${encodeURIComponent(sub)}/widgets`),
     ]);
     const about = aboutRes.ok ? await aboutRes.json() : {};
     const rulesData = rulesRes.ok ? await rulesRes.json() : {rules:[]};
-    const modsData = modsRes.ok ? await modsRes.json() : {moderators:[]};
     const widgetsData = widgetsRes.ok ? await widgetsRes.json() : {widgets:[]};
 
     let html = '';
@@ -104,18 +102,6 @@ export async function toggleSidebar(sub) {
     }
     if (widgetsData.widgets?.length) {
       html += widgetsData.widgets.map(renderWidget).join('');
-    }
-    if (modsData.moderators?.length) {
-      const visible = modsData.moderators.slice(0, 12);
-      const modList = visible.map(m =>
-        `<a class="sidebar-mod-name" href="/user/${escHtml(m.name)}" data-nav="/user/${escHtml(m.name)}">u/${escHtml(m.name)}</a>`
-      ).join('');
-      const more = modsData.moderators.length > 12
-        ? `<span class="sidebar-mod-more">+${modsData.moderators.length - 12} more</span>` : '';
-      html += `<div class="sidebar-section">
-        <div class="sidebar-section-title">Moderators</div>
-        <div class="sidebar-mods">${modList}${more}</div>
-      </div>`;
     }
     if (!html) html = '<div style="font-family:var(--mono);font-size:11px;color:var(--tx3)">No sidebar content.</div>';
     _sidebarCache.set(sub, { html, ts: Date.now() });

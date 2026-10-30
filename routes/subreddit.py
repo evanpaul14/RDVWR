@@ -1,13 +1,11 @@
-"""Subreddit feed, about/rules/moderators/widgets, duplicates, wiki, and multireddits."""
+"""Subreddit feed, about/rules/widgets, duplicates, wiki, and multireddits."""
 import re
-import time
 import html as html_lib
 import requests
 from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url
 from reddit_html import clean_reddit_html
 from reddit_client import reddit_get
-import reddit_login
 from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
@@ -276,42 +274,6 @@ def fetch_rules(subreddit, timeout=10):
 @server_cache(CACHE_TTL_SUBREDDIT)
 def get_rules(subreddit):
     return cached_json({"rules": fetch_rules(subreddit)}, CACHE_TTL_SUBREDDIT)
-
-
-# Reddit answers 403 for moderator lists to every anonymous device token (only a logged-in
-# account gets them), so one 403 pauses the lookup for all subreddits instead of every page
-# load spending an upstream call on it.
-MODERATORS_BLOCK_SECONDS = 1800
-_moderators_blocked_until = 0.0
-
-
-@fetch_cache(CACHE_TTL_SUBREDDIT, empty_ttl=60)
-def fetch_moderators(subreddit, timeout=10):
-    """Best-effort: [] on any failure."""
-    global _moderators_blocked_until
-    as_account = reddit_login.request_account_active()
-    if not as_account and time.time() < _moderators_blocked_until:
-        return []
-    try:
-        resp = reddit_get(
-            f"https://www.reddit.com/r/{subreddit}/about/moderators.json",
-            params={"raw_json": 1}, timeout=timeout)
-        if resp.status_code == 403 and not as_account:
-            _moderators_blocked_until = time.time() + MODERATORS_BLOCK_SECONDS
-        if resp.status_code != 200:
-            return []
-        children = resp.json().get("data", {}).get("children", [])
-        return [{"name": m.get("name", "")} for m in children if m.get("name")]
-    except Exception as e:
-        log.warning("fetch_moderators failed sub=%s: %s", subreddit, e)
-        return []
-
-
-@bp.route("/api/r/<subreddit>/about/moderators")
-@validate_params(subreddit=SUBREDDIT_RE)
-@server_cache(CACHE_TTL_SUBREDDIT)
-def get_moderators(subreddit):
-    return cached_json({"moderators": fetch_moderators(subreddit)}, CACHE_TTL_SUBREDDIT)
 
 
 def fetch_duplicates(subreddit, post_id, after='', timeout=10):
