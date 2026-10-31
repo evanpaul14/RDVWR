@@ -1,3 +1,4 @@
+import { observeMedia, unobserveMedia } from './media-lifecycle.js';
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl, BASE } from './utils.js';
@@ -99,7 +100,7 @@ function _applyAvatarResults(map) {
     const author = img.dataset.author;
     if (!(author in map)) return;
     const url = map[author];
-    _avatarObserver.unobserve(img);
+    unobserveMedia(_avatarObserver, img);
     if (url) { img.src = url; img.classList.remove('comment-avatar-lazy'); }
     else img.remove();
   });
@@ -139,7 +140,7 @@ const _avatarObserver = new IntersectionObserver(entries => {
     const author = entry.target.dataset.author;
     if (_avatarIconCache.has(author)) {
       const url = _avatarIconCache.get(author);
-      _avatarObserver.unobserve(entry.target);
+      unobserveMedia(_avatarObserver, entry.target);
       if (url) { entry.target.src = url; entry.target.classList.remove('comment-avatar-lazy'); }
       else entry.target.remove();
       return;
@@ -163,7 +164,7 @@ function initCommentAvatars(container, avatarPrefetch) {
   });
   // Anyone left (not resolved by the prefetch map above) falls back to the
   // slow one-request-per-user path — keep that gated behind scroll-into-view.
-  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => _avatarObserver.observe(img));
+  container?.querySelectorAll('.comment-avatar-lazy').forEach(img => observeMedia(_avatarObserver, img));
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────

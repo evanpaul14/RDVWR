@@ -1,3 +1,4 @@
+import { suspendMedia, resumeMedia, disposeMedia } from './media-lifecycle.js';
 // Keeps long infinite-scroll feeds light: post cards far outside the viewport
 // have their contents detached (height locked so the scroll position doesn't
 // move) and re-attached as they approach again. The outer .post element stays
@@ -15,6 +16,7 @@ const _observer = new IntersectionObserver(entries => {
 
 function _sleep(card, height) {
   if (_stash.has(card) || card.contains(document.activeElement)) return;
+  suspendMedia(card);
   const frag = document.createDocumentFragment();
   while (card.firstChild) frag.appendChild(card.firstChild);
   card.style.height = `${height}px`;
@@ -29,6 +31,7 @@ function _wake(card) {
   card.appendChild(frag);
   card.style.height = '';
   card.classList.remove('post-hibernated');
+  resumeMedia(card);
 }
 
 /** The element to query inside a card, whether it is currently hibernated or not. */
@@ -41,7 +44,12 @@ export function initCardHibernation(feed) {
   feed.querySelectorAll(':scope > .post').forEach(card => _observer.observe(card));
   new MutationObserver(mutations => {
     for (const m of mutations) {
-      for (const n of m.removedNodes) if (n.nodeType === 1) _observer.unobserve(n);
+      for (const n of m.removedNodes) if (n.nodeType === 1 && !n.isConnected) {
+        _observer.unobserve(n);
+        const frag = _stash.get(n);
+        if (frag) { disposeMedia(frag); _stash.delete(n); }
+        disposeMedia(n);
+      }
       for (const n of m.addedNodes) if (n.nodeType === 1 && n.classList.contains('post')) _observer.observe(n);
     }
   }).observe(feed, { childList: true });
