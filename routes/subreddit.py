@@ -1,4 +1,5 @@
 """Subreddit feed, about/rules/widgets, duplicates, wiki, and multireddits."""
+from upstream_budget import budgeted, request as budget_request
 import re
 import html as html_lib
 import requests
@@ -20,6 +21,7 @@ _WIDGET_KINDS = {"community-list", "calendar", "image", "textarea", "button", "m
 
 
 @fetch_cache(CACHE_TTL_SUBREDDIT, empty_ttl=60)
+@budgeted
 def fetch_widgets(subreddit, timeout=10):
     """A subreddit's sidebar widgets, in display order. Best-effort: [] on any failure."""
     try:
@@ -138,7 +140,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
             params = {"limit": 100, "raw_json": 1}
             if cursor:
                 params["after"] = cursor
-            rc = s.get(
+            rc = budget_request(s.get,
                 f"https://www.reddit.com/r/{subreddit}/comments.json",
                 params=params,
                 timeout=10,
@@ -156,7 +158,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
                 break
         if not ids:
             return [], None
-        rb = s.get(
+        rb = budget_request(s.get,
             f"https://www.reddit.com/by_id/{','.join(ids[:target])}.json",
             params={"raw_json": 1},
             timeout=10,
@@ -170,6 +172,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout=10):
     """A subreddit (or a+b combined) listing: {"posts", "after"}. Raises UpstreamError
     (with .state set, see _subreddit_error_state) when Reddit refuses it."""
@@ -227,6 +230,7 @@ def get_posts(subreddit):
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_about(subreddit, timeout=10):
     """A subreddit's header info. `sidebar` is the raw markdown the JS sidebar renders;
     `sidebar_html` is Reddit's pre-rendered, sanitized copy for the noscript page."""
@@ -273,6 +277,7 @@ def get_about(subreddit):
 
 
 @fetch_cache(CACHE_TTL_SUBREDDIT)
+@budgeted
 def fetch_rules(subreddit, timeout=10):
     """Best-effort: [] on any failure."""
     try:
@@ -297,6 +302,7 @@ def get_rules(subreddit):
     return cached_json({"rules": fetch_rules(subreddit)}, CACHE_TTL_SUBREDDIT)
 
 
+@budgeted
 def fetch_duplicates(subreddit, post_id, after='', timeout=10):
     """Other posts linking to the same URL: {"post" (the original), "posts", "after"}."""
     params = {"raw_json": 1, "limit": 25}
@@ -333,6 +339,7 @@ def get_duplicates(subreddit, post_id):
 WIKI_PAGE_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*$')
 
 
+@budgeted
 def fetch_wiki(subreddit, page='index', timeout=10):
     """A wiki page. `content_html` is Reddit's unsanitized HTML: the JS app runs it through
     DOMPurify, and the noscript page through media_detection.sanitize_reddit_html."""
@@ -382,6 +389,7 @@ def _multireddit_via_graphql(username, multiname, sort, t, after, title=None):
     return {**feed, "title": title or multiname}
 
 
+@budgeted
 def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     """A user multireddit's combined listing: {"posts", "after", "title"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}

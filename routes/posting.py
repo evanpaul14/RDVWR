@@ -1,6 +1,7 @@
 """Creating posts as the logged-in Reddit account: uploads, flair options and the submit
 itself. /api/* is for the JS app; /submit is the no-JS form. Same local-only rules as
 routes/actions.py."""
+from upstream_budget import budgeted
 import re
 from urllib.parse import urlsplit
 from flask import Blueprint, jsonify, redirect, render_template, request
@@ -17,6 +18,7 @@ _FLAIR_ID_RE = re.compile(r'^[0-9a-fA-F-]{8,40}$')
 _ASSET_RE = re.compile(r'^[a-z0-9]{6,20}$')
 
 
+@budgeted
 def fetch_flairs(subreddit, timeout=10):
     """A subreddit's post flairs a regular member may pick, and whether one is required."""
     resp = reddit_get(f"https://www.reddit.com/r/{subreddit}/api/link_flair_v2.json",

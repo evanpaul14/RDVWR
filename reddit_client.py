@@ -6,6 +6,7 @@ import uuid as _uuid_mod
 import base64
 import logging
 import requests
+from upstream_budget import budgeted, request as budget_request, remaining, backoff
 from curl_cffi import requests as cffi_requests
 
 log = logging.getLogger(__name__)
@@ -384,13 +385,13 @@ def _refresh_device(device: _OAuthDevice):
 def _cffi_post(url, device, **kwargs):
     """POST via curl_cffi, falling back to requests on TLS errors."""
     try:
-        return device.session.post(url, impersonate=device.impersonate, **kwargs)
+        return budget_request(device.session.post, url, impersonate=device.impersonate, **kwargs)
     except Exception as e:
         # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
         kwargs.pop("impersonate", None)
         if "content" in kwargs:
             kwargs["data"] = kwargs.pop("content")
-        return SESSION.post(url, **kwargs)
+        return budget_request(SESSION.post, url, **kwargs)
 
 
 def _fetch_android_token(device: _OAuthDevice):
@@ -437,9 +438,13 @@ def _get_device() -> _OAuthDevice:
         _pool_counter += 1
     device = _device_pool[idx]
     if device.needs_refresh():
-        with device.lock:
+        if not device.lock.acquire(timeout=remaining(10)):
+            raise requests.exceptions.Timeout("Token refresh wait exceeded budget")
+        try:
             if device.needs_refresh():
                 _refresh_device(device)
+        finally:
+            device.lock.release()
     return device
 
 
@@ -462,11 +467,11 @@ def _get_quarantine_session() -> "requests.Session":
         s.headers.update(HEADERS)
         s.proxies.update(PROXIES)
         try:
-            s.get(
+            budget_request(s.get,
                 "https://old.reddit.com/quarantine?dest=https%3A%2F%2Fold.reddit.com%2Fr%2FTheRedPill",
                 timeout=10,
             )
-            s.post(
+            budget_request(s.post,
                 "https://old.reddit.com/quarantine",
                 data={"sr_name": "TheRedPill", "dest": "https://old.reddit.com/r/TheRedPill", "accept": "yes"},
                 allow_redirects=False,
@@ -490,6 +495,7 @@ def _record_ratelimit(device: _OAuthDevice, resp):
         pass
 
 
+@budgeted
 def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
     Pass quarantine=True to use the quarantine-opted-in session instead of OAuth.
@@ -501,7 +507,7 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
             user_url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
             headers = {**kwargs.get("headers", {}), "Authorization": f"Bearer {user_token}"}
             try:
-                resp = cffi_requests.get(user_url, impersonate="chrome131", proxies=PROXIES,
+                resp = budget_request(cffi_requests.get, user_url, impersonate="chrome131", proxies=PROXIES,
                                          **{**kwargs, "headers": headers})
                 if resp.status_code != 401:
                     return resp
@@ -509,7 +515,7 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
                 log.warning("account read failed, using anonymous path: %s", e)
     if not REDDIT_OAUTH or quarantine:
         sess = _get_quarantine_session() if quarantine else SESSION
-        return sess.get(url, **kwargs)
+        return budget_request(sess.get, url, **kwargs)
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
     extra_headers = kwargs.pop("headers", {})
@@ -519,13 +525,13 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
         device.drift_qos()
         headers = {**device.api_headers(), **extra_headers}
         try:
-            resp = device.session.get(url, headers=headers, impersonate=device.impersonate, **kwargs)
+            resp = budget_request(device.session.get, url, headers=headers, impersonate=device.impersonate, **kwargs)
         except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
-            return SESSION.get(url, headers=headers, **kwargs)
+            return budget_request(SESSION.get, url, headers=headers, **kwargs)
         _record_ratelimit(device, resp)
         if resp.status_code == 429:
-            time.sleep(min(int(resp.headers.get("Retry-After", 5)), 5))
+            backoff(min(int(resp.headers.get("Retry-After", 5)), 5))
             continue
         if resp.status_code == 403 and rotate_on_403 and not rotated and attempt < 2:
             rotated = True
