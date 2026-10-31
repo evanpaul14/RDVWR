@@ -274,12 +274,11 @@ function _buildHlsWrap(wrap) {
   }
 }
 
-// Reddit-video gif reactions embedded in comment markdown (.md-video-embed) are
-// built lazily like redgifs below — a gif-heavy thread can have many of these, and
-// eagerly attaching hls.js to every one fires a manifest fetch per embed on mount.
+// Feed and comment videos only attach HLS near the viewport. Attaching even
+// with autoStartLoad disabled fetches a manifest, so defer the player itself.
 const _hlsBuildObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
-    if (entry.isIntersecting) {
+    if (entry.isIntersecting && !mediaDisposed(entry.target) && !mediaSleeping(entry.target)) {
       unobserveMedia(_hlsBuildObserver, entry.target);
       _buildHlsWrap(entry.target);
     }
@@ -288,12 +287,8 @@ const _hlsBuildObserver = new IntersectionObserver((entries) => {
 
 export function initVideos(container) {
   container.querySelectorAll('[data-hls]:not([data-hls-init]):not([data-hls-obs])').forEach(wrap => {
-    if (wrap.classList.contains('md-video-embed')) {
-      wrap.dataset.hlsObs = '1';
-      observeMedia(_hlsBuildObserver, wrap);
-    } else {
-      _buildHlsWrap(wrap);
-    }
+    wrap.dataset.hlsObs = '1';
+    observeMedia(_hlsBuildObserver, wrap);
   });
   container.querySelectorAll('video').forEach(_trackVideoMute);
 }
