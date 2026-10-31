@@ -12,7 +12,7 @@ from reddit_client import reddit_get, PROXIES
 from shreddit import _parse_shreddit_post
 from gql_posts import fetch_gql_frontpage
 from helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
-                     cached_json, error_response, hydrate_linked_posts, is_waf_block, log, UpstreamError)
+                     cached_json, error_response, fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
 
@@ -106,40 +106,35 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
                 current_label = txt
     # Batch-fetch gallery data + flair (not present in shreddit's HTML) via the JSON API
     if posts:
-        ids_str = ','.join(f't3_{p["id"]}' for p in posts)
         try:
-            gi = reddit_get('https://www.reddit.com/api/info.json',
-                            params={'id': ids_str, 'raw_json': 1}, timeout=8)
-            if gi.ok:
-                by_id = {c['data']['id']: c['data']
-                         for c in gi.json()['data']['children']}
-                for post in posts:
-                    d = by_id.get(post['id'])
-                    if not d:
-                        continue
-                    full = process_post(d)
-                    post['likes'] = full['likes']
-                    post['flair'] = full['flair']
-                    post['flair_richtext'] = full['flair_richtext']
-                    post['flair_type'] = full['flair_type']
-                    post['flair_bg'] = full['flair_bg']
-                    post['flair_tc'] = full['flair_tc']
-                    if post['post_hint'] == 'gallery' and not post['gallery'] and full.get('gallery'):
-                        post['gallery'] = full['gallery']
-                        if full.get('preview_img'):
-                            post['preview_img'] = full['preview_img']
-                    if post.get('crosspost_from'):
-                        # The shreddit HTML crosspost embed only exposes an HLS src, so
-                        # shreddit.py has to guess the v.redd.it encoding (DASH vs CMAF);
-                        # info.json's crosspost_parent_list carries the real fallback_url,
-                        # which process_post() uses to detect it correctly — prefer that.
-                        if full.get('crosspost_from'):
-                            post['crosspost_from'] = full['crosspost_from']
-                    elif full.get('is_video') and full.get('hls_url'):
-                        post['is_video'] = True
-                        post['video_url'] = full['video_url']
-                        post['hls_url'] = full['hls_url']
-                        post['audio_url'] = full['audio_url']
+            by_id = fetch_posts_by_id([p["id"] for p in posts])
+            for post in posts:
+                d = by_id.get(post['id'])
+                if not d:
+                    continue
+                full = process_post(d)
+                post['likes'] = full['likes']
+                post['flair'] = full['flair']
+                post['flair_richtext'] = full['flair_richtext']
+                post['flair_type'] = full['flair_type']
+                post['flair_bg'] = full['flair_bg']
+                post['flair_tc'] = full['flair_tc']
+                if post['post_hint'] == 'gallery' and not post['gallery'] and full.get('gallery'):
+                    post['gallery'] = full['gallery']
+                    if full.get('preview_img'):
+                        post['preview_img'] = full['preview_img']
+                if post.get('crosspost_from'):
+                    # The shreddit HTML crosspost embed only exposes an HLS src, so
+                    # shreddit.py has to guess the v.redd.it encoding (DASH vs CMAF);
+                    # info.json's crosspost_parent_list carries the real fallback_url,
+                    # which process_post() uses to detect it correctly — prefer that.
+                    if full.get('crosspost_from'):
+                        post['crosspost_from'] = full['crosspost_from']
+                elif full.get('is_video') and full.get('hls_url'):
+                    post['is_video'] = True
+                    post['video_url'] = full['video_url']
+                    post['hls_url'] = full['hls_url']
+                    post['audio_url'] = full['audio_url']
         except Exception as ge:
             log.warning("home-feed flair/gallery batch-fetch failed: %s", ge)
     hydrate_linked_posts(posts)
