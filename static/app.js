@@ -1,3 +1,4 @@
+import { initMediaCleanup } from './media-lifecycle.js';
 import { state } from './state.js';
 import { initVotes, accountActive } from './vote.js';
 import { loadAccount, leaveAccount, initAccountLink } from './account.js';
@@ -1192,6 +1193,7 @@ state.currentCommentSort = settings.commentSort;
 updateFeedsBtn();
 initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
 initCardHibernation(feed);
+initMediaCleanup(document.body);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
 renderRoute(parseRoute());
 

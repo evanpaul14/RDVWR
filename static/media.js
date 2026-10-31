@@ -1,3 +1,4 @@
+import { ownMedia, observeMedia, unobserveMedia, mediaDisposed, mediaSleeping } from './media-lifecycle.js';
 import { state, setMutePref, setVolumePref } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUrl, isLocalUrl, BASE } from './utils.js';
@@ -5,6 +6,10 @@ import { escHtml, evictMap, renderPoll, veilWrap, GALLERY_SWIPE_MIN, realMediaUr
 function _trackVideoMute(v) {
   if (v.dataset.muteTracked) return;
   v.dataset.muteTracked = '1';
+  ownMedia(v, {
+    suspend: () => v.pause(),
+    dispose: () => { v.pause(); v.removeAttribute('src'); v.load(); },
+  });
   v.volume = state.userVolume;
   v.muted = state.userPrefersMuted;
   v.addEventListener('volumechange', () => {
@@ -48,6 +53,10 @@ export function syncAudio(videoEl, audioSrc) {
   audio.preload = 'none';
   audio.volume = videoEl.volume;
   audio.muted = videoEl.muted;
+  ownMedia(videoEl, {
+    suspend: () => audio.pause(),
+    dispose: () => { audio.pause(); audio.removeAttribute('src'); audio.load(); },
+  });
   videoEl.addEventListener('play',         () => { audio.currentTime = videoEl.currentTime; audio.play().catch(()=>{}); });
   videoEl.addEventListener('pause',        () => audio.pause());
   videoEl.addEventListener('seeked',       () => { audio.currentTime = videoEl.currentTime; });
@@ -76,13 +85,29 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
   if (hlsUrl) {
     await _ensureHls();
   }
+  if (mediaDisposed(videoEl)) return;
   if (hlsUrl && typeof Hls !== 'undefined' && Hls.isSupported()) {
     const hls = new Hls({ autoStartLoad: false, startLevel: 999 });
+    let active = true;
+    const start = () => { if (active && !mediaSleeping(videoEl)) hls.startLoad(); };
+    const stop = () => { if (active) hls.stopLoad(); };
+    const destroy = () => {
+      if (!active) return;
+      active = false;
+      videoEl.removeEventListener('play', start);
+      videoEl.removeEventListener('pause', stop);
+      hls.destroy();
+    };
+    videoEl.addEventListener('play', start);
+    videoEl.addEventListener('pause', stop);
+    ownMedia(videoEl, {
+      suspend: stop,
+      dispose: destroy,
+    });
     hls.loadSource(hlsUrl); hls.attachMedia(videoEl);
-    videoEl.addEventListener('play', () => hls.startLoad(), { once: true });
     hls.on(Hls.Events.ERROR, (_ev, data) => {
       if (!data.fatal) return;
-      hls.destroy();
+      destroy();
       if (fallback) {
         const wrap = videoEl.closest('[data-hls]');
         if (wrap) wrap.querySelectorAll('.hls-quality-btn, .hls-quality-menu').forEach(el => el.remove());
@@ -151,6 +176,7 @@ export async function setupHls(videoEl, hlsUrl, fallback, audioSrc) {
 const _gifObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     const v = entry.target;
+    if (mediaDisposed(v) || mediaSleeping(v)) return;
     if (entry.isIntersecting) {
       v.play().catch(() => {});
     } else {
@@ -170,6 +196,7 @@ const _IMG_GIF_UNLOAD_DELAY = 1500;
 const _imgGifObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     const img = entry.target;
+    if (mediaDisposed(img) || mediaSleeping(img)) return;
     if (entry.isIntersecting) {
       const t = _imgGifUnloadTimers.get(img);
       if (t) { clearTimeout(t); _imgGifUnloadTimers.delete(img); }
@@ -196,7 +223,12 @@ const _imgGifObserver = new IntersectionObserver((entries) => {
 export function initGifImages(container) {
   container.querySelectorAll('img.gif-anim-img:not([data-gif-img-obs])').forEach(img => {
     img.dataset.gifImgObs = '1';
-    _imgGifObserver.observe(img);
+    const clearTimer = () => {
+      clearTimeout(_imgGifUnloadTimers.get(img));
+      _imgGifUnloadTimers.delete(img);
+    };
+    ownMedia(img, { suspend: clearTimer, dispose: clearTimer });
+    observeMedia(_imgGifObserver, img);
   });
 }
 
@@ -220,7 +252,7 @@ function _prefetchRedgifs(id) {
 
 const _rgPrefetchObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
-    if (entry.isIntersecting) _prefetchRedgifs(entry.target.dataset.rgid);
+    if (entry.isIntersecting && !mediaDisposed(entry.target) && !mediaSleeping(entry.target)) _prefetchRedgifs(entry.target.dataset.rgid);
   });
 }, { rootMargin: '400px' });
 
@@ -228,7 +260,7 @@ export function initGifVideos(container) {
   container.querySelectorAll('video[autoplay]:not([data-gif-obs])').forEach(v => {
     v.dataset.gifObs = '1';
     v.removeAttribute('autoplay');
-    _gifObserver.observe(v);
+    observeMedia(_gifObserver, v);
   });
 }
 
@@ -248,7 +280,7 @@ function _buildHlsWrap(wrap) {
 const _hlsBuildObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
-      _hlsBuildObserver.unobserve(entry.target);
+      unobserveMedia(_hlsBuildObserver, entry.target);
       _buildHlsWrap(entry.target);
     }
   });
@@ -258,7 +290,7 @@ export function initVideos(container) {
   container.querySelectorAll('[data-hls]:not([data-hls-init]):not([data-hls-obs])').forEach(wrap => {
     if (wrap.classList.contains('md-video-embed')) {
       wrap.dataset.hlsObs = '1';
-      _hlsBuildObserver.observe(wrap);
+      observeMedia(_hlsBuildObserver, wrap);
     } else {
       _buildHlsWrap(wrap);
     }
@@ -269,8 +301,8 @@ export function initVideos(container) {
 export function observeRedgifsPrefetch(container) {
   container.querySelectorAll('.redgifs-wrap[data-rgid]:not([data-rg-prefetch])').forEach(w => {
     w.dataset.rgPrefetch = '1';
-    _rgPrefetchObserver.observe(w);
-    _rgBuildObserver.observe(w);
+    observeMedia(_rgPrefetchObserver, w);
+    observeMedia(_rgBuildObserver, w);
   });
 }
 
@@ -279,6 +311,7 @@ async function _buildRedgifsWrap(wrap) {
   let data = _rgCache.get(id);
   if (!data) { _prefetchRedgifs(id); data = _rgCache.get(id); }
   data = (await data) ?? null;
+  if (mediaDisposed(wrap)) return;
   if (!data || (!data.hd && !data.sd)) {
     const fbHls = wrap.dataset.fbHls, fbSrc = wrap.dataset.fbSrc;
     if (fbHls || fbSrc) {
@@ -338,12 +371,12 @@ function _flushRgBuildQueue() {
 
 const _rgBuildObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
-    if (!entry.isIntersecting) return;
+    if (!entry.isIntersecting || mediaDisposed(entry.target) || mediaSleeping(entry.target)) return;
     const wrap = entry.target;
     if (wrap.dataset.rgInit) return;
     wrap.dataset.rgInit = '1';
-    _rgBuildObserver.unobserve(wrap);
-    _rgPrefetchObserver.unobserve(wrap);
+    unobserveMedia(_rgBuildObserver, wrap);
+    unobserveMedia(_rgPrefetchObserver, wrap);
     _rgBuildQueue.push(wrap);
     if (!_rgBuildScheduled) {
       _rgBuildScheduled = true;
@@ -368,6 +401,7 @@ export async function initImgurAlbums(container) {
     try {
       const res = await fetch(`/api/imgur/album/${encodeURIComponent(id)}`);
       const data = await res.json();
+      if (mediaDisposed(wrap)) return;
       if (!res.ok || !data.images?.length) throw new Error(data.error || 'no images');
       const imgs = data.images.map(img => ({url: img.url, width: img.width, height: img.height, caption: img.description || ''}));
       if (settings.linkExternalMedia && imgs.some(img => !isLocalUrl(img.url))) throw new Error('unproxied');
@@ -393,6 +427,7 @@ export async function initImgurAlbums(container) {
         }
       }
     } catch {
+      if (mediaDisposed(wrap)) return;
       const cls = escHtml(wrap.classList.contains('pv-media') ? 'pv-media' : 'post-video');
       wrap.insertAdjacentHTML('afterend', settings.linkExternalMedia
         ? `<div class="${cls} minimal-media"><a class="minimal-media-link" href="https://imgur.com/a/${escHtml(id)}" target="_blank" rel="noopener noreferrer">Imgur album ↗</a></div>`
@@ -423,6 +458,7 @@ export function initOgImages(container) {
     const url = wrap.dataset.ogUrl;
     fetchOg(url)
       .then(d => {
+        if (mediaDisposed(wrap)) return;
         if (!d.url || (settings.linkExternalMedia && !isLocalUrl(d.url))) { wrap.remove(); return; }
         if (wrap.classList.contains('post-compact-thumb')) {
           const img = document.createElement('img');
@@ -453,6 +489,7 @@ export function initOgDescriptions(container) {
     const url = el.dataset.ogUrl;
     fetchOg(url)
       .then(d => {
+        if (mediaDisposed(el)) return;
         if (!d.description) { el.remove(); return; }
         el.textContent = d.description;
       })
