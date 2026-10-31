@@ -63,6 +63,17 @@ def _page(view, title, page, **hydration):
             "page": page, **hydration}
 
 
+def _listing(kind, data, **params):
+    if data is None:
+        return {}
+    return {"initial_listing": {"kind": kind, "params": params, "data": data,
+                                "account": reddit_login.username() if reddit_login.request_account_active() else None}}
+
+
+def _listing_time(sort, t):
+    return (t or 'all') if sort in TIMED_SORTS else ''
+
+
 def _feed_nav(base, sort, t, next_after, **extra):
     """Sort bar, time filter and next-page link for a paginated post listing at base/<sort>."""
     timed = sort in TIMED_SORTS
@@ -88,7 +99,8 @@ def build_home(sort, t, after, cookie=None):
     return _page("home", "Home", {
         "nav": _feed_nav("/home", sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err,
-    })
+    }, **_listing('home', feed, sort=sort, time=_listing_time(sort, t), after=after or '',
+                  mode='login' if cookie else None, distance=4))
 
 
 def build_subscribed(sort, t, after):
@@ -164,7 +176,8 @@ def build_multi(username, multiname, sort, t, after):
         "username": username, "title": title,
         "nav": _feed_nav(f"/user/{username}/m/{multiname}", sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err,
-    })
+    }, **_listing('multi', feed, username=username.lower(), multiname=multiname.lower(),
+                  sort=sort, time=_listing_time(sort, t), after=after or ''))
 
 
 def build_duplicates(sub, post_id, after):
@@ -326,16 +339,19 @@ def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', 
     if not q:
         return _page("search", "Search", page)
 
+    nsfw = not (get_pref('nsfw_hide') or get_pref('nsfw_search_hide'))
     if stype == 'communities':
         data, err = _attempt(fetch_search_communities, q, after)
     elif stype == 'users':
         data, err = _attempt(fetch_search_users, q, after)
     else:
-        nsfw = not (get_pref('nsfw_hide') or get_pref('nsfw_search_hide'))
         data, err = _attempt(fetch_search_posts, q, sort, t, sub, nsfw, after)
     page.update(results=data[stype] if data else [], error=err,
                 next_url=url(after=data["after"]) if data and data.get("after") else None)
-    return _page("search", f"Search: {q}" + (f" in r/{sub}" if sub else ""), page, scope_sub=sub or None)
+    return _page("search", f"Search: {q}" + (f" in r/{sub}" if sub else ""), page, scope_sub=sub or None,
+                 **_listing('search', data, query=q, type=stype, sort=sort if stype == 'posts' else '',
+                            time=t if stype == 'posts' else '', sub=sub if stype == 'posts' else '',
+                            nsfw=nsfw if stype == 'posts' else False, after=after or ''))
 
 
 # ── Everything else ───────────────────────────────────────────────────────────

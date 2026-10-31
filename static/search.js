@@ -1,3 +1,4 @@
+import { takeInitialListing } from './hydration.js';
 import { state } from './state.js';
 import { settings } from './settings.js';
 import { escHtml, setActiveButton, errState, buildTimeFilterHtml } from './utils.js';
@@ -31,8 +32,9 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
     if (state.searchSub)  url += `&sub=${encodeURIComponent(state.searchSub)}`;
     if (state.searchNsfw) url += `&nsfw=1`;
     if (after)            url += `&after=${encodeURIComponent(after)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const initial = !append && takeInitialListing('search', { query, type: 'posts', sort, time, sub: state.searchSub, nsfw: state.searchNsfw, after: after || '' });
+    const res = initial ? { ok: true } : await fetch(url);
+    const data = initial || await res.json();
     if (myGen !== state.feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = errState(escHtml(data.error||'Search failed'), 'feed');
@@ -123,8 +125,9 @@ export async function loadCommunityResults(query, after=null, append=false) {
   try {
     let url = `/api/search/communities?q=${encodeURIComponent(query)}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const initial = !append && takeInitialListing('search', { query, type: 'communities', sort: '', time: '', sub: '', nsfw: false, after: after || '' });
+    const res = initial ? { ok: true } : await fetch(url);
+    const data = initial || await res.json();
     if (myGen !== state.feedGen) return;
     if (!append) feed.innerHTML = '';
     if (!data.communities?.length && !append) {
@@ -149,8 +152,9 @@ export async function loadUserResults(query, after=null, append=false) {
   try {
     let url = `/api/search/users?q=${encodeURIComponent(query)}`;
     if (after) url += `&after=${encodeURIComponent(after)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const initial = !append && takeInitialListing('search', { query, type: 'users', sort: '', time: '', sub: '', nsfw: false, after: after || '' });
+    const res = initial ? { ok: true } : await fetch(url);
+    const data = initial || await res.json();
     if (myGen !== state.feedGen) return;
     if (!append) feed.innerHTML = '';
     if (!data.users?.length && !append) {
