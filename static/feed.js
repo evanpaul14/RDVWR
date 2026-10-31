@@ -1,3 +1,4 @@
+import { streamHomePages } from './home-pagination.js';
 import { takeInitialListing } from './hydration.js';
 import { state } from './state.js';
 import { settings, personalizedHomeMode } from './settings.js';
@@ -129,46 +130,44 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
       if (!append && !after) curAfter = cursor.after;
     }
 
-    let res, data;
-    let collected = [];
-    let fetches = 0;
-    while (true) {
-      ({ res, data } = await _fetchHomePage(sort, time, curAfter, curDistance));
-      if (myGen !== state.feedGen) return;
-      if (!res.ok) {
-        if (!append) feed.innerHTML = errState(escHtml(data.error||'Error'), 'feed');
-        return;
-      }
-      const fresh = append ? data.posts : data.posts.filter(p => !isHomeSeen(p.id));
-      collected = collected.concat(fresh);
-      curAfter = data.after;
-      curDistance += 4;
-      fetches++;
-      const enough = append ? true : collected.length >= HOME_TARGET_UNSEEN;
-      if (enough || !curAfter || fetches > HOME_MAX_EXTRA_FETCHES) break;
-    }
-
-    if (!append) feed.innerHTML = '';
-    if (!collected.length && !append) {
-      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
-      return;
-    }
-    const startIdx = append ? feed.querySelectorAll('.post').length : 0;
-    const tmp = document.createElement('div');
-    const parts = [];
-    collected.forEach((p, i) => {
-      parts.push(renderPost(p, startIdx + i, true));
+    let rendered = 0;
+    await streamHomePages({
+      after: curAfter, distance: curDistance,
+      maxPages: append ? 1 : HOME_MAX_EXTRA_FETCHES + 1, target: HOME_TARGET_UNSEEN,
+      isCurrent: () => myGen === state.feedGen,
+      fetchPage: async (cursor, distance) => {
+        const { res, data } = await _fetchHomePage(sort, time, cursor, distance);
+        if (!res.ok) throw new Error(data.error || 'Error');
+        return data;
+      },
+      filterPage: posts => append ? posts : posts.filter(p => !isHomeSeen(p.id)),
+      onPage: (posts, cursor, distance) => {
+        if (posts.length) {
+          if (!append && !rendered) feed.innerHTML = '';
+          const startIdx = append || rendered ? feed.children.length : 0;
+          const tmp = document.createElement('div');
+          tmp.innerHTML = posts.map((p, i) => renderPost(p, startIdx + i, true)).join('');
+          initMedia(tmp);
+          const cards = [...tmp.children];
+          feed.append(...cards);
+          cards.forEach(initGifVideos);
+          rendered += posts.length;
+          markHomeSeen(posts.map(p => p.id));
+        }
+        setHomeCursor(sort, time, cursor, distance);
+        state.afterToken = cursor;
+      },
     });
-    tmp.innerHTML = parts.join('');
-    initMedia(tmp);
-    while (tmp.firstChild) feed.appendChild(tmp.firstChild);
-    initGifVideos(feed);
-    markHomeSeen(collected.map(p => p.id));
-    setHomeCursor(sort, time, curAfter, curDistance);
-    state.afterToken = curAfter;
-    sentinel.classList.remove('loading');
-  } catch { if (!append && myGen === state.feedGen) feed.innerHTML = errState('Network error', 'feed'); }
-  finally  { if (myGen === state.feedGen) state.loading = false; }
+    if (myGen !== state.feedGen) return;
+    if (!rendered && !append) {
+      feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
+    }
+  } catch (error) {
+    if (!append && myGen === state.feedGen && !feed.querySelector('.post')) {
+      feed.innerHTML = errState(escHtml(error.message || 'Network error'), 'feed');
+    }
+  }
+  finally  { if (myGen === state.feedGen) { state.loading = false; sentinel.classList.remove('loading'); } }
 }
 
 export async function loadHome(sort='best', time='all', after=null) {
