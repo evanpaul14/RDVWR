@@ -198,6 +198,7 @@
 </div>
 </div><!-- /#app-shell -->
 <noscript>{% include "noscript/layout.html" %}</noscript>
+{% if initial_listing %}<script nonce="{{ csp_nonce }}">window.__INITIAL_LISTING__={{ initial_listing | tojson | safe }};</script>{% endif %}
 {% if initial_data %}<script nonce="{{ csp_nonce }}">window.__INITIAL_DATA__={{ initial_data | tojson | safe }};</script>{% endif %}
 {% if initial_about %}<script nonce="{{ csp_nonce }}">window.__INITIAL_ABOUT__={{ initial_about | tojson | safe }};</script>{% endif %}
 {% if initial_post %}<script nonce="{{ csp_nonce }}">window.__INITIAL_POST__={{ initial_post | tojson | safe }};</script>{% endif %}

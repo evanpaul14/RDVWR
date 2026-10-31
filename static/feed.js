@@ -1,3 +1,4 @@
+import { takeInitialListing } from './hydration.js';
 import { state } from './state.js';
 import { settings, personalizedHomeMode } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit, BASE } from './utils.js';
@@ -101,6 +102,8 @@ async function _fetchHomePage(sort, time, after, distance) {
   if (distance) url += `&distance=${distance}`;
   const mode = personalizedHomeMode();
   if (mode === 'login') url += '&login=1';
+  const initial = takeInitialListing('home', { sort, time: ['top', 'controversial'].includes(sort) ? (time || 'all') : '', after: after || '', mode, distance: distance || 4 });
+  if (initial) return { res: { ok: true }, data: initial };
   const fetchOpts = mode === 'cookies' ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
   const res  = await fetch(url, fetchOpts);
   const data = await res.json();
@@ -406,8 +409,12 @@ export async function loadMultiFeed(username, multiname, sort, time, after=null,
     let url = `/api/user/${encodeURIComponent(username)}/m/${encodeURIComponent(multiname)}?sort=${sort}`;
     if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
     if (after) url += `&after=${after}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const initial = !append && takeInitialListing('multi', {
+      username: username.toLowerCase(), multiname: multiname.toLowerCase(), sort,
+      time: ['top', 'controversial'].includes(sort) ? (time || 'all') : '', after: after || '',
+    });
+    const res = initial ? { ok: true } : await fetch(url);
+    const data = initial || await res.json();
     if (myGen !== state.feedGen) return;
     if (!res.ok) {
       if (!append) feed.innerHTML = errState(escHtml(data.error || 'Error'), 'feed');

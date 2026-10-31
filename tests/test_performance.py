@@ -47,3 +47,24 @@ def test_feed_fallback_uses_rest_budget():
          patch('routes.subreddit.reddit_get', side_effect=rest), \
          patch('routes.subreddit.fetch_gql_feed', side_effect=fallback):
         fetch_feed('budgettest', 'hot', timeout=6)
+
+
+@pytest.mark.parametrize('kind', ['home', 'multi', 'search'])
+def test_listing_hydration_matches_server_request(kind):
+    from app import app
+    from routes import page_data
+    payload = {'posts': [], 'after': 'next', 'title': 'List'}
+    fetch = {'home': 'fetch_frontpage', 'multi': 'fetch_multireddit', 'search': 'fetch_search_posts'}[kind]
+    with app.test_request_context('/'), patch.object(page_data, fetch, return_value=payload), \
+         patch('reddit_login.request_account_active', return_value=False):
+        if kind == 'home':
+            result = page_data.build_home('hot', 'all', 'cursor')
+        elif kind == 'multi':
+            result = page_data.build_multi('User', 'List', 'hot', 'all', 'cursor')
+        else:
+            result = page_data.build_search('cats', after='cursor')
+        initial = result['initial_listing']
+        assert initial['kind'] == kind
+        assert initial['params']['after'] == 'cursor'
+        assert initial['data'] == payload
+        assert initial['account'] is None
