@@ -68,3 +68,74 @@ def test_listing_hydration_matches_server_request(kind):
         assert initial['params']['after'] == 'cursor'
         assert initial['data'] == payload
         assert initial['account'] is None
+
+
+def test_fetch_cache_normalizes_defaults_and_copies_results():
+    helpers._fetch_cache.clear()
+    calls = []
+    @helpers.fetch_cache(60)
+    def fetch(value, optional='', timeout=10):
+        calls.append(value)
+        return {'items': [value]}
+    with patch('helpers.reddit_login.request_account_active', return_value=False):
+        fetch('same')['items'].clear()
+        assert fetch(value='same', timeout=6)['items'] == ['same']
+        assert fetch('same', '')['items'] == ['same']
+    assert calls == ['same']
+
+
+@pytest.mark.parametrize('fails', [False, True])
+def test_fetch_cache_coalesces_concurrent_results_and_failures(fails):
+    from concurrent.futures import ThreadPoolExecutor, Future
+    from threading import Event, Barrier, Lock
+    helpers._fetch_cache.clear()
+    entered, release = Event(), Event()
+    followers = Barrier(4)
+    calls = []
+    @helpers.fetch_cache(60)
+    def fetch(value, timeout=10):
+        calls.append(value)
+        entered.set()
+        assert release.wait(3)
+        if fails:
+            raise ValueError('upstream failed')
+        return {'items': [value]}
+    original_result = Future.result
+    # Observe three followers reaching the shared Future before releasing the leader.
+    def result(future, timeout=None):
+        if future in helpers._fetch_inflight.values():
+            followers.wait(timeout=3)
+        return original_result(future, timeout)
+    with patch('helpers.reddit_login.request_account_active', return_value=False), \
+         patch.object(Future, 'result', result), ThreadPoolExecutor(max_workers=4) as pool:
+        jobs = [pool.submit(fetch, 'same')]
+        assert entered.wait(3)
+        jobs += [pool.submit(fetch, 'same') for _ in range(3)]
+        followers.wait(timeout=3)
+        release.set()
+        if fails:
+            for job in jobs:
+                with pytest.raises(ValueError, match='upstream failed'):
+                    job.result()
+        else:
+            values = [job.result() for job in jobs]
+            values[0]['items'].clear()
+            assert all(value['items'] == ['same'] for value in values[1:])
+    assert calls == ['same']
+    assert not helpers._fetch_inflight
+    if fails:
+        with patch('helpers.reddit_login.request_account_active', return_value=False), pytest.raises(ValueError):
+            fetch('same')
+        assert calls == ['same', 'same']
+
+
+def test_fetch_cache_never_shares_account_reads():
+    calls = []
+    @helpers.fetch_cache(60)
+    def fetch(value):
+        calls.append(value)
+        return value
+    with patch('helpers.reddit_login.request_account_active', return_value=True):
+        fetch('private')
+        fetch('private')
+    assert calls == ['private', 'private']

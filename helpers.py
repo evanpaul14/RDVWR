@@ -10,7 +10,10 @@ import threading
 from functools import wraps
 from urllib.parse import urlsplit
 import contextvars
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future, TimeoutError as FutureTimeout
+from inspect import signature
+from upstream_budget import remaining
+import requests
 from flask import jsonify, request, Response, make_response
 from media_detection import process_post
 import reddit_login
@@ -394,6 +397,8 @@ def server_cache(ttl):
 
 
 _fetch_cache = TTLCache(500)
+_fetch_inflight = {}
+_fetch_inflight_lock = threading.Lock()
 
 def fetch_cache(ttl, empty_ttl=None, skip=None):
     """Memoize a shared fetch_* helper's return value in-process for `ttl` seconds, so the
@@ -403,20 +408,48 @@ def fetch_cache(ttl, empty_ttl=None, skip=None):
     fetchers that return [] on failure), and `skip(result)` can veto caching. Callers get a
     private copy, so they can mutate what they receive."""
     def decorator(f):
+        sig = signature(f)
         @wraps(f)
         def wrapper(*args, **kwargs):
             if reddit_login.request_account_active():
                 return f(*args, **kwargs)
-            key = (f.__name__, args, tuple(sorted((k, v) for k, v in kwargs.items() if k != 'timeout')))
-            hit = _fetch_cache.get(key)
+            bound = sig.bind(*args, **kwargs)
+            bound.apply_defaults()
+            key = (f.__module__, f.__qualname__, tuple((k, v) for k, v in bound.arguments.items() if k != 'timeout'))
+            # Coordinate the cache lookup and leader election to avoid a miss racing
+            # with another leader publishing its completed result.
+            with _fetch_inflight_lock:
+                hit = _fetch_cache.get(key)
+                if hit is not _CACHE_MISS:
+                    future = None
+                else:
+                    future = _fetch_inflight.get(key)
+                    leader = future is None
+                    if leader:
+                        _fetch_inflight[key] = future = Future()
             if hit is not _CACHE_MISS:
                 return copy.deepcopy(hit)
-            result = f(*args, **kwargs)
-            if not (skip and skip(result)):
-                hold = empty_ttl if (empty_ttl is not None and not result) else ttl
-                if hold:
-                    _fetch_cache.set(key, copy.deepcopy(result), hold)
-            return result
+            if not leader:
+                try:
+                    result = future.result(timeout=remaining(min(INFLIGHT_WAIT, bound.arguments.get('timeout', INFLIGHT_WAIT))))
+                except FutureTimeout as exc:
+                    raise requests.exceptions.Timeout('Timed out waiting for shared upstream fetch') from exc
+                return copy.deepcopy(result)
+            try:
+                result = f(*args, **kwargs)
+                snapshot = copy.deepcopy(result)
+                if not (skip and skip(result)):
+                    hold = empty_ttl if (empty_ttl is not None and not result) else ttl
+                    if hold:
+                        _fetch_cache.set(key, snapshot, hold)
+                future.set_result(snapshot)
+                return result
+            except BaseException as exc:
+                future.set_exception(exc)
+                raise
+            finally:
+                with _fetch_inflight_lock:
+                    _fetch_inflight.pop(key, None)
         return wrapper
     return decorator
 
