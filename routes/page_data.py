@@ -12,6 +12,7 @@ Every page is templates/index.html, and the data fetched for it does two jobs:
 Each build_* function returns that template context as a dict (see _page), or
 {"redirect": url} when the page should send the browser elsewhere instead.
 """
+from upstream_budget import budget
 from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
 from ns_prefs import get_pref
@@ -48,7 +49,8 @@ def _attempt(fetch, *args, **kwargs):
     """Call one of the shared fetch_* helpers. Returns (data, None) on success or
     (None, UpstreamError) on failure, so a page can still render its error state."""
     try:
-        return fetch(*args, timeout=SSR_TIMEOUT, **kwargs), None
+        with budget(SSR_TIMEOUT):
+            return fetch(*args, timeout=SSR_TIMEOUT, **kwargs), None
     except UpstreamError as e:
         return None, e
     except Exception as e:

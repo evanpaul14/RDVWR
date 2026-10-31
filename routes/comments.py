@@ -1,4 +1,5 @@
 """Post comment trees and 'load more' children."""
+from upstream_budget import budgeted
 import time
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request
@@ -157,6 +158,7 @@ def _listing_comments(subreddit, post_id, comment_id, sort, timeout):
 
 
 @fetch_cache(CACHE_TTL_FEED, skip=lambda r: r.get('comments_error'))
+@budgeted
 def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeout=12, with_avatars=False):
     """A post plus its comment tree: {"post", "comments", "avatar_prefetch"}. With
     `comment_id`, the tree is that comment's thread (plus a few parents of context)."""
@@ -225,6 +227,7 @@ def get_comments(subreddit, post_id):
         return error_response(500)
 
 
+@budgeted
 def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_avatars=False):
     """Expand a "load more comments" stub: `children` is its comma-separated comment ids.
     Returns {"comments", "avatar_prefetch"} with the loaded comments re-nested."""

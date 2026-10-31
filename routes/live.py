@@ -1,4 +1,5 @@
 """Reddit live threads."""
+from upstream_budget import budgeted
 import re
 from flask import Blueprint, jsonify, request
 from reddit_client import reddit_get
@@ -28,6 +29,7 @@ def _parse_live_updates(children):
     return out
 
 
+@budgeted
 def fetch_live_updates(thread_id, before='', after='', timeout=10):
     """One page of a live thread's updates, newest first: {"updates", "after"}. (The
     thread's own .json is its updates listing; /updates.json 404s over OAuth.)"""
@@ -41,6 +43,7 @@ def fetch_live_updates(thread_id, before='', after='', timeout=10):
     return {"updates": _parse_live_updates(listing.get("children", [])), "after": listing.get("after")}
 
 
+@budgeted
 def fetch_live_thread(thread_id, after='', timeout=10):
     """A live thread's header info plus one page of its updates (see fetch_live_updates);
     a failed updates fetch just leaves the thread with no updates."""

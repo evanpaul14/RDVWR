@@ -1,4 +1,5 @@
 """Post, community, and user search plus subreddit autocomplete."""
+from upstream_budget import budgeted
 import requests
 from flask import Blueprint, jsonify, request
 from media_detection import extract_posts, clean_url, DISABLE_NSFW
@@ -43,6 +44,7 @@ def subreddit_search():
 # ── Search API ───────────────────────────────────────────────────────────────
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='', timeout=10):
     """Post search, optionally restricted to one subreddit: {"posts", "after"}."""
     if sort not in SEARCH_SORTS:
@@ -104,6 +106,7 @@ def _search_things(q, kind, after, timeout):
     return [c["data"] for c in listing["children"] if c.get("kind") == kind], listing.get("after")
 
 
+@budgeted
 def fetch_search_communities(q, after='', timeout=10):
     things, next_after = _search_things(q, "t5", after, timeout)
     if things is None:   # REST blocked
@@ -119,6 +122,7 @@ def fetch_search_communities(q, after='', timeout=10):
     return {"communities": results, "after": next_after}
 
 
+@budgeted
 def fetch_search_users(q, after='', timeout=10):
     things, next_after = _search_things(q, "t2", after, timeout)
     if things is None:   # REST blocked

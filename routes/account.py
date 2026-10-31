@@ -1,6 +1,7 @@
 """Managing the logged-in Reddit account's own profile: its posts and comments (edit, delete)
 and its profile picture. Signing out is /auth/reddit/logout (routes/auth.py). Same local-only
 rules as routes/actions.py; /api/* is for the JS app, /actions/account/* are the no-JS forms."""
+from upstream_budget import budgeted
 import re
 from flask import Blueprint, jsonify, redirect, request
 from helpers import UpstreamError, safe_next
@@ -19,6 +20,7 @@ _AVATAR_MAX = 5 * 1024 * 1024
 _NO_STORE = {'Cache-Control': 'private, no-store'}
 
 
+@budgeted
 def fetch_full_texts(fullnames, timeout=10):
     """{fullname: raw markdown} for the account's own posts/comments. Listings cut post text
     short, so anything that pre-fills an edit box needs this to avoid saving a truncated copy."""

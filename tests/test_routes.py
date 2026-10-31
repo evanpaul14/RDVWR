@@ -1124,8 +1124,9 @@ class TestOgImage:
         resp = client.get("/api/og-image?url=javascript:alert(1)")
         assert resp.status_code == 400
 
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
     @patch.object(reddit_client.SESSION, "get")
-    def test_og_tag_extracted(self, mock_get, client):
+    def test_og_tag_extracted(self, mock_get, _resolve, client):
         html = b'<meta property="og:image" content="https://example.com/thumb.jpg">'
         mock_resp = MagicMock()
         mock_resp.iter_content.return_value = iter([html])
@@ -1137,8 +1138,9 @@ class TestOgImage:
         assert resp.status_code == 200
         assert resp.get_json()["url"] == "https://example.com/thumb.jpg"
 
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
     @patch.object(reddit_client.SESSION, "get")
-    def test_no_og_tag_returns_none(self, mock_get, client):
+    def test_no_og_tag_returns_none(self, mock_get, _resolve, client):
         mock_resp = MagicMock()
         mock_resp.iter_content.return_value = iter([b"<html><body>no og tag</body></html>"])
         mock_resp.close = MagicMock()

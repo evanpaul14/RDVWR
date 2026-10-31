@@ -1,4 +1,5 @@
 """Home feed: the logged-in shreddit feed when a cookie is supplied, else the anonymous front page."""
+from upstream_budget import budgeted, request as budget_request
 import re
 import uuid
 import requests
@@ -18,6 +19,7 @@ bp = Blueprint("home", __name__)
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_frontpage(sort, t='', after='', timeout=10):
     """Reddit's anonymous (logged-out) front page: {"posts", "after"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}
@@ -40,6 +42,7 @@ def fetch_frontpage(sort, t='', after='', timeout=10):
     return {"posts": posts, "after": listing.get("after")}
 
 
+@budgeted
 def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15):
     """The logged-in shreddit home feed for these cookies: {"posts", "after", "via"}."""
     shreddit_sort = {"best": "HOT", "hot": "HOT", "new": "NEW",
@@ -52,7 +55,7 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
     if after:
         params["after"] = after
         params["cursor"] = after
-    resp = cffi_requests.get(
+    resp = budget_request(cffi_requests.get,
         "https://www.reddit.com/svc/shreddit/feeds/home-feed",
         params=params,
         headers={
@@ -149,6 +152,7 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
     return {"posts": posts, "after": next_after, "via": "shreddit"}
 
 
+@budgeted
 def fetch_subscriptions(timeout=10):
     """Names of the subreddits the logged-in account has joined, A-Z. Account requests only."""
     names, after = [], ''

@@ -1,4 +1,5 @@
 """User profile endpoints (about, trophies, posts, comments, overview) with archive fallback."""
+from upstream_budget import budgeted
 from flask import Blueprint, jsonify, request
 from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
 from reddit_client import reddit_get
@@ -38,6 +39,7 @@ def get_posts_live_info():
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_user_about(username, timeout=10):
     """REST first (the only source of the moderator / verified badges). When Reddit's WAF
     blocks it, the app's GraphQL profile query answers instead."""
@@ -178,6 +180,7 @@ def _listing_params(sort, t, after):
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_user_posts(username, sort='new', t='', after='', timeout=10):
     """A user's submissions: {"posts", "after"}, plus "archived": True when served
     from the Arctic Shift archive."""
@@ -198,6 +201,7 @@ def _parse_comment_listing(listing):
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_user_comments(username, sort='new', t='', after='', timeout=10):
     """A user's comments: {"comments", "after"}, plus "archived" like fetch_user_posts."""
     comments, next_after, archived = _fetch_listing_with_archive(
@@ -242,6 +246,7 @@ def _gql_overview(username, sort, t, after):
 
 
 @fetch_cache(CACHE_TTL_FEED)
+@budgeted
 def fetch_user_overview(username, sort='new', t='', after='', timeout=10, allow_archive=True):
     """A user's mixed posts+comments feed: {"items": [{"type", "data"}], "after"}, plus
     "archived": True when served from the Arctic Shift archive.

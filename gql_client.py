@@ -7,6 +7,7 @@ rejects ours we re-read that file from GitHub, so a rotation heals without a dep
 GITHUB_DISPATCH_TOKEN is set, a failure also kicks that workflow off right away.
 Results are converted to the same dicts routes/comments.py builds."""
 import base64
+from upstream_budget import budgeted, request as budget_request
 import json
 import os
 import re
@@ -49,7 +50,7 @@ def _refresh_hashes():
         return False
     _last_refresh = time.time()
     try:
-        fresh = SESSION.get(HASHES_URL, timeout=10).json()
+        fresh = budget_request(SESSION.get, HASHES_URL, timeout=10).json()
     except Exception as e:
         log.warning("gql hash refresh failed: %s", e)
         return False
@@ -169,7 +170,7 @@ def _post(body, timeout):
     for attempt in range(2):
         device = _get_device()
         headers = {**device.api_headers(), "Content-Type": "application/json"}
-        resp = device.session.post(GQL_URL, headers=headers, json=body,
+        resp = budget_request(device.session.post, GQL_URL, headers=headers, json=body,
                                    impersonate=device.impersonate, timeout=timeout)
         if resp.status_code == 401 and attempt == 0:
             device.expires_at = 0.0  # force this device to re-auth next use
@@ -178,6 +179,7 @@ def _post(body, timeout):
     return resp
 
 
+@budgeted
 def gql_query(operation, variables, timeout=15):
     """The response body of a persisted query, healing a rotated hash like fetch_gql_comments
     does. Raises RuntimeError when Reddit still rejects it; a body that has `errors` but also
@@ -198,6 +200,7 @@ def gql_query(operation, variables, timeout=15):
             raise RuntimeError(f"GraphQL {operation} failed")
 
 
+@budgeted
 def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, timeout=15):
     """(roots, author_fullnames): a post's comment tree, nested like fetch_comments builds it.
     "more" stubs carry one encoded cursor in `children`; pass the decoded cursor back as
@@ -239,6 +242,7 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
     return roots, author_fullnames
 
 
+@budgeted
 def fetch_gql_user_about(username, timeout=10):
     """A user's profile as the dict routes/users.fetch_user_about builds, or None when
     Reddit has no such user. The app's profile query has no moderator / verified / award-karma
