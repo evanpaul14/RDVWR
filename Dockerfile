@@ -10,14 +10,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY upstream_budget.py app.py helpers.py shreddit.py archive.py media_detection.py reddit_client.py reddit_html.py \
-     reddit_login.py reddit_actions.py reddit_media.py reddit_owner.py gql_client.py gql_hashes.json \
-     ns_prefs.py template_helpers.py ./
+COPY *.py gql_hashes.json ./
 COPY routes/ routes/
 COPY static/ static/
 COPY templates/ templates/
 
 ENV PYTHONUNBUFFERED=1
+# Reddit login cookies live here; mount a volume on /data to keep them across rebuilds.
+ENV REDDIT_LOGIN_FILE=/data/.reddit_login.json
+RUN mkdir -p /data
 EXPOSE 8002
 
 # WEB_CONCURRENCY defaults to 1 worker (threads handle concurrency within it). Each
