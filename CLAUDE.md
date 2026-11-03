@@ -59,4 +59,4 @@ Keep each Python file under ~500 lines — add new endpoints to the matching `ro
 - Commit and push — DO NOT mention redgifs, nsfw, 18+, or any adult content terms in commit messages
 - `ssh mypi`, cd `/home/evanpaul/RDVWR`, run `git pull && sudo systemctl restart rdvwr`
 
-There is also a Vercel project linked to this repo (`.vercel/project.json`, gitignored) separate from the Pi deployment above. No `vercel.json` is committed, so the platform auto-detects `app.py` and only `/api/*` paths are routed to it as a serverless function.
+There is also a Vercel project linked to this repo (`.vercel/project.json`, gitignored) separate from the Pi deployment above. No `vercel.json` is committed, so the platform auto-detects `app.py`. 
