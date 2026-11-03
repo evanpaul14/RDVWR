@@ -2192,3 +2192,24 @@ class TestGqlCommentScores:
         assert gql_client._comment(self._node(), 0)["score_hidden"] is False
         assert comments_routes._parse_comment_fields({"id": "a", "score_hidden": True})["score_hidden"] is True
         assert comments_routes._parse_comment_fields({"id": "a"})["score_hidden"] is False
+
+
+# ── /healthz ──────────────────────────────────────────────────────────────────
+
+def test_healthz_reports_state_without_secrets():
+    r = app.test_client().get("/healthz")
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["status"] == "ok"
+    assert set(d) == {"status", "oauth", "gql", "cache"}
+    assert d["cache"]["backend"] == "memory"
+    assert r.headers["Cache-Control"] == "no-store"
+
+
+def test_healthz_degraded_when_every_token_expired():
+    import time
+    with patch.object(reddit_client, "REDDIT_OAUTH", True), \
+         patch.object(reddit_client, "_device_pool", [MagicMock(token="t", expires_at=time.time() - 5, acquired_at=1.0)]):
+        r = app.test_client().get("/healthz")
+    assert r.status_code == 503
+    assert r.get_json()["status"] == "degraded"
