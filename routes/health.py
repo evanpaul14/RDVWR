@@ -2,9 +2,9 @@
 Reports upstream-auth and cache state only; no identities, tokens or cookies."""
 import time
 from flask import Blueprint, jsonify
-import gql_client
-import helpers
-import reddit_client
+from gql import client as gql_client
+from core import helpers
+from reddit import client as reddit_client
 
 bp = Blueprint("health", __name__)
 

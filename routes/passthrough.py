@@ -1,8 +1,8 @@
 """Reddit-style ".json" URLs (e.g. /r/pics/hot.json), proxied straight to Reddit's API."""
 import re
 from flask import Blueprint, Response, jsonify, request
-from reddit_client import reddit_get
-from helpers import log
+from reddit.client import reddit_get
+from core.helpers import log
 
 bp = Blueprint("passthrough", __name__)
 

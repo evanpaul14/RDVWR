@@ -20,7 +20,7 @@ def _run(base, body):
 def test_prefixed_app_path_and_html():
     r = _run('/rdvwr/', """
         import json, re
-        from base_path import BASE_PATH, app_path
+        from core.base_path import BASE_PATH, app_path
         from app import app
         c = app.test_client()
         html = c.get('/settings').get_data(as_text=True)
@@ -51,7 +51,7 @@ def test_redirect_location_prefixed_once():
 def test_unset_is_noop():
     r = _run('', """
         import json
-        from base_path import BASE_PATH, app_path
+        from core.base_path import BASE_PATH, app_path
         from app import app
         idx = app.test_client().get('/').get_data(as_text=True)
         print(json.dumps(dict(base=BASE_PATH, a=app_path('/api/x'), meta='content=""' in idx, static='"/static/app.bundle.js' in idx)))

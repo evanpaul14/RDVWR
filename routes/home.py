@@ -1,5 +1,5 @@
 """Home feed: the logged-in shreddit feed when a cookie is supplied, else the anonymous front page."""
-from upstream_budget import budgeted, request as budget_request
+from reddit.budget import budgeted, request as budget_request
 import re
 import uuid
 import requests
@@ -7,12 +7,12 @@ from urllib.parse import urlparse, parse_qs
 from flask import Blueprint, abort, jsonify, request, make_response
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
-from media_detection import process_post, extract_posts
-import reddit_login
-from reddit_client import reddit_get, PROXIES
-from shreddit import _parse_shreddit_post
-from gql_posts import fetch_gql_frontpage
-from helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
+from parsing.media_detection import process_post, extract_posts
+from reddit import login as reddit_login
+from reddit.client import reddit_get, PROXIES
+from parsing.shreddit import _parse_shreddit_post
+from gql.posts import fetch_gql_frontpage
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
                      cached_json, error_response, fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("home", __name__)

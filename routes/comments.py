@@ -1,15 +1,15 @@
 """Post comment trees and 'load more' children."""
-from upstream_budget import budgeted
+from reddit.budget import budgeted
 import time
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request
-from media_detection import process_post, _parse_awards, DISABLE_NSFW
-from reddit_html import clean_reddit_html
-from reddit_client import reddit_get
-from archive import fetch_archived_comment_tree
-from gql_client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
-from gql_posts import fetch_gql_post
-from helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
+from parsing.media_detection import process_post, _parse_awards, DISABLE_NSFW
+from parsing.reddit_html import clean_reddit_html
+from reddit.client import reddit_get
+from reddit.archive import fetch_archived_comment_tree
+from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
+from gql.posts import fetch_gql_post
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
                      is_waf_block, parallel, UpstreamError, log)
 from routes.subreddit import _subreddit_error_state

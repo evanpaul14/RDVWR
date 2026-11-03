@@ -2,15 +2,15 @@
 from unittest.mock import Mock, patch
 import pytest
 import requests
-from upstream_budget import budget, request, backoff
+from reddit.budget import budget, request, backoff
 from routes.subreddit import fetch_feed
-import helpers
+from core import helpers
 
 
 def test_nested_requests_share_remaining_budget():
     clock = [100.0]
     call = Mock()
-    with patch('upstream_budget.time.monotonic', side_effect=lambda: clock[0]):
+    with patch('reddit.budget.time.monotonic', side_effect=lambda: clock[0]):
         with budget(6):
             clock[0] += 4
             with budget(15):
@@ -24,7 +24,7 @@ def test_nested_requests_share_remaining_budget():
 
 
 def test_backoff_does_not_exceed_deadline():
-    with patch('upstream_budget.time.sleep') as sleep:
+    with patch('reddit.budget.time.sleep') as sleep:
         with budget(1):
             with pytest.raises(requests.exceptions.Timeout):
                 backoff(5)
@@ -42,8 +42,8 @@ def test_feed_fallback_uses_rest_budget():
         request(call, 'gql', timeout=15)
         assert call.call_args.kwargs['timeout'] == 2
         return {'posts': [], 'after': None}
-    with patch('upstream_budget.time.monotonic', side_effect=lambda: clock[0]), \
-         patch('helpers.reddit_login.request_account_active', return_value=False), \
+    with patch('reddit.budget.time.monotonic', side_effect=lambda: clock[0]), \
+         patch('core.helpers.reddit_login.request_account_active', return_value=False), \
          patch('routes.subreddit.reddit_get', side_effect=rest), \
          patch('routes.subreddit.fetch_gql_feed', side_effect=fallback):
         fetch_feed('budgettest', 'hot', timeout=6)
@@ -56,7 +56,7 @@ def test_listing_hydration_matches_server_request(kind):
     payload = {'posts': [], 'after': 'next', 'title': 'List'}
     fetch = {'home': 'fetch_frontpage', 'multi': 'fetch_multireddit', 'search': 'fetch_search_posts'}[kind]
     with app.test_request_context('/'), patch.object(page_data, fetch, return_value=payload), \
-         patch('reddit_login.request_account_active', return_value=False):
+         patch('reddit.login.request_account_active', return_value=False):
         if kind == 'home':
             result = page_data.build_home('hot', 'all', 'cursor')
         elif kind == 'multi':
@@ -77,7 +77,7 @@ def test_fetch_cache_normalizes_defaults_and_copies_results():
     def fetch(value, optional='', timeout=10):
         calls.append(value)
         return {'items': [value]}
-    with patch('helpers.reddit_login.request_account_active', return_value=False):
+    with patch('core.helpers.reddit_login.request_account_active', return_value=False):
         fetch('same')['items'].clear()
         assert fetch(value='same', timeout=6)['items'] == ['same']
         assert fetch('same', '')['items'] == ['same']
@@ -106,7 +106,7 @@ def test_fetch_cache_coalesces_concurrent_results_and_failures(fails):
         if future in helpers._fetch_inflight.values():
             followers.wait(timeout=3)
         return original_result(future, timeout)
-    with patch('helpers.reddit_login.request_account_active', return_value=False), \
+    with patch('core.helpers.reddit_login.request_account_active', return_value=False), \
          patch.object(Future, 'result', result), ThreadPoolExecutor(max_workers=4) as pool:
         jobs = [pool.submit(fetch, 'same')]
         assert entered.wait(3)
@@ -124,7 +124,7 @@ def test_fetch_cache_coalesces_concurrent_results_and_failures(fails):
     assert calls == ['same']
     assert not helpers._fetch_inflight
     if fails:
-        with patch('helpers.reddit_login.request_account_active', return_value=False), pytest.raises(ValueError):
+        with patch('core.helpers.reddit_login.request_account_active', return_value=False), pytest.raises(ValueError):
             fetch('same')
         assert calls == ['same', 'same']
 
@@ -135,7 +135,7 @@ def test_fetch_cache_never_shares_account_reads():
     def fetch(value):
         calls.append(value)
         return value
-    with patch('helpers.reddit_login.request_account_active', return_value=True):
+    with patch('core.helpers.reddit_login.request_account_active', return_value=True):
         fetch('private')
         fetch('private')
     assert calls == ['private', 'private']

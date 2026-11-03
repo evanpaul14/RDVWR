@@ -1,11 +1,11 @@
 """Post, community, and user search plus subreddit autocomplete."""
-from upstream_budget import budgeted
+from reddit.budget import budgeted
 import requests
 from flask import Blueprint, jsonify, request
-from media_detection import extract_posts, clean_url, DISABLE_NSFW
-from reddit_client import reddit_get
-from gql_search import fetch_gql_search_posts, fetch_gql_search_users, fetch_gql_search_communities
-from helpers import (fetch_cache, CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
+from parsing.media_detection import extract_posts, clean_url, DISABLE_NSFW
+from reddit.client import reddit_get
+from gql.search import fetch_gql_search_posts, fetch_gql_search_users, fetch_gql_search_communities
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, FEED_LIMIT, SEARCH_SORTS, cached_json, error_response, server_cache,
                      hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("search", __name__)

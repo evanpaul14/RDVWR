@@ -9,10 +9,10 @@ import base64
 import pytest
 from unittest.mock import patch, MagicMock
 
-import gql_posts
-from gql_posts import gql_post_to_rest, fetch_gql_feed
-from helpers import UpstreamError
-from media_detection import process_post
+from gql import posts as gql_posts
+from gql.posts import gql_post_to_rest, fetch_gql_feed
+from core.helpers import UpstreamError
+from parsing.media_detection import process_post
 from routes import subreddit as subreddit_routes
 
 
@@ -138,7 +138,7 @@ def test_selftext_renders_richtext_formatting_lists_and_code():
 
 
 def test_richtext_table_and_heading():
-    from gql_richtext import richtext_html
+    from gql.richtext import richtext_html
     cell = lambda t: {"c": [{"e": "text", "t": t}]}
     doc = rt({"e": "h", "l": 2, "c": [{"e": "raw", "t": "Title"}]},
              {"e": "table", "h": [cell("A"), cell("B")], "c": [[cell("1"), cell("2")]]})
@@ -147,13 +147,13 @@ def test_richtext_table_and_heading():
 
 
 def test_richtext_format_offsets_count_utf16_units():
-    from gql_richtext import richtext_html
+    from gql.richtext import richtext_html
     doc = rt({"e": "par", "c": [{"e": "text", "t": "\U0001F600 bold", "f": [[1, 3, 4]]}]})   # the emoji is 2 units
     assert richtext_html(doc) == "<p>\U0001F600 <strong>bold</strong></p>"
 
 
 def test_richtext_garbage_gives_empty_html():
-    from gql_richtext import richtext_html
+    from gql.richtext import richtext_html
     assert richtext_html("not json") == "" and richtext_html(None) == "" and richtext_html("{}") == ""
 
 
@@ -240,8 +240,8 @@ def test_fetch_feed_graphql_failure_reports_the_original_block():
 
 # ── about / rules ─────────────────────────────────────────────────────────────
 
-import gql_subreddit
-from gql_subreddit import fetch_gql_about, fetch_gql_rules
+from gql import subreddit as gql_subreddit
+from gql.subreddit import fetch_gql_about, fetch_gql_rules
 
 
 def about_node(**over):
@@ -329,7 +329,7 @@ def test_csp_allows_blob_workers_for_hls():
 # ── popular / front page / user posts ─────────────────────────────────────────
 
 from routes import home as home_routes, users as users_routes, search as search_routes
-import gql_search
+from gql import search as gql_search
 
 
 def test_cell_post_id_reads_any_cell_kind():
@@ -577,7 +577,7 @@ def test_feed_returns_rest_style_cursor_and_accepts_one_back():
 
 # ── user comments / overview ──────────────────────────────────────────────────
 
-import gql_user
+from gql import user as gql_user
 
 
 def comment_node(cid="t1_c1", preview="hello", **over):
@@ -691,7 +691,8 @@ def test_overview_falls_back_to_the_archive_when_graphql_fails():
 
 # ── multireddit, link hydration, avatars ──────────────────────────────────────
 
-import helpers, routes.avatars as avatars_routes
+from core import helpers
+import routes.avatars as avatars_routes
 
 
 def test_multireddit_feed_and_missing():

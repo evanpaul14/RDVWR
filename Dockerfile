@@ -10,7 +10,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY *.py gql_hashes.json ./
+COPY *.py ./
+COPY core/ core/
+COPY parsing/ parsing/
+COPY reddit/ reddit/
+COPY gql/ gql/
 COPY routes/ routes/
 COPY static/ static/
 COPY templates/ templates/

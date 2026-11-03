@@ -8,8 +8,8 @@ from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from flask import Blueprint, jsonify, request, Response
-from reddit_client import SESSION, HEADERS
-from helpers import STREAM_CHUNK_SIZE, DISABLE_DOWNLOADS, error_response, log
+from reddit.client import SESSION, HEADERS
+from core.helpers import STREAM_CHUNK_SIZE, DISABLE_DOWNLOADS, error_response, log
 
 bp = Blueprint("downloads", __name__)
 

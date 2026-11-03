@@ -1,7 +1,7 @@
 import pytest
 
-import reddit_login
-import reddit_owner
+from reddit import login as reddit_login
+from reddit import owner as reddit_owner
 from app import app
 
 PROXIED = {'X-Forwarded-For': '1.2.3.4', 'X-Real-IP': '192.168.1.5', 'Sec-Fetch-Site': 'same-origin'}
