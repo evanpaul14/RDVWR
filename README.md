@@ -26,7 +26,9 @@
 4. [Configuration](#configuration)
    - [Environment variables](#environment-variables)
    - [Default settings](#default-settings)
+   - [Reddit login](#reddit-login)
    - [Media proxying](#media-proxying)
+   - [Health check](#health-check)
 5. [Credit](#credit)
 
 ---
@@ -37,17 +39,19 @@ RDVWR is a single-page Reddit viewer. A Python/Flask backend proxies Reddit's AP
 
 ## Features
 
-- Subreddit feeds with sort/time filters
-- Post view with nested comment threads
+- Subreddit, multireddit and home feeds with sort/time filters
+- Post view with nested comment threads, duplicates, wiki pages and live threads
 - User profiles (posts + comments)
-- Subreddit and post search
+- Subreddit, user and post search
+- Local saved posts and subscriptions, plus read tracking (all stored in your browser)
+- Optional Reddit login for voting, commenting and posting (see [Reddit login](#reddit-login))
 - Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - Dark theme, mobile-friendly
 - Works without JavaScript: every page is also server-rendered, with its own cookie-based settings page (`/settings`)
 
 ## Built with
 
-- **Backend:** [Python](https://www.python.org/) / [Flask](https://flask.palletsprojects.com/) — proxies Reddit's public JSON API
+- **Backend:** [Python](https://www.python.org/) / [Flask](https://flask.palletsprojects.com/) — proxies Reddit's API (spoofed OAuth, public JSON, and the app's GraphQL as a fallback when Reddit blocks REST)
 - **Frontend:** Vanilla JS with client-side routing
 - [marked](https://github.com/markedjs/marked) + [DOMPurify](https://github.com/cure53/DOMPurify) for markdown
 - [hls.js](https://github.com/video-dev/hls.js) for video
@@ -112,6 +116,7 @@ python3 -m pytest tests/
 |---|---|---|
 | `REDDIT_OAUTH` | `1` | Spoofs Reddit OAuth. Set `0` to disable and use public JSON API. |
 | `GITHUB_DISPATCH_TOKEN` | _(unset)_ | Fine-grained GitHub token (Actions read/write on the repo). When comment loading fails, the server uses it to run the `update-gql-hash` workflow right away instead of waiting for its daily run. |
+| `BASE_PATH` | _(unset)_ | Serve the app under a URL prefix, e.g. `/rdvwr`, behind a reverse proxy that strips it (such as Caddy's `handle_path`). Routes stay root-relative; only the URLs the app emits are prefixed. |
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
 | `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
 | `RDVWR_ENABLE_NSFW_ONLY_SEARCH` | `0` | Set to `1` to offer an "NSFW only" checkbox in search (next to the "limit to r/sub" one) that limits results to over-18 posts. Adds a matching toggle to the settings panel, on by default; hidden while this is `0` or `DISABLE_NSFW=1`. The checkbox is also hidden when the visitor hides NSFW posts. |
@@ -184,6 +189,19 @@ Set `REDDIT_LOGIN=1` to add a "Reddit account" section to settings. Reddit no lo
 
 > [!WARNING]
 > All media bandwidth then flows through the server.
+
+## Health check
+
+`GET /healthz` returns JSON for uptime monitors and load balancers, with no identities, tokens or cookies in it:
+
+```json
+{"status": "ok",
+ "oauth": {"enabled": true, "pool_size": 3, "tokens_valid": 3, "ever_acquired": true},
+ "gql": {"hashes": 13, "last_github_check_secs_ago": null},
+ "cache": {"backend": "memory", "ok": true}}
+```
+
+It answers `200` normally and `503` with `"status": "degraded"` when the Redis cache is unreachable, or when OAuth has issued tokens before but none are currently valid. Tokens are minted on demand, so a freshly started server with none yet is still `ok`.
 
 ---
 
