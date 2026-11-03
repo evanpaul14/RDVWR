@@ -177,7 +177,7 @@ def search():
     return _respond(build_search(
         q, _arg('stype', 'posts'), sort if sort in SEARCH_SORTS else 'relevance',
         clean_time(_arg('t'), 'all'), sub if SUBREDDIT_RE.match(sub) else '',
-        scope if SUBREDDIT_RE.match(scope) else '', _arg('after')))
+        scope if SUBREDDIT_RE.match(scope) else '', _arg('after'), _arg('nsfw_only') == '1'))
 
 
 @bp.route("/live/<thread_id>", strict_slashes=False)

@@ -9,6 +9,7 @@ services:
       - PROXY_MEDIA=${PROXY_MEDIA:-0}
       - DISABLE_NSFW=${DISABLE_NSFW:-0}
       - DISABLE_DOWNLOADS=${DISABLE_DOWNLOADS:-0}
+      - RDVWR_ENABLE_NSFW_ONLY_SEARCH=${RDVWR_ENABLE_NSFW_ONLY_SEARCH:-0}
       - RDVWR_DISABLE_PERSONALIZED_HOME=${RDVWR_DISABLE_PERSONALIZED_HOME:-0}
       # Only meaningful together: WEB_CONCURRENCY>1 needs REDIS_URL set (a shared
       # response cache), otherwise each worker's cache is independent.

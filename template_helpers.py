@@ -9,7 +9,8 @@ from urllib.parse import urlencode, urlparse, parse_qsl
 from flask import g, request
 from markupsafe import Markup
 import reddit_login
-from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME
+from media_detection import DISABLE_NSFW
+from helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, NSFW_ONLY_SEARCH
 from reddit_html import EXTERNAL_MEDIA_CLASS, linkify_plain_text
 from ns_prefs import all_prefs, get_pref
 from base_path import BASE_PATH
@@ -218,4 +219,5 @@ def register(app):
     def _inject_globals():
         return dict(base_path=BASE_PATH, asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
                     default_settings=DEFAULT_SETTINGS, reddit_login=reddit_login.login_status(), disable_personalized_home=DISABLE_PERSONALIZED_HOME,
+                    nsfw_only_search=NSFW_ONLY_SEARCH and not DISABLE_NSFW,
                     ns=all_prefs())

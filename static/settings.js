@@ -9,6 +9,7 @@ export const DEFAULTS = {
   nsfwBlur: false,
   nsfwHide: false,
   nsfwSearchHide: false,
+  nsfwOnlySearch: false,
   markRead: true,
   hideReadHome: false,
   hideReadSub: false,

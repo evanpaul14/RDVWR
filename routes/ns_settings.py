@@ -8,7 +8,7 @@ per commenter), marking posts read on scroll and clearing read history (both use
 localStorage + scroll tracking), and disabling infinite scroll (there's no infinite
 scroll here to disable — noscript already paginates via plain "next page" links)."""
 from flask import Blueprint, request, render_template, redirect
-from helpers import DISABLE_DOWNLOADS, safe_next
+from helpers import DISABLE_DOWNLOADS, NSFW_ONLY_SEARCH, safe_next
 import reddit_login
 from ns_prefs import PREFS, all_prefs, set_pref_cookie
 
@@ -22,6 +22,8 @@ def ns_settings():
         for name, pref in PREFS.items():
             if name == 'personalized_home' and not request.form.get('personalized_home_shown'):
                 continue  # the checkbox is only offered while logged in; don't reset it otherwise
+            if name == 'nsfw_only_search' and not NSFW_ONLY_SEARCH:
+                continue  # the checkbox is only offered when the deployment opts in
             value = request.form.get(name, '')
             set_pref_cookie(resp, name, value == '1' if pref.allowed is None else value)
         return resp
