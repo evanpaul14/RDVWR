@@ -152,9 +152,31 @@ setting always overrides these — they're only the starting point (stored in th
 
 ## Reddit login
 
-`REDDIT_LOGIN=1` adds a "Reddit account" section to settings with log in / log out. Logged in, Home shows that account's personalized feed (on requests from the server's own machine only, and switchable off with the "Personalized home feed" setting, which also covers pasted cookies). Local requests also read Reddit as the account (so posts show your vote), and get up/down vote arrows on posts and comments, in the JS app and the no-JS pages. The subscribe button becomes join/leave on the real subreddit, and the Subscribed feed (also available without JS at `/subscribed`) becomes the account's own front page: every subreddit it has joined, with no 50-subreddit cap, and the post view gets a comment box plus reply buttons. A "+" button in the header (or `/submit` without JS) creates text, link, image, gallery and video posts, with optional flair (the subreddit's own flair list, including required and editable flairs); comments can carry one image or GIF. Uploads go straight from the server to Reddit: images/GIFs up to 20 MB, videos up to 100 MB (held in memory, so mind the size on a small machine). Video posts need `ffmpeg` on the server for the poster frame Reddit requires, and a comment with an image is sent as rich text, so markdown formatting in that comment isn't applied. A profile page at `/account` (linked in the header) lists the account's own posts and comments with edit and delete, changes or removes its profile picture, and signs out. None of these controls ever appear on the public site. Reddit no longer issues API apps, so there's no OAuth: sign in on reddit.com in your own browser, then paste that session's cookies into the form (F12 → Application → Cookies → right-click the `reddit.com` row → Copy all as header value). The server checks them against Reddit and stores them.
+Set `REDDIT_LOGIN=1` to add a "Reddit account" section to settings. Reddit no longer issues API apps, so there's no OAuth: sign in on reddit.com in your own browser, then paste the session cookies into the form (F12 → Application → Cookies → right-click the `reddit.com` row → Copy all as header value). The server checks them against Reddit and stores them.
 
-Login stays on the server: the cookies go only to Reddit, are never sent back to the browser, and are kept in `.reddit_login.json` (mode 0600, override with `REDDIT_LOGIN_FILE`). The login routes only answer requests coming directly from the machine running the server (not through a reverse proxy), so use `localhost` or an SSH tunnel. Logging out deletes the file. Needs a writable disk, so it won't work on Vercel.
+**What you get (JS app and no-JS pages):**
+
+- Personalized Home feed, and your vote shown on posts
+- Up/down vote arrows on posts and comments
+- Join/leave on the real subreddit; the Subscribed feed (`/subscribed`) becomes your account's own front page, with no 50-subreddit cap
+- Comment box and reply buttons in the post view
+- Create posts from the header "+" button or `/submit`: text, link, image, gallery and video, with optional flair
+- Comments can carry one image or GIF
+- `/account`: your own posts and comments (edit/delete), profile picture, sign out
+
+**Limits and requirements:**
+
+- Uploads go straight from the server to Reddit: images/GIFs up to 20 MB, videos up to 100 MB. They are held in memory, so mind the size on a small machine.
+- Video posts need `ffmpeg` on the server for the poster frame Reddit requires.
+- A comment with an image is sent as rich text, so markdown formatting in that comment isn't applied.
+- Needs a writable disk, so it won't work on Vercel.
+
+**Security:**
+
+- Cookies go only to Reddit and are never sent back to the browser.
+- They're stored in `.reddit_login.json` (mode 0600; override the path with `REDDIT_LOGIN_FILE`). Logging out deletes the file.
+- These controls never appear on the public site: login and account routes only answer requests coming directly from the server's own machine, so use `localhost` or an SSH tunnel.
+- To use the account from other devices behind a reverse proxy, set `REDDIT_LOGIN_OWNER_KEY` (see [Environment variables](#environment-variables)).
 
 ## Media proxying
 
