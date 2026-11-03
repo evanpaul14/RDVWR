@@ -18,11 +18,11 @@
     <div class="sort-bar ns-sort-bar">
       {% for s, url in page.sort_links %}{{ ui.sort_link(s | capitalize, url, s == page.sort) }}{% endfor %}
       {% if page.sort == 'top' %}{{ ui.time_filter('/search', page.time, page.time_form_fields) }}{% endif %}
-      {% if page.nsfw_only_toggle_url %}
-        <a class="scope-check-label" href="{{ page.nsfw_only_toggle_url }}" role="checkbox" aria-checked="{{ 'true' if page.nsfw_only else 'false' }}"><span class="ns-checkbox{% if page.nsfw_only %} checked{% endif %}" aria-hidden="true"></span><span>NSFW only</span></a>
-      {% endif %}
       {% if page.scope_toggle_url %}
         <a class="scope-check-label" href="{{ page.scope_toggle_url }}" role="checkbox" aria-checked="{{ 'true' if page.sub else 'false' }}"><span class="ns-checkbox{% if page.sub %} checked{% endif %}" aria-hidden="true"></span><span>r/{{ page.scope }}</span></a>
+      {% endif %}
+      {% if page.nsfw_only_toggle_url %}
+        <a class="scope-check-label" href="{{ page.nsfw_only_toggle_url }}" role="checkbox" aria-checked="{{ 'true' if page.nsfw_only else 'false' }}"><span class="ns-checkbox{% if page.nsfw_only %} checked{% endif %}" aria-hidden="true"></span><span>NSFW only</span></a>
       {% endif %}
     </div>
   {% endif %}

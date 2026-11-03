@@ -1247,6 +1247,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
   font-family:var(--mono); font-size:10px; color:var(--tx2); letter-spacing:.04em;
   cursor:pointer; white-space:nowrap; user-select:none;
 }
+.scope-check-label + .scope-check-label { border-left:0; padding-left:4px; }
 .scope-check-input {
   accent-color:var(--ac); width:12px; height:12px; cursor:pointer; flex-shrink:0;
 }

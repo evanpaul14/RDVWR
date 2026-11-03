@@ -102,7 +102,7 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   const nsfwOnlyHtml = nsfwOnlyOffered
     ? `<label class="scope-check-label"><input type="checkbox" class="scope-check-input" id="nsfw-only-check"${nsfwOnly ? ' checked' : ''}><span>NSFW only</span></label>`
     : '';
-  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwOnlyHtml + scopeCheckHtml;
+  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + scopeCheckHtml + nsfwOnlyHtml;
   sortBar.style.display = 'flex';
   setActiveButton(sortBar, 'ssort', sort);
 
