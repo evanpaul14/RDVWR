@@ -1,15 +1,15 @@
 """Subreddit feed, about/rules/widgets, duplicates, wiki, and multireddits."""
-from upstream_budget import budgeted, request as budget_request
+from reddit.budget import budgeted, request as budget_request
 import re
 import html as html_lib
 import requests
 from flask import Blueprint, jsonify, request
-from media_detection import process_post, extract_posts, clean_url
-from reddit_html import clean_reddit_html
-from reddit_client import reddit_get
-from gql_posts import fetch_gql_feed, fetch_gql_multireddit
-from gql_subreddit import fetch_gql_about, fetch_gql_rules
-from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
+from parsing.media_detection import process_post, extract_posts, clean_url
+from parsing.reddit_html import clean_reddit_html
+from reddit.client import reddit_get
+from gql.posts import fetch_gql_feed, fetch_gql_multireddit
+from gql.subreddit import fetch_gql_about, fetch_gql_rules
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, is_waf_block, log, UpstreamError)
@@ -132,7 +132,7 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
     """Quarantined subreddit listings are blocked for anonymous sessions even after
     opt-in. Fall back: paginate the comments feed (accessible) to collect post IDs,
     then batch-fetch those posts via /by_id/."""
-    from reddit_client import _get_quarantine_session
+    from reddit.client import _get_quarantine_session
     s = _get_quarantine_session()
     try:
         seen, ids, cursor = set(), [], after

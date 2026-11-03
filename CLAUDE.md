@@ -16,7 +16,14 @@ Do not install or run Playwright (or any other browser-automation tool) to verif
 
 Single-page Reddit viewer. Python/Flask backend proxies Reddit API; ES module frontend.
 
-**Backend files:** `app.py` (Flask app setup + blueprint registration only), `helpers.py` (shared constants, allowlist regexes, `TTLCache`, `server_cache`/`cached_json`/`validate_params`, `hydrate_linked_posts`, `UpstreamError`), `routes/` (one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `pages`, `ns_settings`, `mediaproxy`, `passthrough`, `account`, `health` — registered in `routes/__init__.py`; plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`), `template_helpers.py` (Jinja filters/globals), `ns_prefs.py` (noscript preference cookies), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers), `archive.py` (Arctic Shift fallback for user profiles), `media_detection.py` (media helpers), `reddit_client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every ~10 min; disable with `REDDIT_OAUTH=0`), `update_vendor.py` (update vendored JS — run manually).
+**Backend files:** `app.py` (Flask app setup + blueprint registration only) at the root, plus packages:
+- `routes/` — one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `pages`, `ns_settings`, `mediaproxy`, `passthrough`, `account`, `health` (registered in `routes/__init__.py`); plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`.
+- `core/` — `helpers.py` (shared constants, allowlist regexes, `TTLCache`, `server_cache`/`cached_json`/`validate_params`, `hydrate_linked_posts`, `UpstreamError`), `template_helpers.py` (Jinja filters/globals), `ns_prefs.py` (noscript preference cookies), `base_path.py`.
+- `parsing/` — `media_detection.py` (media helpers), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers).
+- `reddit/` — `client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every ~10 min; disable with `REDDIT_OAUTH=0`), `login.py`, `actions.py`, `media.py`, `owner.py`, `budget.py` (upstream budget), `archive.py` (Arctic Shift fallback for user profiles).
+- `gql/` — GraphQL fallback (`client.py`, `posts.py`, `search.py`, `subreddit.py`, `user.py`, `richtext.py`) and `gql_hashes.json`.
+- `scripts/` — `update_vendor.py` (update vendored JS — run manually), `update_gql_hash.py`, `benchmark.py`.
+Import as `from core.helpers import ...` / `from reddit import client as reddit_client`; new Python files go in the matching package.
 
 `process_post()` normalizes post dicts. Media detection priority: galleries → redgifs → reddit HLS video → reddit_video_preview → YouTube → Streamable → TikTok → iframe → Imgur album → GIF/GIFV/Imgur image.
 

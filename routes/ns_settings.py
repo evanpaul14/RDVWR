@@ -8,9 +8,9 @@ per commenter), marking posts read on scroll and clearing read history (both use
 localStorage + scroll tracking), and disabling infinite scroll (there's no infinite
 scroll here to disable — noscript already paginates via plain "next page" links)."""
 from flask import Blueprint, request, render_template, redirect
-from helpers import DISABLE_DOWNLOADS, NSFW_ONLY_SEARCH, safe_next
-import reddit_login
-from ns_prefs import PREFS, all_prefs, set_pref_cookie
+from core.helpers import DISABLE_DOWNLOADS, NSFW_ONLY_SEARCH, safe_next
+from reddit import login as reddit_login
+from core.ns_prefs import PREFS, all_prefs, set_pref_cookie
 
 bp = Blueprint("ns_settings", __name__)
 

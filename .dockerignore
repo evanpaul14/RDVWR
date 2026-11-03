@@ -12,9 +12,8 @@ tests
 *.zip
 *.xpi
 *.patch
-benchmark.py
-update_vendor.py
-update_gql_hash.py
+scripts/benchmark.py
+scripts/
 promo
 plan.md
 reconstruction.md

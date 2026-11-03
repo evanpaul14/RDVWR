@@ -3,9 +3,9 @@ import secrets
 import logging
 from flask import Flask, g, jsonify, request
 from flask_compress import Compress
-import template_helpers
-import base_path
-from helpers import CACHE_TTL_STATIC, is_same_site_request
+from core import template_helpers
+from core import base_path
+from core.helpers import CACHE_TTL_STATIC, is_same_site_request
 from routes import register_all
 
 

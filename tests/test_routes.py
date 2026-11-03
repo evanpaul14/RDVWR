@@ -11,8 +11,8 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-import helpers
-import reddit_client
+from core import helpers
+from reddit import client as reddit_client
 from app import app
 from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes, users as users_routes, subreddit as subreddit_routes
 
@@ -558,7 +558,7 @@ class TestUserAbout:
         gql.assert_not_called()
 
     def test_graphql_profile_mapping(self):
-        import gql_client
+        from gql import client as gql_client
         node = {"name": "spez", "isGilded": True, "isEmployee": True, "snoovatarIcon": None,
                 "karma": {"fromPosts": 184704, "fromComments": 756554.0, "total": 941258.0},
                 "profile": {"createdAt": "2005-06-06T04:00:00.000000+0000", "publicDescriptionText": "Reddit CEO",
@@ -947,7 +947,7 @@ class TestMediaProxy:
 # ── /api/resolve ──────────────────────────────────────────────────────────────
 
 class TestResolve:
-    @patch("reddit_client.SESSION.head")
+    @patch("reddit.client.SESSION.head")
     def test_valid_reddit_url(self, mock_head, client):
         mock_resp = MagicMock()
         mock_resp.url = "https://www.reddit.com/r/python/comments/abc123/title/"
@@ -956,7 +956,7 @@ class TestResolve:
         assert resp.status_code == 200
         assert "url" in resp.get_json()
 
-    @patch("reddit_client.SESSION.head")
+    @patch("reddit.client.SESSION.head")
     def test_stops_at_off_reddit_redirect(self, mock_head, client):
         mock_head.side_effect = [
             MockResponse(status_code=302, headers={"Location": "/r/python/comments/abc/"}),
@@ -1238,7 +1238,7 @@ class TestParseShredditCrosspost:
         return BeautifulSoup(html, 'html.parser').find('shreddit-post')
 
     def test_video_crosspost_media_populated(self):
-        from shreddit import _parse_shreddit_post
+        from parsing.shreddit import _parse_shreddit_post
         inner = '''
         <div slot="post-media-container">
           <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
@@ -1260,7 +1260,7 @@ class TestParseShredditCrosspost:
         assert post["linked_post"] is None
 
     def test_image_crosspost_media_populated(self):
-        from shreddit import _parse_shreddit_post
+        from parsing.shreddit import _parse_shreddit_post
         inner = '''
         <div slot="post-media-container">
           <div class="crosspost-credit-bar"><a href="/r/orig/">r/orig</a></div>
@@ -1275,7 +1275,7 @@ class TestParseShredditCrosspost:
         assert xp["gallery"] == []
 
     def test_non_crosspost_untouched(self):
-        from shreddit import _parse_shreddit_post
+        from parsing.shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="text"
             domain="self.dest" id="t3_id1" post-title="t" subreddit-name="dest"
@@ -1288,7 +1288,7 @@ class TestParseShredditCrosspost:
 
 class TestParseShredditPostLinkThumbnail:
     def test_link_post_thumbnail_proxied(self):
-        from shreddit import _parse_shreddit_post
+        from parsing.shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
             content-href="https://example.com/article" domain="example.com"
@@ -1304,7 +1304,7 @@ class TestParseShredditPostLinkThumbnail:
         assert post["preview_img"].startswith("/api/img?url=")
 
     def test_link_post_no_thumbnail(self):
-        from shreddit import _parse_shreddit_post
+        from parsing.shreddit import _parse_shreddit_post
         from bs4 import BeautifulSoup
         html = '''<shreddit-post permalink="/r/dest/comments/id1/t/" post-type="link"
             content-href="https://example.com/article" domain="example.com"
@@ -1336,11 +1336,11 @@ class TestParseLiveUpdates:
 class TestTTLCache:
     def test_expired_entries_swept_before_live_ones_evicted(self):
         cache = helpers.TTLCache(3)
-        with patch("helpers.time.time", return_value=1000.0):
+        with patch("core.helpers.time.time", return_value=1000.0):
             cache.set("live", 1, 5000)
             cache.set("old1", 2, 10)
             cache.set("old2", 3, 10)
-        with patch("helpers.time.time", return_value=2000.0):
+        with patch("core.helpers.time.time", return_value=2000.0):
             cache.set("new", 4, 600)
             assert cache.get("live") == 1
             assert cache.get("new") == 4
@@ -1348,9 +1348,9 @@ class TestTTLCache:
 
     def test_expired_get_is_miss_and_removed(self):
         cache = helpers.TTLCache(10)
-        with patch("helpers.time.time", return_value=1000.0):
+        with patch("core.helpers.time.time", return_value=1000.0):
             cache.set("k", "v", 5)
-        with patch("helpers.time.time", return_value=1010.0):
+        with patch("core.helpers.time.time", return_value=1010.0):
             assert cache.get("k") is helpers._CACHE_MISS
         assert len(cache) == 0
 
@@ -1408,7 +1408,7 @@ class TestRedditLogin:
         assert c.post('/auth/reddit/login', environ_base=self.LOCAL, headers=self.SAME).status_code == 404
 
     def test_non_local_and_proxied_requests_rejected(self):
-        import reddit_login
+        from reddit import login as reddit_login
         with patch.object(reddit_login, 'ENABLED', True):
             c = app.test_client()
             assert c.post('/auth/reddit/login', environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
@@ -1416,13 +1416,13 @@ class TestRedditLogin:
                           headers={**self.SAME, 'X-Forwarded-For': '1.2.3.4'}).status_code == 404
 
     def test_cross_site_post_rejected(self):
-        import reddit_login
+        from reddit import login as reddit_login
         with patch.object(reddit_login, 'ENABLED', True):
             r = app.test_client().post('/auth/reddit/login', environ_base=self.LOCAL, headers={'Sec-Fetch-Site': 'cross-site'})
         assert r.status_code == 403
 
     def test_rejects_garbage_and_signed_out_cookies(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         with patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(tmp_path / 'l.json')), \
              patch.object(reddit_login, '_whoami', return_value=None):
             c = app.test_client()
@@ -1432,7 +1432,7 @@ class TestRedditLogin:
             assert reddit_login.username() is None
 
     def test_login_stores_cookies_locally_and_logout_removes_them(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         store = str(tmp_path / 'l.json')
         with patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', store), \
              patch.object(reddit_login, '_whoami', return_value='someone'):
@@ -1452,7 +1452,7 @@ class TestPersonalizedHomeViaLogin:
     SAME = {'Sec-Fetch-Site': 'same-origin'}
 
     def _logged_in(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         store = tmp_path / 'l.json'
         store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
         return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)))
@@ -1531,14 +1531,15 @@ class TestAccountReads:
         return f"{b({'alg': 'none'})}.{b({'exp': exp})}.sig"
 
     def _logged_in(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         store = tmp_path / 'l.json'
         store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
         reddit_login._token.update(cookies=None, value=None, exp=0.0)
         return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)))
 
     def test_access_token_minted_from_home_page_set_cookie_and_cached(self, tmp_path):
-        import time, reddit_login
+        import time
+        from reddit import login as reddit_login
         tok = self._jwt(time.time() + 86400)
         resp = MagicMock(status_code=200)
         resp.headers.get_list.return_value = ['session_tracker=x; Path=/', f'token_v2={tok}; Domain=.reddit.com']
@@ -1549,7 +1550,7 @@ class TestAccountReads:
         assert g.call_count == 1 and g.call_args.kwargs['headers']['Cookie'] == 'reddit_session=abc'
 
     def test_access_token_none_when_cookies_dead(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         resp = MagicMock(status_code=200)
         resp.headers.get_list.return_value = ['session_tracker=x']
         p1, p2 = self._logged_in(tmp_path)
@@ -1557,7 +1558,7 @@ class TestAccountReads:
             assert reddit_login.access_token() is None
 
     def test_request_token_only_for_local_requests(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         p1, p2 = self._logged_in(tmp_path)
         with p1, p2, patch.object(reddit_login, 'access_token', return_value='T'):
             with app.test_request_context('/', environ_base=self.LOCAL):
@@ -1578,7 +1579,7 @@ class TestAccountReads:
 
     def test_account_reads_bypass_and_never_populate_shared_cache(self, tmp_path):
         from routes import home
-        import reddit_login
+        from reddit import login as reddit_login
         p1, p2 = self._logged_in(tmp_path)
         with p1, p2, patch.object(home, 'fetch_frontpage', return_value={'posts': [], 'after': None}), \
              patch.object(reddit_login, 'access_token', return_value='T'):
@@ -1596,14 +1597,14 @@ class TestVoting:
     SAME = {'Sec-Fetch-Site': 'same-origin'}
 
     def _login(self, tmp_path):
-        import reddit_login
+        from reddit import login as reddit_login
         store = tmp_path / 'l.json'
         store.write_text(json.dumps({'username': 'someone', 'cookies': 'reddit_session=abc'}))
         return (patch.object(reddit_login, 'ENABLED', True), patch.object(reddit_login, 'STORE_PATH', str(store)),
                 patch.object(reddit_login, 'access_token', return_value='T'))
 
     def test_vote_posts_to_reddit_as_account(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = self._login(tmp_path)
         resp = MagicMock(ok=True, status_code=200)
         resp.json.return_value = {}
@@ -1636,7 +1637,7 @@ class TestVoting:
                 assert cl.post('/api/vote', json=bad, environ_base=self.LOCAL, headers=self.SAME).status_code == 400
 
     def test_reddit_errors_are_reported(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = self._login(tmp_path)
         resp = MagicMock(ok=False, status_code=429)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=resp):
@@ -1644,7 +1645,7 @@ class TestVoting:
         assert r.status_code == 429 and 'rate limiting' in r.get_json()['error']
 
     def test_noscript_form_vote_redirects_back_and_buttons_render_only_when_logged_in(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         from routes import page_data
         a, b, c = self._login(tmp_path)
         resp = MagicMock(ok=True, status_code=200)
@@ -1672,7 +1673,7 @@ class TestJoinSubreddit:
         return TestVoting()._login(tmp_path)
 
     def test_join_and_leave_post_to_reddit(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = self._login(tmp_path)
         resp = MagicMock(ok=True, status_code=200)
         resp.json.return_value = {}
@@ -1724,7 +1725,7 @@ class TestCommenting:
         return resp
 
     def test_comment_posts_and_returns_normalized_comment(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
             r = app.test_client().post('/api/comment', json={'parent': 't3_abc', 'text': '  hello  '},
@@ -1736,7 +1737,7 @@ class TestCommenting:
         assert post.call_args.kwargs['data']['thing_id'] == 't3_abc' and post.call_args.kwargs['data']['text'] == 'hello'
 
     def test_comment_validation_and_reddit_errors(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         cl = app.test_client()
         err = MagicMock(ok=True, status_code=200)
@@ -1752,7 +1753,7 @@ class TestCommenting:
                            environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
 
     def test_noscript_form_comment_redirects_back(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()):
             r = app.test_client().post('/actions/comment', data={'parent': 't1_abc', 'text': 'hi', 'next': '/r/x/comments/y'},
@@ -1770,7 +1771,7 @@ class TestSubmitPost:
         return resp
 
     def test_text_post_submits_and_returns_local_path(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
             r = app.test_client().post('/api/submit', json={'sub': 'r/test', 'title': ' Hello ', 'kind': 'self', 'body': 'body'},
@@ -1781,7 +1782,7 @@ class TestSubmitPost:
         assert (d['sr'], d['title'], d['kind'], d['text']) == ('test', 'Hello', 'self', 'body')
 
     def test_link_post_needs_a_url(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         cl = app.test_client()
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._reddit()) as post:
@@ -1806,7 +1807,7 @@ class TestSubmitPost:
         assert app.test_client().get('/submit', environ_base=self.LOCAL).status_code == 404   # login disabled
 
     def test_noscript_form_redirects_and_redisplays_errors(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         locked = MagicMock(ok=True, status_code=200)
         locked.json.return_value = {'json': {'errors': [['SUBREDDIT_NOTALLOWED', 'You are not allowed to post there.', 'sr']]}}
@@ -1884,7 +1885,8 @@ class TestMediaAndFlair:
         return r
 
     def test_upload_image_returns_asset_and_url(self, tmp_path):
-        import io, reddit_actions, reddit_media
+        import io
+        from reddit import actions as reddit_actions, media as reddit_media
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._lease()) as lease, \
              patch.object(reddit_media.requests, 'post', return_value=MagicMock(status_code=201)) as s3:
@@ -1909,7 +1911,8 @@ class TestMediaAndFlair:
                            environ_base={'REMOTE_ADDR': '10.0.0.5'}, headers=self.SAME).status_code == 404
 
     def test_video_upload_also_uploads_a_poster_frame(self, tmp_path):
-        import io, reddit_actions, reddit_media
+        import io
+        from reddit import actions as reddit_actions, media as reddit_media
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', side_effect=[self._lease('vid111'), self._lease('pos222')]), \
              patch.object(reddit_media.requests, 'post', return_value=MagicMock(status_code=201)), \
@@ -1939,7 +1942,7 @@ class TestMediaAndFlair:
         assert r.status_code == 502
 
     def test_submit_with_flair_and_each_media_kind(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         img = {'asset_id': 'img111', 'url': self.UP + 'img111'}
         img2 = {'asset_id': 'img222', 'url': self.UP + 'img222'}
@@ -1976,7 +1979,7 @@ class TestMediaAndFlair:
                 assert r.status_code == 400, body
 
     def test_comment_with_image_uses_richtext(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         made = self._ok({'json': {'errors': [], 'data': {'things': [{'data': {'id': 'c1', 'name': 't1_c1', 'author': 'me', 'body': 'x',
                                                                               'body_html': '', 'score': 1, 'created_utc': 0}}]}}})
@@ -1994,7 +1997,8 @@ class TestMediaAndFlair:
             assert r.status_code == 400
 
     def test_noscript_form_uploads_attached_file_then_posts(self, tmp_path):
-        import io, reddit_actions, reddit_media
+        import io
+        from reddit import actions as reddit_actions, media as reddit_media
         a, b, c = TestVoting()._login(tmp_path)
         posted = self._ok({'json': {'errors': [], 'data': {'websocket_url': 'wss://x'}}})
         found = self._ok({'data': {'children': [{'data': {'title': 'Pic', 'created_utc': 4102444800, 'permalink': '/r/test/comments/m1/pic/'}}]}})
@@ -2018,7 +2022,7 @@ class TestMediaAndFlair:
 
 class TestImageCommentFinishes:
     def test_placeholder_replaced_by_processed_comment(self):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         placeholder = {'name': 't1_c1', 'body': 'hi\n\n*Processing img abc...*'}
         done = MockResponse({'data': {'children': [{'data': {'name': 't1_c1', 'body': 'hi\n\nhttps://preview.redd.it/abc.png'}}]}})
         with patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', side_effect=[MockResponse({'data': {'children': []}}), done]):
@@ -2026,7 +2030,7 @@ class TestImageCommentFinishes:
         assert 'preview.redd.it' in out['body'] and out['likes'] is True
 
     def test_gives_up_but_still_returns_the_comment(self):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         placeholder = {'name': 't1_c1', 'body': '*Processing img abc...*'}
         with patch.object(reddit_actions.time, 'sleep'), patch.object(reddit_actions, 'reddit_get', return_value=MockResponse({'data': {'children': []}})):
             assert reddit_actions._finished_comment(placeholder, tries=3) == placeholder
@@ -2041,7 +2045,7 @@ class TestAccountPage:
         return resp
 
     def test_edit_and_delete_post_to_reddit(self, tmp_path):
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._ok()) as post:
             cl = app.test_client()
@@ -2065,7 +2069,7 @@ class TestAccountPage:
 
     def test_avatar_upload_and_removal(self, tmp_path):
         import io
-        import reddit_actions
+        from reddit import actions as reddit_actions
         a, b, c = TestVoting()._login(tmp_path)
         with a, b, c, patch.object(reddit_actions.cffi_requests, 'post', return_value=self._ok({'errors': []})) as post:
             cl = app.test_client()
@@ -2125,16 +2129,16 @@ class TestGqlHashes:
         return apk
 
     def test_update_script_finds_hash_in_class_that_loads_operation_name(self, tmp_path):
-        import update_gql_hash
+        from scripts import update_gql_hash
         assert update_gql_hash.find_hash([self._apk(tmp_path, [0, 1])], "PostComments") == "a" * 64
         assert update_gql_hash.find_hash([self._apk(tmp_path, [0, 1])], "Missing") is None
 
     def test_update_script_ignores_class_without_operation_name(self, tmp_path):
-        import update_gql_hash
+        from scripts import update_gql_hash
         assert update_gql_hash.find_hash([self._apk(tmp_path, [1, 2])], "PostComments") is None
 
     def test_refresh_adopts_valid_hash_from_github(self):
-        import gql_client
+        from gql import client as gql_client
         fresh = {"PostComments": "c" * 64}
         with patch.object(gql_client, "_hashes", {"PostComments": "d" * 64}), \
                 patch.object(gql_client, "_last_refresh", 0.0), \
@@ -2143,7 +2147,7 @@ class TestGqlHashes:
             assert gql_client._hashes["PostComments"] == "c" * 64
 
     def test_refresh_rejects_malformed_hashes(self):
-        import gql_client
+        from gql import client as gql_client
         with patch.object(gql_client, "_hashes", {"PostComments": "d" * 64}), \
                 patch.object(gql_client, "_last_refresh", 0.0), \
                 patch.object(gql_client.SESSION, "get", return_value=MockResponse({"PostComments": "nope"})):
@@ -2151,7 +2155,7 @@ class TestGqlHashes:
             assert gql_client._hashes["PostComments"] == "d" * 64
 
     def test_failure_dispatches_hash_workflow_once_when_token_set(self, monkeypatch):
-        import gql_client
+        from gql import client as gql_client
         monkeypatch.setenv("GITHUB_DISPATCH_TOKEN", "tok")
         monkeypatch.setattr(gql_client, "_last_dispatch", 0.0)
         monkeypatch.setattr(gql_client.threading, "Thread",
@@ -2163,7 +2167,7 @@ class TestGqlHashes:
         assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer tok"
 
     def test_failure_without_token_dispatches_nothing(self, monkeypatch):
-        import gql_client
+        from gql import client as gql_client
         monkeypatch.delenv("GITHUB_DISPATCH_TOKEN", raising=False)
         monkeypatch.setattr(gql_client, "_last_dispatch", 0.0)
         with patch.object(gql_client.SESSION, "post") as post:
@@ -2176,18 +2180,18 @@ class TestGqlCommentScores:
         return {"id": "t1_abc", "score": 42, "voteState": "NONE", "content": {"markdown": "hi"}, **kw}
 
     def test_score_and_vote_state_map_to_rest_fields(self):
-        import gql_client
+        from gql import client as gql_client
         assert gql_client._comment(self._node(), 0)["score"] == 42
         assert gql_client._comment(self._node(voteState="UPVOTE"), 0)["likes"] is True
         assert gql_client._comment(self._node(voteState="DOWNVOTE"), 0)["likes"] is False
         assert gql_client._comment(self._node(), 0)["likes"] is None
 
     def test_missing_score_is_zero(self):
-        import gql_client
+        from gql import client as gql_client
         assert gql_client._comment(self._node(score=None), 0)["score"] == 0
 
     def test_hidden_score_flag(self):
-        import gql_client
+        from gql import client as gql_client
         assert gql_client._comment(self._node(isScoreHidden=True), 0)["score_hidden"] is True
         assert gql_client._comment(self._node(), 0)["score_hidden"] is False
         assert comments_routes._parse_comment_fields({"id": "a", "score_hidden": True})["score_hidden"] is True

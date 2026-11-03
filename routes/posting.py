@@ -1,14 +1,14 @@
 """Creating posts as the logged-in Reddit account: uploads, flair options and the submit
 itself. /api/* is for the JS app; /submit is the no-JS form. Same local-only rules as
 routes/actions.py."""
-from upstream_budget import budgeted
+from reddit.budget import budgeted
 import re
 from urllib.parse import urlsplit
 from flask import Blueprint, jsonify, redirect, render_template, request
-from helpers import DISABLE_DOWNLOADS, SUBREDDIT_RE, UpstreamError, validate_params
-from reddit_client import reddit_get
-import reddit_actions
-import reddit_media
+from core.helpers import DISABLE_DOWNLOADS, SUBREDDIT_RE, UpstreamError, validate_params
+from reddit.client import reddit_get
+from reddit import actions as reddit_actions
+from reddit import media as reddit_media
 from routes.actions import require_account
 
 bp = Blueprint("posting", __name__)

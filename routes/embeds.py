@@ -6,8 +6,8 @@ import ipaddress
 import html as html_lib
 from urllib.parse import urljoin, urlparse, urlunparse
 from flask import Blueprint, jsonify, request, make_response
-from reddit_client import SESSION, HEADERS, _get_device, recent_user_agent
-from helpers import TTLCache, _CACHE_MISS, cached_json, log
+from reddit.client import SESSION, HEADERS, _get_device, recent_user_agent
+from core.helpers import TTLCache, _CACHE_MISS, cached_json, log
 
 bp = Blueprint("embeds", __name__)
 

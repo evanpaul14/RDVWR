@@ -19,7 +19,7 @@ jobs:
 
       - run: pip install requests
 
-      - run: python3 update_vendor.py
+      - run: python3 scripts/update_vendor.py
 
       - name: Commit if changed
         run: |

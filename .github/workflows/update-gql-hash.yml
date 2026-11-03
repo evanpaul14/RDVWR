@@ -1,8 +1,8 @@
 name: Update GraphQL hashes
 
 # Reddit's WAF blocks the REST comment endpoints, so comments load through the Android
-# app's persisted GraphQL queries (gql_client.py). Their hashes change with app releases;
-# this pulls them out of the latest APK and commits gql_hashes.json when they move.
+# app's persisted GraphQL queries (gql/client.py). Their hashes change with app releases;
+# this pulls them out of the latest APK and commits gql/gql_hashes.json when they move.
 on:
   schedule:
     - cron: '0 4 * * *'  # daily at 4am UTC
@@ -36,12 +36,12 @@ jobs:
           find apk -name '*.apk'
 
       - name: Extract hashes
-        run: python3 update_gql_hash.py $(find apk -name '*.apk')
+        run: python3 scripts/update_gql_hash.py $(find apk -name '*.apk')
 
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add gql_hashes.json
+          git add gql/gql_hashes.json
           git diff --cached --quiet || git commit -m "Update GraphQL query hashes"
           git push

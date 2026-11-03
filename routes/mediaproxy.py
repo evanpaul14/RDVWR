@@ -9,9 +9,9 @@ rewritten to that form in an after-request pass, which covers every route at onc
 import re
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, current_app, request, Response
-from base_path import app_path
-from reddit_client import SESSION, HEADERS
-from helpers import STREAM_CHUNK_SIZE, log
+from core.base_path import app_path
+from reddit.client import SESSION, HEADERS
+from core.helpers import STREAM_CHUNK_SIZE, log
 
 bp = Blueprint("mediaproxy", __name__)
 

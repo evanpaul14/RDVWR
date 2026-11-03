@@ -12,12 +12,12 @@ Every page is templates/index.html, and the data fetched for it does two jobs:
 Each build_* function returns that template context as a dict (see _page), or
 {"redirect": url} when the page should send the browser elsewhere instead.
 """
-from upstream_budget import budget
+from reddit.budget import budget
 from urllib.parse import urlencode
-from helpers import TIME_FILTERS, UpstreamError, parallel, log
-from ns_prefs import get_pref
-from helpers import NSFW_ONLY_SEARCH
-from media_detection import DISABLE_NSFW
+from core.helpers import TIME_FILTERS, UpstreamError, parallel, log
+from core.ns_prefs import get_pref
+from core.helpers import NSFW_ONLY_SEARCH
+from parsing.media_detection import DISABLE_NSFW
 from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
@@ -26,8 +26,8 @@ from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts
 from routes.search import fetch_search_posts, fetch_search_communities, fetch_search_users
 from routes.live import fetch_live_thread
 from routes.account import fetch_full_texts
-import reddit_login
-from reddit_html import sanitize_reddit_html
+from reddit import login as reddit_login
+from parsing.reddit_html import sanitize_reddit_html
 
 SSR_TIMEOUT = 6   # shorter than the /api/* endpoints' — a page shouldn't hang on Reddit
 

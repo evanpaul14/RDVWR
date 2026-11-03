@@ -6,9 +6,9 @@ import time
 import threading
 from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
-from base_path import app_path
-from reddit_client import SESSION, HEADERS
-from helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
+from core.base_path import app_path
+from reddit.client import SESSION, HEADERS
+from core.helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
                      cached_json, error_response, server_cache, log)
 
 bp = Blueprint("media", __name__)

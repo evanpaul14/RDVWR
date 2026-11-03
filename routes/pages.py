@@ -3,12 +3,12 @@ fetched server-side: for the JS app's first render and for the no-JS fallback in
 <noscript> (templates/noscript/). The per-page data lives in routes/page_data.py."""
 import re
 from flask import Blueprint, jsonify, redirect, render_template, request
-from helpers import (DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
+from core.helpers import (DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
                      USERNAME_RE, POST_ID_RE, MULTINAME_RE, log)
-from reddit_html import local_reddit_path
-from gql_client import GQL_CURSOR_RE
-import reddit_login
-from ns_prefs import get_pref
+from parsing.reddit_html import local_reddit_path
+from gql.client import GQL_CURSOR_RE
+from reddit import login as reddit_login
+from core.ns_prefs import get_pref
 from routes.live import LIVE_ID_RE
 from routes.media import resolve_reddit_url
 from routes.actions import require_account

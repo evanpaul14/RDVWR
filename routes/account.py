@@ -1,13 +1,13 @@
 """Managing the logged-in Reddit account's own profile: its posts and comments (edit, delete)
 and its profile picture. Signing out is /auth/reddit/logout (routes/auth.py). Same local-only
 rules as routes/actions.py; /api/* is for the JS app, /actions/account/* are the no-JS forms."""
-from upstream_budget import budgeted
+from reddit.budget import budgeted
 import re
 from flask import Blueprint, jsonify, redirect, request
-from helpers import UpstreamError, safe_next
-from reddit_client import reddit_get
-import reddit_actions
-import reddit_login
+from core.helpers import UpstreamError, safe_next
+from reddit.client import reddit_get
+from reddit import actions as reddit_actions
+from reddit import login as reddit_login
 from routes.actions import require_account
 from routes.users import fetch_user_about, fetch_user_posts, fetch_user_comments
 

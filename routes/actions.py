@@ -3,10 +3,10 @@ requests from the server's own machine while logged in (404 otherwise), and need
 same-site request. /api/* is for the JS app; /actions/* are the no-JS form equivalents."""
 import re
 from flask import Blueprint, abort, jsonify, redirect, request
-from helpers import SUBREDDIT_RE, is_same_site_request, safe_next
-import reddit_actions
-import reddit_login
-import reddit_media
+from core.helpers import SUBREDDIT_RE, is_same_site_request, safe_next
+from reddit import actions as reddit_actions
+from reddit import login as reddit_login
+from reddit import media as reddit_media
 from routes.comments import _parse_comment_fields
 
 bp = Blueprint("actions", __name__)

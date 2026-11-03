@@ -8,8 +8,8 @@ import uuid
 import pytest
 from unittest.mock import patch, MagicMock
 
-import reddit_client as app_module
-from reddit_client import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
+from reddit import client as app_module
+from reddit.client import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
 
 
 class TestOAuthDeviceInit:

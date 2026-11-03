@@ -11,10 +11,10 @@ import re
 import pytest
 from unittest.mock import patch
 
-import helpers
-import reddit_client
+from core import helpers
+from reddit import client as reddit_client
 from app import app
-from reddit_html import sanitize_reddit_html
+from parsing.reddit_html import sanitize_reddit_html
 from tests.test_routes import MockResponse, _make_listing, _make_post
 
 
@@ -77,18 +77,18 @@ def _comment(cid, body="hi", author="someone", replies=None):
 
 class TestPrefs:
     def test_defaults_come_from_default_settings(self):
-        from ns_prefs import all_prefs
+        from core.ns_prefs import all_prefs
         with app.test_request_context("/"):
             prefs = all_prefs()
         assert prefs["theme"] == helpers.DEFAULT_SETTINGS["theme"]
 
     def test_invalid_enum_cookie_falls_back_to_default(self):
-        from ns_prefs import get_pref
+        from core.ns_prefs import get_pref
         with app.test_request_context("/", headers={"Cookie": "ns_layout=bogus"}):
             assert get_pref("layout") == helpers.DEFAULT_SETTINGS["layout"]
 
     def test_off_cookie_overrides_an_on_default(self, monkeypatch):
-        from ns_prefs import get_pref
+        from core.ns_prefs import get_pref
         monkeypatch.setitem(helpers.DEFAULT_SETTINGS, "nsfwBlur", True)
         with app.test_request_context("/", headers={"Cookie": "ns_nsfw_blur=0"}):
             assert get_pref("nsfw_blur") is False
@@ -173,7 +173,7 @@ class TestSanitizer:
 
 class TestTemplateHelpers:
     def test_md_unembeds_third_party_media_when_asked(self):
-        from template_helpers import md
+        from core.template_helpers import md
         html = sanitize_reddit_html('<a href="https://giphy.com/gifs/abc123">https://giphy.com/gifs/abc123</a>')
         with app.test_request_context("/", headers={"Cookie": "ns_link_external_media=1"}):
             assert '<img' not in md(html)
@@ -181,17 +181,17 @@ class TestTemplateHelpers:
             assert '<img' in md(html)
 
     def test_download_url_for_reddit_video(self):
-        from template_helpers import download_url
+        from core.template_helpers import download_url
         p = {"id": "x", "is_video": True, "video_url": "https://v.redd.it/a/DASH_720.mp4",
              "hls_url": "https://v.redd.it/a/HLSPlaylist.m3u8"}
         assert download_url(p).startswith("/api/download/reddit-video?")
 
     def test_download_url_skips_unknown_hosts(self):
-        from template_helpers import download_url
+        from core.template_helpers import download_url
         assert download_url({"id": "x", "preview_img": "https://example.com/a.jpg"}) is None
 
     def test_is_bot(self):
-        from template_helpers import is_bot
+        from core.template_helpers import is_bot
         assert is_bot("RemindMeBot") and is_bot("bot_2000")
         assert not is_bot("Robotics")
 
@@ -281,7 +281,7 @@ class TestSubredditPage:
 
 class TestPager:
     def _urls(self, path, next_url):
-        from template_helpers import pager_urls
+        from core.template_helpers import pager_urls
         with app.test_request_context(path):
             return pager_urls(next_url)
 
@@ -308,7 +308,7 @@ class TestPager:
 
 
 def _gql_comment(cid, body, depth=0):
-    from gql_client import _comment
+    from gql.client import _comment
     return _comment({"id": f"t1_{cid}", "authorInfo": {"name": "someone"}, "content": {"markdown": body},
                      "score": 3, "createdAt": "2026-10-22T21:14:12.260000+0000"}, depth)
 

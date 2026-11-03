@@ -2,10 +2,10 @@
 import re
 from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, jsonify, request
-from media_detection import clean_url
-from reddit_client import reddit_get
-from gql_client import fetch_gql_user_about
-from helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, is_waf_block, log
+from parsing.media_detection import clean_url
+from reddit.client import reddit_get
+from gql.client import fetch_gql_user_about
+from core.helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, is_waf_block, log
 
 bp = Blueprint("avatars", __name__)
 

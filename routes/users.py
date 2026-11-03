@@ -1,15 +1,15 @@
 """User profile endpoints (about, trophies, posts, comments, overview) with archive fallback."""
-from upstream_budget import budgeted
+from reddit.budget import budgeted
 from flask import Blueprint, jsonify, request
-from media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
-from reddit_client import reddit_get
-from gql_client import fetch_gql_user_about
-from gql_posts import fetch_gql_user_posts
-from gql_user import fetch_gql_user_comments, fetch_gql_user_overview, OVERVIEW_PREFIX
-from helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
+from parsing.media_detection import process_post, extract_posts, clean_url, DISABLE_NSFW
+from reddit.client import reddit_get
+from gql.client import fetch_gql_user_about
+from gql.posts import fetch_gql_user_posts
+from gql.user import fetch_gql_user_comments, fetch_gql_user_overview, OVERVIEW_PREFIX
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, USERNAME_RE, POST_ID_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
                      fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
-from archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
+from reddit.archive import (_normalize_comment, _fetch_archived_posts, _fetch_archived_comments,
                      _fetch_archived_overview, _arc_cursor)
 
 bp = Blueprint("users", __name__)

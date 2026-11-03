@@ -4,7 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import pytest
-from media_detection import (
+from parsing.media_detection import (
     clean_url,
     extract_redgifs_id,
     _parse_awards,
