@@ -53,7 +53,7 @@ export function parseRoute(path=stripBase(location.pathname)) {
   if (pathname === '/search') {
     const params = _qs(path);
     const q = params.get('q') || '';
-    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', stype:params.get('stype')||'posts', after: params.get('after') || null, page: parseInt(params.get('page')) || 1 };
+    if (q) return { type:'search', query:q, sort:params.get('sort')||'relevance', time:params.get('t')||'all', sub:params.get('sub')||'', stype:params.get('stype')||'posts', nsfwOnly: params.get('nsfw_only') === '1', after: params.get('after') || null, page: parseInt(params.get('page')) || 1 };
   }
   return { type:'home' };
 }

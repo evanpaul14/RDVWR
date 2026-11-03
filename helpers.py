@@ -105,6 +105,10 @@ def _enum_env(name, default, allowed):
 # DEFAULTS object; anything a visitor changes in the settings panel is saved to their own
 # localStorage and always wins over these (see settings.js _load()). `redditCookies` isn't
 # here since it's a per-visitor credential, not a deployment-wide default.
+# Deployer opt-in for the search "only NSFW" checkbox: off by default, and while it's off the
+# settings panel doesn't offer the toggle either. When on, the toggle appears and defaults on.
+NSFW_ONLY_SEARCH = _bool_env('RDVWR_ENABLE_NSFW_ONLY_SEARCH', False)
+
 DEFAULT_SETTINGS = {
     'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', THEMES),
     'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', LAYOUTS),
@@ -120,6 +124,7 @@ DEFAULT_SETTINGS = {
     'nsfwBlur':          _bool_env('RDVWR_DEFAULT_NSFW_BLUR', False),
     'nsfwHide':          _bool_env('RDVWR_DEFAULT_NSFW_HIDE', False),
     'nsfwSearchHide':    _bool_env('RDVWR_DEFAULT_NSFW_SEARCH_HIDE', False),
+    'nsfwOnlySearch':    NSFW_ONLY_SEARCH,
     'markRead':          _bool_env('RDVWR_DEFAULT_MARK_READ', True),
     'hideReadHome':      _bool_env('RDVWR_DEFAULT_HIDE_READ_HOME', False),
     'hideReadSub':       _bool_env('RDVWR_DEFAULT_HIDE_READ_SUB', False),

@@ -176,7 +176,7 @@ async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
     case 'search':
       closePostView();
       closeSidebar();
-      await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts', route.after || null);
+      await loadSearch(route.query, route.sort, route.time, route.sub, true, route.stype || 'posts', route.after || null, !!route.nsfwOnly);
       break;
     case 'duplicates':
       closePostView();
@@ -388,6 +388,7 @@ function buildSearchUrl(q=state.searchQuery, sort=state.searchSort, time=state.s
   let url = `/search?q=${encodeURIComponent(q)}&sort=${sort}`;
   if (time !== 'all') url += `&t=${time}`;
   if (sub)  url += `&sub=${encodeURIComponent(sub)}`;
+  if (state.searchNsfwOnly) url += '&nsfw_only=1';
   return url;
 }
 
@@ -444,6 +445,12 @@ sortBar.addEventListener('click', e => {
 
 // Sort bar change (time filter, scope checkbox)
 sortBar.addEventListener('change', e => {
+  const nsfwOnlyCheck = e.target.closest('#nsfw-only-check');
+  if (nsfwOnlyCheck && state.searchMode) {
+    state.searchNsfwOnly = nsfwOnlyCheck.checked;
+    navigate(buildSearchUrl(), { replace:true });
+    return;
+  }
   const scopeCheck = e.target.closest('#scope-check');
   if (scopeCheck && state.searchMode) {
     state.searchSub = scopeCheck.checked ? state.searchSubStored : '';
@@ -557,6 +564,7 @@ function buildNextPageUrl() {
     let url = `/search?q=${encodeURIComponent(state.searchQuery)}&sort=${state.searchSort}`;
     if (state.searchTime !== 'all') url += `&t=${state.searchTime}`;
     if (state.searchSub) url += `&sub=${encodeURIComponent(state.searchSub)}`;
+    if (state.searchNsfwOnly) url += '&nsfw_only=1';
     url += `&stype=${state.searchType}&after=${encodeURIComponent(after)}&page=${nextPage}`;
     return url;
   } else if (state.profileMode) {
@@ -1020,6 +1028,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Blur NSFW thumbnails</span>${chk('s-nsfw-blur', settings.nsfwBlur)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW posts</span>${chk('s-nsfw-hide', settings.nsfwHide)}</label>
     <label class="settings-row"><span class="settings-label">Hide NSFW content in search</span>${chk('s-nsfw-search-hide', settings.nsfwSearchHide)}</label>
+    ${window.__NSFW_ONLY_SEARCH__ ? `<label class="settings-row"><span class="settings-label">Show "NSFW only" option in search</span>${chk('s-nsfw-only-search', settings.nsfwOnlySearch)}</label>` : ''}
   </div>
   ${_loginSectionHtml()}
   <div class="settings-section">
@@ -1092,6 +1101,7 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-nsfw-blur').addEventListener('change', e => { settings.nsfwBlur = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-search-hide').addEventListener('change', e => { settings.nsfwSearchHide = e.target.checked; saveSettings(); });
+  settingsBody.querySelector('#s-nsfw-only-search')?.addEventListener('change', e => { settings.nsfwOnlySearch = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-mark-read').addEventListener('change', e => { settings.markRead = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();

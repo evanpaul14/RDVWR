@@ -45,8 +45,11 @@ def subreddit_search():
 
 @fetch_cache(CACHE_TTL_FEED)
 @budgeted
-def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='', timeout=10):
-    """Post search, optionally restricted to one subreddit: {"posts", "after"}."""
+def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='', nsfw_only=False, timeout=10):
+    """Post search, optionally restricted to one subreddit: {"posts", "after"}. `nsfw_only`
+    keeps just the over-18 posts of each page (and implies `nsfw`)."""
+    nsfw_only = nsfw_only and not DISABLE_NSFW
+    nsfw = nsfw or nsfw_only
     if sort not in SEARCH_SORTS:
         sort = "relevance"
     url    = f"https://www.reddit.com/r/{sub}/search.json" if sub else "https://www.reddit.com/search.json"
@@ -61,6 +64,8 @@ def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='
         try:   # NSFW results are unavailable through the fallback (see gql_search)
             feed = fetch_gql_search_posts(q, sort, t, sub, after)
             hydrate_linked_posts(feed["posts"])
+            if nsfw_only:
+                feed["posts"] = [p for p in feed["posts"] if p.get("over_18")]
             return feed
         except Exception as e:
             log.warning("gql post search failed q=%r: %s", q, e)
@@ -68,6 +73,8 @@ def fetch_search_posts(q, sort='relevance', t='all', sub='', nsfw=False, after='
         raise UpstreamError.from_status(resp.status_code)
     listing = resp.json()["data"]
     posts   = extract_posts(listing)
+    if nsfw_only:
+        posts = [p for p in posts if p.get("over_18")]
     hydrate_linked_posts(posts)
     return {"posts": posts, "after": listing.get("after")}
 
@@ -82,7 +89,7 @@ def search_posts():
         return cached_json(fetch_search_posts(
             q, request.args.get("sort", "relevance"), request.args.get("t", "all"),
             request.args.get("sub", ""), request.args.get("nsfw", "0") == "1",
-            request.args.get("after", "")), CACHE_TTL_FEED)
+            request.args.get("after", ""), request.args.get("nsfw_only", "0") == "1"), CACHE_TTL_FEED)
     except UpstreamError as e:
         return e.response()
     except requests.exceptions.Timeout:

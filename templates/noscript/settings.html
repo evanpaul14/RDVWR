@@ -47,6 +47,7 @@
     {{ check_row('nsfw_blur', 'Blur NSFW content', 'Hide NSFW post media and text behind a click-to-reveal.') }}
     {{ check_row('nsfw_hide', 'Hide NSFW posts', 'Leave NSFW posts out of feeds and profiles entirely.') }}
     {{ check_row('nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW posts out of search results.') }}
+    {% if nsfw_only_search %}{{ check_row('nsfw_only_search', 'Offer "NSFW only" in search', 'Show a checkbox next to the search sort options that limits results to NSFW posts.') }}{% endif %}
 
     <div class="ns-settings-actions">
       <button type="submit">Save</button>

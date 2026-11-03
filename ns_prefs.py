@@ -30,6 +30,7 @@ PREFS = {
     'nsfw_blur':           Pref('ns_nsfw_blur', 'nsfwBlur', None),
     'nsfw_hide':           Pref('ns_nsfw_hide', 'nsfwHide', None),
     'nsfw_search_hide':    Pref('ns_nsfw_search_hide', 'nsfwSearchHide', None),
+    'nsfw_only_search':    Pref('ns_nsfw_only_search', 'nsfwOnlySearch', None),
 }
 
 

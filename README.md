@@ -114,6 +114,7 @@ python3 -m pytest tests/
 | `GITHUB_DISPATCH_TOKEN` | _(unset)_ | Fine-grained GitHub token (Actions read/write on the repo). When comment loading fails, the server uses it to run the `update-gql-hash` workflow right away instead of waiting for its daily run. |
 | `PROXY_MEDIA` | `0` | Set to `1` to route media through the server (see below). |
 | `DISABLE_NSFW` | `0` | Set to `1` to strip over-18 posts/communities from every response and 404 direct links to them. |
+| `RDVWR_ENABLE_NSFW_ONLY_SEARCH` | `0` | Set to `1` to offer an "NSFW only" checkbox in search (next to the "limit to r/sub" one) that limits results to over-18 posts. Adds a matching toggle to the settings panel, on by default; hidden while this is `0` or `DISABLE_NSFW=1`. The checkbox is also hidden when the visitor hides NSFW posts. |
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `RDVWR_DISABLE_PERSONALIZED_HOME` | `0` | Set to `1` to disable the personalized (logged-in) home feed entirely. |
 | `REDDIT_LOGIN` | `0` | Set to `1` to enable logging in to a Reddit account from the settings panel (see [Reddit login](#reddit-login)). |

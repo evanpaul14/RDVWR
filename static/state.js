@@ -53,6 +53,7 @@ export const state = {
   searchSub: '',
   searchSubStored: '',
   searchNsfw: false,
+  searchNsfwOnly: false,
   searchAfter: null,
   searchType: 'posts',
   communityAfter: null,

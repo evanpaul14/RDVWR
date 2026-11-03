@@ -31,8 +31,9 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
     let url = `/api/search?q=${encodeURIComponent(query)}&sort=${sort}&t=${time}`;
     if (state.searchSub)  url += `&sub=${encodeURIComponent(state.searchSub)}`;
     if (state.searchNsfw) url += `&nsfw=1`;
+    if (state.searchNsfwOnly) url += `&nsfw_only=1`;
     if (after)            url += `&after=${encodeURIComponent(after)}`;
-    const initial = !append && takeInitialListing('search', { query, type: 'posts', sort, time, sub: state.searchSub, nsfw: state.searchNsfw, after: after || '' });
+    const initial = !append && takeInitialListing('search', { query, type: 'posts', sort, time, sub: state.searchSub, nsfw: state.searchNsfw, after: after || '', nsfwOnly: state.searchNsfwOnly });
     const res = initial ? { ok: true } : await fetch(url);
     const data = initial || await res.json();
     if (myGen !== state.feedGen) return;
@@ -55,8 +56,10 @@ export async function loadSearchResults(query, sort, time, after=null, append=fa
   finally  { if (myGen === state.feedGen) state.loading = false; }
 }
 
-export async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts', after=null) {
+export async function loadSearch(query, sort='relevance', time='all', sub='', nsfw=true, type='posts', after=null, nsfwOnly=false) {
   if (settings.nsfwHide || settings.nsfwSearchHide) nsfw = false;
+  const nsfwOnlyOffered = !!window.__NSFW_ONLY_SEARCH__ && settings.nsfwOnlySearch && !settings.nsfwHide && !settings.nsfwSearchHide;
+  nsfwOnly = nsfwOnly && nsfwOnlyOffered;
   if (sub) state.searchSubStored = sub;
   else if (query !== state.searchQuery) state.searchSubStored = '';
 
@@ -67,6 +70,7 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   state.searchTime  = time;
   state.searchSub   = sub;
   state.searchNsfw  = nsfw;
+  state.searchNsfwOnly = nsfwOnly;
   state.searchAfter = null;
   state.afterToken  = null;
   state.communityAfter = null;
@@ -95,7 +99,10 @@ export async function loadSearch(query, sort='relevance', time='all', sub='', ns
   const scopeCheckHtml = state.searchSubStored
     ? `<label class="scope-check-label"><input type="checkbox" class="scope-check-input" id="scope-check"${sub ? ' checked' : ''}><span>r/${escHtml(state.searchSubStored)}</span></label>`
     : '';
-  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + scopeCheckHtml;
+  const nsfwOnlyHtml = nsfwOnlyOffered
+    ? `<label class="scope-check-label"><input type="checkbox" class="scope-check-input" id="nsfw-only-check"${nsfwOnly ? ' checked' : ''}><span>NSFW only</span></label>`
+    : '';
+  sortBar.innerHTML = SEARCH_SORT_BTN_HTML + (sort === 'top' ? buildTimeFilterHtml(time) : '') + nsfwOnlyHtml + scopeCheckHtml;
   sortBar.style.display = 'flex';
   setActiveButton(sortBar, 'ssort', sort);
 

@@ -16,6 +16,8 @@ from upstream_budget import budget
 from urllib.parse import urlencode
 from helpers import TIME_FILTERS, UpstreamError, parallel, log
 from ns_prefs import get_pref
+from helpers import NSFW_ONLY_SEARCH
+from media_detection import DISABLE_NSFW
 from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
@@ -308,7 +310,7 @@ def build_profile(username, tab='overview', sort='new', t='all', after='', archi
 
 # ── Search ────────────────────────────────────────────────────────────────────
 
-def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', after=''):
+def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', after='', nsfw_only=False):
     """Search results. `sub` restricts a post search to one subreddit; `scope` remembers
     which subreddit the "r/<sub>" checkbox toggles, so it survives being unticked."""
     scope = scope or sub
@@ -317,14 +319,18 @@ def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', 
         stype = 'posts'   # the JS app hides the type tabs for scoped searches, too
     if sort != 'top':
         t = 'all'         # only "top" offers a time filter
+    hiding = get_pref('nsfw_hide') or get_pref('nsfw_search_hide')
+    nsfw_only_offered = NSFW_ONLY_SEARCH and not DISABLE_NSFW and get_pref('nsfw_only_search') and not hiding
+    nsfw_only = bool(nsfw_only and nsfw_only_offered)
 
     def url(**overrides):
-        params = {"q": q, "stype": stype, "sort": sort, "t": t, "sub": sub, "scope": scope, **overrides}
+        params = {"q": q, "stype": stype, "sort": sort, "t": t, "sub": sub, "scope": scope, "nsfw_only": nsfw_only, **overrides}
         return page_url("/search", q=params["q"],
                         stype=params["stype"] if params["stype"] != 'posts' else '',
                         sort=params["sort"] if params["sort"] != 'relevance' else '',
                         t=params["t"] if params["t"] != 'all' else '', sub=params["sub"],
                         scope=params["scope"] if params["scope"] != params["sub"] else '',
+                        nsfw_only='1' if params["nsfw_only"] else '',
                         after=params.get("after", ''))
 
     page = {
@@ -333,7 +339,11 @@ def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', 
         "sort_links": [(s, url(sort=s, t='all')) for s in ('relevance', 'hot', 'top', 'new')],
         # The JS app's "only r/<sub>" checkbox: toggling it re-runs the search.
         "scope_toggle_url": url(sub='' if sub else scope) if scope else None,
-        "time_form_fields": {"q": q, "sort": sort, "sub": sub, "scope": scope if scope != sub else ''},
+        "nsfw_only": nsfw_only,
+        # The "only NSFW" checkbox (opt-in via RDVWR_ENABLE_NSFW_ONLY_SEARCH).
+        "nsfw_only_toggle_url": url(nsfw_only=not nsfw_only) if nsfw_only_offered else None,
+        "time_form_fields": {"q": q, "sort": sort, "sub": sub, "scope": scope if scope != sub else '',
+                             "nsfw_only": '1' if nsfw_only else ''},
         "results": [], "error": None, "next_url": None,
     }
     if not q:
@@ -345,13 +355,14 @@ def build_search(q, stype='posts', sort='relevance', t='all', sub='', scope='', 
     elif stype == 'users':
         data, err = _attempt(fetch_search_users, q, after)
     else:
-        data, err = _attempt(fetch_search_posts, q, sort, t, sub, nsfw, after)
+        data, err = _attempt(fetch_search_posts, q, sort, t, sub, nsfw, after, nsfw_only)
     page.update(results=data[stype] if data else [], error=err,
                 next_url=url(after=data["after"]) if data and data.get("after") else None)
     return _page("search", f"Search: {q}" + (f" in r/{sub}" if sub else ""), page, scope_sub=sub or None,
                  **_listing('search', data, query=q, type=stype, sort=sort if stype == 'posts' else '',
                             time=t if stype == 'posts' else '', sub=sub if stype == 'posts' else '',
-                            nsfw=nsfw if stype == 'posts' else False, after=after or ''))
+                            nsfw=nsfw if stype == 'posts' else False, after=after or '',
+                            **({'nsfw_only': nsfw_only} if stype == 'posts' else {})))
 
 
 # ── Everything else ───────────────────────────────────────────────────────────
