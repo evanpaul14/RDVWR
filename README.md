@@ -87,7 +87,7 @@ cd RDVWR
 docker compose up -d --build
 ```
 
-Serves on port 8002. Set any of the [environment variables](#environment-variables) in the environment (or a `.env` file) to pass them through.
+Serves on port 8002. Set any of the [environment variables](#environment-variables) in the environment (or a `.env` file) to pass them through. Reddit login cookies are kept in the `rdvwr-data` volume so they survive rebuilds.
 
 ## Running from source
 
@@ -123,6 +123,7 @@ python3 -m pytest tests/
 | `DISABLE_DOWNLOADS` | `0` | Set to `1` to 403 the `/api/download*` endpoints (including the ffmpeg-based reddit-video merge). |
 | `RDVWR_DISABLE_PERSONALIZED_HOME` | `0` | Set to `1` to disable the personalized (logged-in) home feed entirely. |
 | `REDDIT_LOGIN` | `0` | Set to `1` to enable logging in to a Reddit account from the settings panel (see [Reddit login](#reddit-login)). |
+| `REDDIT_LOGIN_FILE` | `.reddit_login.json` next to the app | Where the stored Reddit login cookies are saved. The Docker image sets `/data/.reddit_login.json`. |
 | `REDDIT_LOGIN_OWNER_KEY` | _(unset)_ | With `REDDIT_LOGIN=1`, a long random passphrase that lets you use the logged-in account from other devices behind a reverse proxy: enter it once per browser at `/auth/owner`. Serve over HTTPS. |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |

@@ -6,6 +6,10 @@ services:
     environment:
       - REDDIT_OAUTH=${REDDIT_OAUTH:-1}
       - IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID:-}
+      - GITHUB_DISPATCH_TOKEN=${GITHUB_DISPATCH_TOKEN:-}
+      - BASE_PATH=${BASE_PATH:-}
+      - REDDIT_LOGIN=${REDDIT_LOGIN:-0}
+      - REDDIT_LOGIN_OWNER_KEY=${REDDIT_LOGIN_OWNER_KEY:-}
       - PROXY_MEDIA=${PROXY_MEDIA:-0}
       - DISABLE_NSFW=${DISABLE_NSFW:-0}
       - DISABLE_DOWNLOADS=${DISABLE_DOWNLOADS:-0}
@@ -27,6 +31,7 @@ services:
       - RDVWR_DEFAULT_SUB_TIME=${RDVWR_DEFAULT_SUB_TIME:-day}
       - RDVWR_DEFAULT_COMMENT_SORT=${RDVWR_DEFAULT_COMMENT_SORT:-confidence}
       - RDVWR_DEFAULT_HOME_FEED=${RDVWR_DEFAULT_HOME_FEED:-personalized}
+      - RDVWR_DEFAULT_PERSONALIZED_HOME=${RDVWR_DEFAULT_PERSONALIZED_HOME:-1}
       - RDVWR_DEFAULT_PAGINATION=${RDVWR_DEFAULT_PAGINATION:-0}
       - RDVWR_DEFAULT_SHOW_AVATARS=${RDVWR_DEFAULT_SHOW_AVATARS:-0}
       - RDVWR_DEFAULT_SHOW_AWARDS=${RDVWR_DEFAULT_SHOW_AWARDS:-1}
@@ -37,6 +42,8 @@ services:
       - RDVWR_DEFAULT_MARK_READ=${RDVWR_DEFAULT_MARK_READ:-1}
       - RDVWR_DEFAULT_HIDE_READ_HOME=${RDVWR_DEFAULT_HIDE_READ_HOME:-0}
       - RDVWR_DEFAULT_HIDE_READ_SUB=${RDVWR_DEFAULT_HIDE_READ_SUB:-0}
+    volumes:
+      - rdvwr-data:/data
     restart: unless-stopped
 
   # Uncomment to run multiple rdvwr workers/instances behind a shared cache.
@@ -47,3 +54,6 @@ services:
 
 # No client-facing rate limiting happens in the app — put it in front, e.g. with
 # nginx's limit_req_zone. See README "Rate limiting".
+
+volumes:
+  rdvwr-data:

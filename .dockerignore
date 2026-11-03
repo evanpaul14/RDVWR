@@ -14,3 +14,7 @@ tests
 *.patch
 benchmark.py
 update_vendor.py
+update_gql_hash.py
+promo
+plan.md
+reconstruction.md
