@@ -4,8 +4,8 @@ gql_hashes.json. Run by .github/workflows/update-gql-hash.yml:
     python3 update_gql_hash.py <apk> [<apk> ...]
 The app is minified, so class names are useless; instead each Apollo operation class is the
 one whose code loads both the operation's name ("PostComments") and its sha256 id as string
-constants. The dex files are read directly (no decompiler). Exits non-zero, leaving the file
-alone, when an operation's hash can't be found uniquely."""
+constants. The dex files are read directly (no decompiler). Exits non-zero only when no
+operation hash can be found uniquely at all."""
 import json
 import re
 import struct
@@ -101,20 +101,23 @@ def find_hash(apks, operation):
 
 def main(apks):
     hashes = json.loads(HASHES_FILE.read_text())
-    ok = True
+    changed = False
+    found_any = False
     for operation in hashes:
         new = find_hash(apks, operation)
         if not new:
             print(f"{operation}: no unique hash found", file=sys.stderr)
-            ok = False
-        elif new != hashes[operation]:
+            continue
+        found_any = True
+        if new != hashes[operation]:
             print(f"{operation}: {hashes[operation]} -> {new}")
             hashes[operation] = new
+            changed = True
         else:
             print(f"{operation}: unchanged")
-    if ok:
+    if changed:
         HASHES_FILE.write_text(json.dumps(hashes, indent=2) + "\n")
-    return 0 if ok else 1
+    return 0 if found_any else 1
 
 
 if __name__ == "__main__":
