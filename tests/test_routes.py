@@ -2137,6 +2137,25 @@ class TestGqlHashes:
         from scripts import update_gql_hash
         assert update_gql_hash.find_hash([self._apk(tmp_path, [1, 2])], "PostComments") is None
 
+    def test_update_script_keeps_existing_hash_when_one_operation_is_missing(self, tmp_path, capsys):
+        from scripts import update_gql_hash
+        hashes_file = tmp_path / "gql_hashes.json"
+        hashes_file.write_text(json.dumps({"PostComments": "a" * 64, "SubmittedComments": "b" * 64}) + "\n")
+        with patch.object(update_gql_hash, "HASHES_FILE", hashes_file), \
+                patch.object(update_gql_hash, "find_hash", side_effect=["c" * 64, None]):
+            assert update_gql_hash.main(["dummy.apk"]) == 0
+        assert json.loads(hashes_file.read_text()) == {"PostComments": "c" * 64, "SubmittedComments": "b" * 64}
+        assert "SubmittedComments: no unique hash found" in capsys.readouterr().err
+
+    def test_update_script_fails_only_when_no_hashes_are_found(self, tmp_path):
+        from scripts import update_gql_hash
+        hashes_file = tmp_path / "gql_hashes.json"
+        hashes_file.write_text(json.dumps({"PostComments": "a" * 64}) + "\n")
+        with patch.object(update_gql_hash, "HASHES_FILE", hashes_file), \
+                patch.object(update_gql_hash, "find_hash", return_value=None):
+            assert update_gql_hash.main(["dummy.apk"]) == 1
+        assert json.loads(hashes_file.read_text()) == {"PostComments": "a" * 64}
+
     def test_refresh_adopts_valid_hash_from_github(self):
         from gql import client as gql_client
         fresh = {"PostComments": "c" * 64}
