@@ -73,15 +73,15 @@ function handleSearchInput(e) {
 }
 document.getElementById('search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(); }
+  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); hideAllAutocomplete(); handleSearchInput(e); }
 });
 document.getElementById('pv-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 document.getElementById('pv-subreddit-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
+  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); hideAllAutocomplete(); handleSearchInput(e); }
 });
 document.getElementById('mobile-search-btn').addEventListener('click', e => { hideAllAutocomplete(); handleSearchInput(e); });
 mobileSearchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { hideAllAutocomplete(); handleSearchInput(e); }
+  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); hideAllAutocomplete(); handleSearchInput(e); }
   if (e.key === 'Escape') { closeMobileSearch(); }
 });
 mobileSearchInput.addEventListener('blur', () => {
