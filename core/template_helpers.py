@@ -5,8 +5,8 @@ import os
 import re
 import time
 import datetime
-from urllib.parse import urlencode, urlparse, parse_qsl
-from flask import g, request
+from urllib.parse import urlencode, urlparse, parse_qsl, parse_qs
+from flask import g, request, has_request_context, has_app_context, current_app
 from markupsafe import Markup
 from reddit import login as reddit_login
 from parsing.media_detection import DISABLE_NSFW
@@ -126,6 +126,56 @@ def article_url(p):
     return p['url']
 
 
+def local_media_url(url):
+    """Whether the rendered media is local, including the optional after-request proxy."""
+    if not url:
+        return False
+    if url.startswith('/') and not url.startswith('//'):
+        return True
+    if has_app_context() and current_app.config.get('PROXY_MEDIA'):
+        from routes.mediaproxy import MEDIA_PROXY_HOSTS
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return False
+        return parsed.scheme == 'https' and parsed.netloc in MEDIA_PROXY_HOSTS
+    return False
+
+
+def links_out_media(p, full=False):
+    """Mirror the JS media privacy choice before emitting any image/video/iframe."""
+    if not get_pref('link_external_media') or p.get('poll') or p.get('is_devvit'):
+        return False
+    if any(p.get(k) for k in ('youtube_id', 'tiktok_id', 'streamable_id', 'redgifs_id', 'embed_url')):
+        return True
+    if p.get('is_video'):
+        # Native no-JS playback may choose the MP4 fallback instead of HLS.
+        return any(not local_media_url(url) for url in
+                   (p.get('hls_url'), p.get('video_url'), p.get('preview_img')) if url)
+    if p.get('gif_url'):
+        return not local_media_url(p['gif_url'])
+    if p.get('gallery'):
+        return any(not local_media_url(img.get('url')) for img in p['gallery'])
+    image = None if p.get('is_self') else p.get('preview_img') if full else p.get('thumb_url') or p.get('preview_img')
+    return bool(image and not local_media_url(image))
+
+
+def media_link(p):
+    if p.get('youtube_id'):
+        return 'YouTube video', f'https://www.youtube.com/watch?v={p["youtube_id"]}'
+    if p.get('redgifs_id'):
+        return 'video', f'https://www.redgifs.com/watch/{p["redgifs_id"]}'
+    if p.get('streamable_id'):
+        return 'video', f'https://streamable.com/{p["streamable_id"]}'
+    if p.get('imgur_album_id'):
+        return 'Imgur album', f'https://imgur.com/a/{p["imgur_album_id"]}'
+    if p.get('is_video'):
+        return 'video', real_media_url(p.get('video_url')) or p.get('url')
+    if p.get('gif_url'):
+        return 'gif', real_media_url(p['gif_url'])
+    return 'media', p.get('url') or p.get('embed_url') or p.get('permalink')
+
+
 # ── Downloads (mirrors buildDownloadBtn in static/postview.js) ────────────────
 
 _DL_HOSTS = frozenset({'v.redd.it', 'i.redd.it', 'preview.redd.it', 'external-preview.redd.it', 'i.imgur.com'})
@@ -134,7 +184,31 @@ _IMG_EXTS = ('jpg', 'jpeg', 'png', 'gif', 'webp')
 
 
 def _host_in(url, hosts):
-    return bool(url) and urlparse(url).hostname in hosts
+    try:
+        return bool(url) and urlparse(url).hostname in hosts
+    except ValueError:
+        return False
+
+
+def real_media_url(url):
+    """Undo our local media proxies before building download links (utils.js realMediaUrl)."""
+    if not url:
+        return url
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return url
+    if parsed.netloc and (not has_request_context() or parsed.netloc != request.host):
+        return url
+    path = parsed.path
+    if BASE_PATH and path.startswith(BASE_PATH + '/'):
+        path = path[len(BASE_PATH):]
+    if path == '/api/img':
+        return parse_qs(parsed.query).get('url', [url])[0]
+    match = re.fullmatch(r'/api/m/([^/]+)(/.*)?', path)
+    if not match:
+        return url
+    return f'https://{match[1]}{match[2] or "/"}' + (f'?{parsed.query}' if parsed.query else '')
 
 
 def download_url(p):
@@ -144,21 +218,24 @@ def download_url(p):
     if DISABLE_DOWNLOADS or p.get('redgifs_id') or p.get('imgur_album_id'):
         return None
     if p.get('gallery'):
-        urls = [img['url'] for img in p['gallery'] if _host_in(img.get('url'), _GALLERY_DL_HOSTS)][:25]
+        urls = [real_media_url(img.get('url')) for img in p['gallery']]
+        urls = [url for url in urls if _host_in(url, _GALLERY_DL_HOSTS)][:25]
         return '/api/download/gallery?' + urlencode({'urls': ','.join(urls), 'name': p['id']}) if urls else None
     if p.get('is_video') and p.get('video_url') and p.get('hls_url'):
-        return '/api/download/reddit-video?' + urlencode({'hls': p['hls_url'], 'filename': f"{p['id']}.mp4"})
+        hls = real_media_url(p['hls_url'])
+        return '/api/download/reddit-video?' + urlencode({'hls': hls, 'filename': f"{p['id']}.mp4"}) if _host_in(hls, {'v.redd.it'}) else None
     if p.get('is_video') and p.get('video_url'):
         url, filename = p['video_url'], f"{p['id']}.mp4"
     elif p.get('gif_url'):
         url, filename = p['gif_url'], f"{p['id']}.{'mp4' if p.get('gif_is_video') else 'gif'}"
     elif not any(p.get(k) for k in ('youtube_id', 'tiktok_id', 'streamable_id', 'embed_url', 'is_self')) \
             and p.get('preview_img'):
-        url = p['preview_img']
+        url = real_media_url(p['preview_img'])
         ext = url.split('?')[0].rsplit('.', 1)[-1].lower()
         filename = f"{p['id']}.{ext if ext in _IMG_EXTS else 'jpg'}"
     else:
         return None
+    url = real_media_url(url)
     if not _host_in(url, _DL_HOSTS):
         return None
     return '/api/download?' + urlencode({'url': url, 'filename': filename})
@@ -175,7 +252,7 @@ def current_url():
 # Reddit listings only page forwards (an `after` cursor), so the pager carries the
 # cursors of the pages already visited in a `prev` param: "next" pushes the current
 # page's cursor onto it, "previous" pops the last one back off.
-_CURSOR_RE = re.compile(r'^[\w\-.=]{1,200}$')
+_CURSOR_RE = re.compile(r'^[A-Za-z0-9_\-.:=+/]{1,2000}$')
 _PREV_MAX = 40
 
 
@@ -193,7 +270,13 @@ def pager_urls(next_url):
         return path + ('?' + urlencode(args) if args else '')
 
     here = with_args(current_url(), after='', prev='')
-    prev_url = with_args(here, after=trail[-1] if trail else '', prev=','.join(trail[:-1]))
+    previous = dict(after=trail[-1] if trail else '', prev=','.join(trail[:-1]))
+    if 'distance' in request.args:
+        try:
+            previous['distance'] = str(max(4, int(request.args['distance']) - 4))
+        except ValueError:
+            previous['distance'] = '4'
+    prev_url = with_args(here, **previous)
     if next_url:
         next_url = with_args(next_url, prev=','.join((trail + [after])[-_PREV_MAX:]))
     return prev_url, next_url
@@ -202,7 +285,7 @@ def pager_urls(next_url):
 def register(app):
     for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md, mdtext):
         app.add_template_filter(f)
-    for fn in (is_bot, link_domain, is_article, article_url):
+    for fn in (is_bot, link_domain, is_article, article_url, local_media_url, links_out_media, media_link):
         app.add_template_global(fn)
     app.add_template_global(download_url)
     app.add_template_global(current_url)
@@ -219,5 +302,5 @@ def register(app):
     def _inject_globals():
         return dict(base_path=BASE_PATH, asset_v=asset_v, proxy_media=app.config['PROXY_MEDIA'], csp_nonce=g.get('csp_nonce', ''),
                     default_settings=DEFAULT_SETTINGS, reddit_login=reddit_login.login_status(), disable_personalized_home=DISABLE_PERSONALIZED_HOME,
-                    nsfw_only_search=NSFW_ONLY_SEARCH and not DISABLE_NSFW,
+                    nsfw_only_search=NSFW_ONLY_SEARCH and not DISABLE_NSFW, disable_nsfw=DISABLE_NSFW,
                     ns=all_prefs())

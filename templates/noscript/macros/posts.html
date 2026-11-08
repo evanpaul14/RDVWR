@@ -121,7 +121,10 @@
 
 {% macro media(p, full) -%}
   {%- set cls = 'pv-media' if full else 'post-media' -%}
-  {%- if p.gallery and p.gallery | length > (0 if full else 1) -%}
+  {%- if links_out_media(p, full) or (ns.layout == 'minimal' and (p.is_video or p.gif_is_video or p.youtube_id or p.tiktok_id or p.redgifs_id or p.streamable_id or p.embed_url or p.imgur_album_id)) -%}
+    {% set label, href = media_link(p) %}
+    {{ link_out(href, label ~ ' — open source →') }}
+  {%- elif p.gallery and p.gallery | length > (0 if full else 1) -%}
     {{ gallery(p, full) }}
   {%- elif p.is_video -%}
     {{ video(p, full) }}
@@ -165,12 +168,16 @@
 
 {% macro poll(p) -%}
   {%- if p.poll -%}
-    <div class="ns-poll">
+    {% set total = p.poll.total_votes or 0 %}
+    <div class="poll-widget"><div class="poll-options">
       {%- for opt in p.poll.options -%}
-        <div class="ns-poll-opt">{{ opt.text }}{% if opt.vote_count is not none %} &mdash; {{ opt.vote_count | fmtnum }} votes{% endif %}</div>
+        {% set pct = ((opt.vote_count * 100 / total + 0.5) | int) if opt.vote_count is not none and total > 0 else none %}
+        <div class="poll-option"><span class="poll-option-text">{{ opt.text }}</span>
+          {% if pct is not none %}<div class="poll-bar"><div class="poll-bar-fill" style="width:{{ pct }}%"></div></div><span class="poll-pct">{{ pct }}%</span>
+          {% else %}<div class="poll-bar poll-bar-hidden"></div>{% endif %}
+        </div>
       {%- endfor -%}
-      <p class="ns-note">{{ p.poll.total_votes | fmtnum }} total votes{% if p.poll.closed %} &middot; closed{% endif %}</p>
-    </div>
+    </div><div class="poll-meta"><span class="poll-status{% if p.poll.closed %} poll-closed{% else %} poll-open{% endif %}">Poll {{ 'closed' if p.poll.closed else 'open' }}</span><span class="poll-total">{{ total | fmtnum }} vote{{ 's' if total != 1 }}</span></div></div>
   {%- endif -%}
 {%- endmacro %}
 
@@ -181,7 +188,7 @@
     <div class="crosspost-embed-header">&#8618; {{ 'crossposted from' if p.crosspost_from else 'links to a post in' }} <a href="/r/{{ xp.subreddit }}">r/{{ xp.subreddit }}</a></div>
     <a class="crosspost-embed-title" href="{{ post_path(xp) }}">{{ xp.title }}</a>
     {{ veiled(xp, media(xp, full)) }}
-    {%- if full and xp.selftext_html %}{{ veiled(xp, '<div class="xp-excerpt xp-excerpt-full md">' | safe ~ (xp.selftext_html | md) ~ '</div>' | safe, spoiler=False) }}{% endif -%}
+    {%- if full and (xp.selftext_html or xp.selftext) %}{{ veiled(xp, '<div class="xp-excerpt xp-excerpt-full md">' | safe ~ (xp.selftext_html | md if xp.selftext_html else xp.selftext | mdtext) ~ '</div>' | safe, spoiler=False) }}{% endif -%}
   </div>
 {%- endmacro %}
 
@@ -192,6 +199,9 @@
   {%- set src_post = p.crosspost_from or p -%}
   {%- set g0 = src_post.gallery[0] if src_post.gallery else None -%}
   {%- set src = (g0.thumb or g0.url) if g0 else (src_post.thumb_url or src_post.preview_img) -%}
+  {%- if ns.link_external_media and not local_media_url(src) -%}
+    {%- set src = src_post.preview_img if local_media_url(src_post.preview_img) else None -%}
+  {%- endif -%}
   {%- if src -%}
     <a class="{{ cls }}" href="{{ href }}"{% if href.startswith('http') %} target="_blank" rel="noopener"{% endif %}><img loading="lazy" src="{{ src }}" alt=""{% if p.is_spoiler or (p.over_18 and ns.nsfw_blur) %} class="ns-thumb-veiled"{% endif %}>
       {%- if src_post.gallery and src_post.gallery | length > 1 %}<span class="gallery-badge"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="4.5" y="4.5" width="9" height="9" rx="1.3" stroke="#fff" stroke-width="1.3"/><path d="M2.5 11.5v-7a2 2 0 0 1 2-2h7" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>{{ src_post.gallery | length }}</span>{% endif -%}
@@ -278,8 +288,8 @@
       {%- else -%}
         {{ veiled(p, media(p, False)) }}
         {{ poll(p) }}
-        {%- if p.is_self and p.selftext_html -%}
-          {{ veiled(p, '<div class="post-excerpt"><div class="md">' | safe ~ (p.selftext_html | md) ~ '</div></div>' | safe) }}
+        {%- if p.is_self and (p.selftext_html or p.selftext) -%}
+          {{ veiled(p, '<div class="post-excerpt"><div class="md">' | safe ~ (p.selftext_html | md if p.selftext_html else p.selftext | mdtext) ~ '</div></div>' | safe) }}
         {%- endif -%}
       {%- endif -%}
       {{ footer(p) }}
@@ -324,7 +334,7 @@
     <div class="pv-article-box"><a class="pv-article-link" href="{{ article }}" target="_blank" rel="noopener"><svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M7 1h4m0 0v4m0-4L5.5 6.5M1 3h3.5M1 9h10M1 6h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>{{ article }}</span></a></div>
   {%- endif -%}
   {{ poll(p) }}
-  {%- if p.is_self and p.selftext_html -%}
-    {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext_html | md) ~ '</div>' | safe, spoiler=False) }}
+  {%- if p.is_self and (p.selftext_html or p.selftext) -%}
+    {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext_html | md if p.selftext_html else p.selftext | mdtext) ~ '</div>' | safe, spoiler=False) }}
   {%- endif -%}
 {%- endmacro %}

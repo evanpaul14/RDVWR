@@ -22,7 +22,7 @@ from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscrip
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
 from routes.comments import fetch_comments, fetch_morechildren
-from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments
+from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments, fetch_user_trophies
 from routes.search import fetch_search_posts, fetch_search_communities, fetch_search_users
 from routes.live import fetch_live_thread
 from routes.account import fetch_full_texts
@@ -81,6 +81,7 @@ def _feed_nav(base, sort, t, next_after, **extra):
     timed = sort in TIMED_SORTS
     return {
         "base": base, "sorts": FEED_SORT_ORDER, "sort": sort, "time": t if timed else None,
+        "params": {k: v for k, v in extra.items() if v and k != 'distance'},
         "next_url": page_url(f"{base}/{sort}", t=t if timed else '', after=next_after, **extra)
                     if next_after else None,
     }
@@ -92,27 +93,27 @@ def clean_time(t, default):
 
 # ── Feeds ─────────────────────────────────────────────────────────────────────
 
-def build_home(sort, t, after, cookie=None):
+def build_home(sort, t, after, cookie=None, distance=4):
     """The home feed: personalized when `cookie` (the Reddit login) is given and works,
     else Reddit's logged-out front page — what the JS app's home shows without a session."""
-    feed, err = _attempt(fetch_personalized_home, cookie, sort, t, after) if cookie else (None, None)
+    feed, err = _attempt(fetch_personalized_home, cookie, sort, t, after, distance=distance) if cookie else (None, None)
     if feed is None:
         feed, err = _attempt(fetch_frontpage, sort, t, after)
     return _page("home", "Home", {
-        "nav": _feed_nav("/home", sort, t, feed and feed["after"]),
+        "nav": _feed_nav("/home", sort, t, feed and feed["after"], distance=min(distance + 4, 500) if cookie else ''),
         "posts": feed["posts"] if feed else [], "error": err,
     }, **_listing('home', feed, sort=sort, time=_listing_time(sort, t), after=after or '',
-                  mode='login' if cookie else None, distance=4))
+                  mode='login' if cookie else None, distance=distance))
 
 
-def build_subscribed(sort, t, after):
+def build_subscribed(sort, t, after, base='/subscribed'):
     """The logged-in account's own front page (its joined subreddits), see routes/home.py."""
     subs, sub_err = _attempt(fetch_subscriptions)
     if sub_err is None and not subs:
         return build_message("Subscribed", "You haven't joined any subreddits yet.", "/", "Go home")
     feed, err = _attempt(fetch_frontpage, sort, t, after)
-    return _page("home", "Subscribed", {
-        "nav": _feed_nav("/subscribed", sort, t, feed and feed["after"]),
+    return _page("home", "Home" if base == '/home' else "Subscribed", {
+        "nav": _feed_nav(base, sort, t, feed and feed["after"]),
         "posts": feed["posts"] if feed else [], "error": err or sub_err,
     })
 
@@ -198,6 +199,7 @@ def build_wiki(sub, page):
     return _page("wiki", f"{page} — {sub} wiki", {
         "sub": sub, "page": page, "error": err,
         "html": sanitize_reddit_html(data["content_html"]) if data else '',
+        "revision_date": data.get("revision_date") if data else None,
     }, scope_sub=sub)
 
 
@@ -218,13 +220,14 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
     - comment_id: just that comment's thread (show_context adds its parent comments);
     - more_ids: the comments behind a "load more comments" stub (the JS app splices
       these into the page; without JS they get a page of their own)."""
+    with_avatars = get_pref('show_avatars') and get_pref('layout') != 'minimal'
     if more_ids:
         (data, err), (more, more_err) = parallel(
-            lambda: _attempt(fetch_comments, sub, post_id, sort=sort),
-            lambda: _attempt(fetch_morechildren, post_id, more_ids, sort))
+            lambda: _attempt(fetch_comments, sub, post_id, sort=sort, with_avatars=with_avatars),
+            lambda: _attempt(fetch_morechildren, post_id, more_ids, sort, with_avatars=with_avatars))
         err = err or more_err
     else:
-        data, err = _attempt(fetch_comments, sub, post_id, comment_id or None, sort=sort)
+        data, err = _attempt(fetch_comments, sub, post_id, comment_id or None, sort=sort, with_avatars=with_avatars)
     if err:
         return _page("post", "Post", {"error": err, "sub": sub})
 
@@ -259,7 +262,7 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
-def build_profile(username, tab='overview', sort='new', t='all', after='', archive=False):
+def build_profile(username, tab='overview', sort='new', t='all', after='', archive=False, show_about=False):
     """A user profile. Tabs/sorts mirror the JS profile view (profile.js), which keeps
     them in page state instead of the URL — here they're query params."""
     if tab not in PROFILE_TABS:
@@ -278,7 +281,9 @@ def build_profile(username, tab='overview', sort='new', t='all', after='', archi
         return _attempt(fetch_user_overview, username, sort, t, after,
                         allow_archive=archive or after.startswith("arc:"))
 
-    (data, err), (about, _) = parallel(listing, lambda: _attempt(fetch_user_about, username))
+    (data, err), (about, _), (trophies, _) = parallel(
+        listing, lambda: _attempt(fetch_user_about, username),
+        lambda: _attempt(fetch_user_trophies, username) if show_about else ([], None))
 
     items = []
     if data:
@@ -296,10 +301,20 @@ def build_profile(username, tab='overview', sort='new', t='all', after='', archi
     base = f"/user/{username}"
 
     def url(tab_, sort_='', **extra):
-        return page_url(base, tab=tab_ if tab_ != 'overview' else '', sort=sort_ if sort_ != 'new' else '', **extra)
+        return page_url(base, tab=tab_ if tab_ != 'overview' else '', sort=sort_ if sort_ != 'new' else '',
+                        **{'about': '1' if show_about else '', **extra})
+
+    counts = {}
+    for item in items:
+        community = item['data'].get('subreddit')
+        if community:
+            counts[community] = counts.get(community, 0) + 1
 
     return _page("profile", f"u/{username}", {
         "username": username, "about": about, "tab": tab, "sort": sort, "time": t or 'all', "base": base,
+        "trophies": trophies or [], "show_about": show_about,
+        "about_url": url(tab, sort, t=t, after=after, about=1),
+        "active_subs": sorted(counts, key=counts.get, reverse=True)[:8],
         "tab_links": [(tab_, url(tab_)) for tab_ in PROFILE_TABS],
         "sort_links": [(sort_, url(tab, sort_)) for sort_ in PROFILE_SORTS[tab]],
         "items": items, "archived": bool(data and data.get("archived")), "error": err,
