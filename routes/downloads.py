@@ -6,7 +6,8 @@ import tempfile
 import subprocess
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+import requests
 from flask import Blueprint, jsonify, request, Response
 from reddit.client import SESSION, HEADERS
 from core.helpers import STREAM_CHUNK_SIZE, DISABLE_DOWNLOADS, error_response, log
@@ -33,6 +34,32 @@ DOWNLOAD_ALLOWED_HOSTS = frozenset({
     'i.imgur.com',
 })
 
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
+_MAX_REDIRECTS = 3
+
+
+def _download_get(url, allowed_hosts, *, timeout, headers=None):
+    """Keep every redirect within the download's allowlist; return an open response."""
+    for hop in range(_MAX_REDIRECTS + 1):
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https') or parsed.netloc not in allowed_hosts:
+            raise requests.RequestException('Download URL not allowed')
+        upstream = SESSION.get(url, stream=True, timeout=timeout, headers=headers,
+                               allow_redirects=False)
+        if upstream.status_code in _REDIRECT_CODES:
+            location = upstream.headers.get('Location')
+            upstream.close()
+            if not location or hop == _MAX_REDIRECTS:
+                raise requests.RequestException('Invalid download redirect')
+            url = urljoin(url, location)
+            continue
+        try:
+            upstream.raise_for_status()
+        except Exception:
+            upstream.close()
+            raise
+        return upstream
+
 
 @bp.route("/api/download")
 @_downloads_enabled
@@ -47,8 +74,7 @@ def download_media():
     if parsed.scheme not in ('http', 'https') or parsed.netloc not in DOWNLOAD_ALLOWED_HOSTS:
         return jsonify({'error': 'URL not allowed'}), 400
     try:
-        upstream = SESSION.get(url, stream=True, timeout=30)
-        upstream.raise_for_status()
+        upstream = _download_get(url, DOWNLOAD_ALLOWED_HOSTS, timeout=30)
         content_type = upstream.headers.get('Content-Type', 'application/octet-stream')
         resp_headers = {
             'Content-Type': content_type,
@@ -56,7 +82,15 @@ def download_media():
         }
         if 'Content-Length' in upstream.headers:
             resp_headers['Content-Length'] = upstream.headers['Content-Length']
-        return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE), status=200, headers=resp_headers)
+        def stream():
+            try:
+                yield from upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE)
+            finally:
+                upstream.close()
+
+        resp = Response(stream(), status=200, headers=resp_headers)
+        resp.call_on_close(upstream.close)
+        return resp
     except Exception:
         return error_response(502)
 
@@ -90,15 +124,16 @@ def download_gallery():
 
     def _fetch(url):
         try:
-            r = SESSION.get(url, stream=True, timeout=20,
-                            headers={'Referer': 'https://www.reddit.com/'})
-            if not r.ok:
-                return None
-            path = urlparse(url).path
-            ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
-            if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
-                ext = 'jpg'
-            return ext, r.content
+            r = _download_get(url, GALLERY_ALLOWED_HOSTS, timeout=20,
+                              headers={'Referer': 'https://www.reddit.com/'})
+            try:
+                path = urlparse(url).path
+                ext = path.rsplit('.', 1)[-1].lower() if '.' in path else 'jpg'
+                if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4'):
+                    ext = 'jpg'
+                return ext, r.content
+            finally:
+                r.close()
         except Exception as e:
             log.warning("gallery item download failed host=%s: %s", urlparse(url).hostname, e)
             return None
