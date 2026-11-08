@@ -54,8 +54,9 @@
 {% macro feed_sort_bar(nav, extra='') -%}
   {# Sort buttons (+ time filter for timed sorts) for a listing at nav.base/<sort>. #}
   <div class="sort-bar ns-sort-bar">
-    {% for s in nav.sorts %}{{ sort_link(s | capitalize, nav.base ~ '/' ~ s, s == nav.sort) }}{% endfor %}
-    {% if nav.time %}{{ time_filter(nav.base ~ '/' ~ nav.sort, nav.time) }}{% endif %}
+    {% set params = nav.get('params', {}) %}
+    {% for s in nav.sorts %}{{ sort_link(s | capitalize, nav.base ~ '/' ~ s ~ ('?' ~ (params | urlencode) if params else ''), s == nav.sort) }}{% endfor %}
+    {% if nav.time %}{{ time_filter(nav.base ~ '/' ~ nav.sort, nav.time, params) }}{% endif %}
     {{ extra }}
   </div>
 {%- endmacro %}

@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, navigationGuard } from './state.js';
 import { leaveAccount, loadAccount } from './account.js';
 import { _markPostVisited } from './visited-ui.js';
 import { appPath } from './utils.js';
@@ -38,6 +38,8 @@ export function navigate(path, { replace=false }={}) {
 let _isBootRender = true;
 
 export async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }={}) {
+  state.navigationGen++;
+  const isCurrent = navigationGuard();
   const isBoot = _isBootRender;
   _isBootRender = false;
   routeHooks.forEach(fn => fn(route));
@@ -78,7 +80,7 @@ export async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }=
       closeSidebar();
       state.searchMode = false;
       const subResult = await loadSubreddit(route.sub, route.sort, route.time || 'all', route.after || null);
-      if (subResult?.notFound) {
+      if (isCurrent() && subResult?.notFound) {
         navigate(`/search?q=${encodeURIComponent(route.sub)}&stype=communities`, { replace: true });
       }
       break;
@@ -141,7 +143,7 @@ export async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }=
       await loadLiveThread(route.threadId);
       break;
   }
-  if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
+  if (isCurrent() && route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
 }
 
 window.addEventListener('popstate', (e) => {

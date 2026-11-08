@@ -7,7 +7,7 @@ from urllib.parse import urlparse, parse_qs
 from flask import Blueprint, abort, jsonify, request, make_response
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
-from parsing.media_detection import process_post, extract_posts
+from parsing.media_detection import process_post, extract_posts, filter_nsfw
 from reddit import login as reddit_login
 from reddit.client import reddit_get, PROXIES
 from parsing.shreddit import _parse_shreddit_post
@@ -107,6 +107,7 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
             txt = child.get_text(separator=' ', strip=True)
             if txt and len(txt) < 300:
                 current_label = txt
+    posts = filter_nsfw(posts)
     # Batch-fetch gallery data + flair (not present in shreddit's HTML) via the JSON API
     if posts:
         try:
