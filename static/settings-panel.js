@@ -116,6 +116,8 @@ function bindSettingEvents() {
     saveSettings();
     updateFeedsBtn();
     _syncHomeRows();
+    const route = parseRoute();
+    if (route.type === 'home') renderRoute({ ...route, after: null });
   });
   settingsBody.querySelector('#s-personalized-home')?.addEventListener('change', e => {
     settings.personalizedHome = e.target.checked;
