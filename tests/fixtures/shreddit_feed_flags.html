@@ -1,0 +1,16 @@
+<!-- Reduced and redacted from live partial HTML checked on 2026-11-08.
+     The article/next-page structure comes from /svc/shreddit/feeds/home-feed;
+     nsfw/subreddit-nsfw flags come from /svc/shreddit/community-more-posts/hot/.
+     Identities, text, media and unrelated UI markup have been removed. -->
+<article>
+  <shreddit-post id="t3_safe" post-title="Unflagged fixture" post-type="text"
+    subreddit-name="fixture" permalink="/r/fixture/comments/safe/title/"
+    is-desktop-viewport is-embeddable is-not-brand-safe></shreddit-post>
+</article>
+<article>
+  <shreddit-post id="t3_flagged" post-title="Flagged fixture" post-type="text"
+    subreddit-name="fixture" permalink="/r/fixture/comments/flagged/title/"
+    is-desktop-viewport is-embeddable is-not-brand-safe nsfw subreddit-nsfw></shreddit-post>
+</article>
+<faceplate-partial id="feed-next-page-partial"
+  src="/svc/shreddit/feeds/home-feed?after=t3_next&amp;distance=8"></faceplate-partial>
