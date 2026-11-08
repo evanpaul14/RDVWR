@@ -19,6 +19,7 @@ function harness(file, overrides = {}) {
   const context = vm.createContext({
     document: { getElementById: element, body: element('body') }, window: {},
     state: { feedGen: 0, currentSub: '' }, settings: { subSort: 'top' },
+    navigationGuard: () => () => true,
     accountActive: () => false, onRoute: () => {}, hideAllAutocomplete: () => {},
     escHtml: s => s, fmtNum: n => n, setTimeout, ...overrides,
   });

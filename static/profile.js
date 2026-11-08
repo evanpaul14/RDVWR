@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, navigationGuard } from './state.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml } from './utils.js';
 import { renderPost, renderUserCommentCard, waitForMdLibs } from './render.js';
 import { initMedia, initGifVideos } from './media.js';
@@ -170,6 +170,8 @@ function _renderProfileAbout(d) {
 }
 
 export async function loadProfile(username, after=null) {
+  const onCurrentRoute = navigationGuard();
+  const isCurrent = () => onCurrentRoute() && state.profileMode && state.profileUser === username;
   state.profileMode = true; state.profileUser = username; state.profileTab = 'overview'; state.profileSort = 'new'; state.profileTime = 'all'; state.profileAfter = null;
   sortBar.style.display = 'none';
   ctxInfo.classList.remove('visible');
@@ -184,7 +186,7 @@ export async function loadProfile(username, after=null) {
   if (inj && inj._username === username.toLowerCase()) {
     window.__INITIAL_PROFILE__ = null;
     await loadProfileTab(username, 'overview', state.profileSort, state.profileTime, after, false, inj);
-    if (inj._about) _renderProfileAbout(inj._about);
+    if (isCurrent() && inj._about) _renderProfileAbout(inj._about);
     return;
   }
 
@@ -196,7 +198,7 @@ export async function loadProfile(username, after=null) {
   try {
     if (aboutRes.ok) {
       const d = await aboutRes.json();
-      _renderProfileAbout(d);
+      if (isCurrent()) _renderProfileAbout(d);
     }
   } catch {}
 }
