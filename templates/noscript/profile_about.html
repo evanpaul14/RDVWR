@@ -1,0 +1,21 @@
+{# Public profile details; trophy lookup is opt-in to keep ordinary page loads cheap. #}
+<div class="ns-about-panel"><details class="ns-about"{% if page.show_about %} open{% endif %}>
+  <summary>About</summary>
+  {% if about.description %}<div class="sidebar-section"><div class="sidebar-desc md">{{ about.description | mdtext }}</div></div>{% endif %}
+  {% if about.created_utc %}<div class="sidebar-section"><div class="sidebar-section-title">Cake day</div>{{ about.created_utc | fmtdate }}</div>{% endif %}
+  <div class="sidebar-section"><div class="sidebar-section-title">Contributor status</div><div class="sidebar-badges">
+    {% for key, label, cls in [('is_employee', 'Reddit Admin', 'badge-sticky'), ('is_mod', 'Moderator', 'badge-oc'), ('is_premium', 'Reddit Premium', 'badge-poll'), ('verified', 'Verified', 'badge-oc'), ('has_verified_email', 'Verified Email', 'badge-spoiler')] %}
+      {% if about[key] %}<span class="badge {{ cls }}">{{ label }}</span>{% endif %}
+    {% endfor %}
+  </div></div>
+  {% if about.karma_total is defined %}<div class="sidebar-section"><div class="sidebar-section-title">Karma</div><div class="sidebar-desc">{{ about.karma_total | fmtnum }} total &middot; {{ about.karma_post | fmtnum }} post &middot; {{ about.karma_comment | fmtnum }} comment{% if about.karma_award %} &middot; {{ about.karma_award | fmtnum }} award{% endif %}</div></div>{% endif %}
+  {% if page.active_subs %}<div class="sidebar-section"><div class="sidebar-section-title">Subreddits on this page</div><div class="sidebar-community-list">
+    {% for sub in page.active_subs %}<a class="sidebar-community" href="/r/{{ sub }}"><span class="sidebar-community-name">r/{{ sub }}</span></a>{% endfor %}
+  </div></div>{% endif %}
+  <div class="sidebar-section"><div class="sidebar-section-title">Trophies</div>
+    {% if not page.show_about %}<a href="{{ page.about_url }}">Load trophies</a>
+    {% else %}<div class="sidebar-trophies">{% for trophy in page.trophies %}<div class="sidebar-trophy" title="{{ trophy.description }}">
+      {% if trophy.icon %}<img class="sidebar-trophy-icon" src="{{ trophy.icon }}" alt="" loading="lazy">{% endif %}<span class="sidebar-trophy-name">{{ trophy.name }}</span>
+    </div>{% else %}<span class="ns-note">No trophies available</span>{% endfor %}</div>{% endif %}
+  </div>
+</details></div>

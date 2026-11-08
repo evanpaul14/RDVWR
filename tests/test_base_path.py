@@ -57,3 +57,22 @@ def test_unset_is_noop():
         print(json.dumps(dict(base=BASE_PATH, a=app_path('/api/x'), meta='content=""' in idx, static='"/static/app.bundle.js' in idx)))
     """)
     assert r == {'base': '', 'a': '/api/x', 'meta': True, 'static': True}
+
+
+def test_noscript_downloads_unwrap_prefixed_media_proxies():
+    r = _run('/rdvwr', """
+        import json
+        from urllib.parse import parse_qs, urlsplit
+        from app import app
+        from core.template_helpers import download_url
+        with app.test_request_context('/'):
+            video = download_url({'id': 'vid', 'is_video': True, 'video_url': '/rdvwr/api/m/v.redd.it/vid/DASH_720.mp4',
+                                  'hls_url': '/rdvwr/api/m/v.redd.it/vid/HLSPlaylist.m3u8?f=sd'})
+            image = download_url({'id': 'img', 'preview_img': 'http://localhost/rdvwr/api/img?url=https%3A%2F%2Fpreview.redd.it%2Fimage.png'})
+            offsite = download_url({'id': 'bad', 'preview_img': 'https://example.com/rdvwr/api/m/i.redd.it/image.png'})
+            print(json.dumps(dict(video=parse_qs(urlsplit(video).query), image=parse_qs(urlsplit(image).query), offsite=offsite)))
+    """)
+    assert r['video']['hls'] == ['https://v.redd.it/vid/HLSPlaylist.m3u8?f=sd']
+    assert r['image']['url'] == ['https://preview.redd.it/image.png']
+    assert r['image']['filename'] == ['img.png']
+    assert r['offsite'] is None

@@ -49,6 +49,17 @@ RDVWR is a single-page Reddit viewer. A Python/Flask backend proxies Reddit's AP
 - Dark theme, mobile-friendly
 - Works without JavaScript: every page is also server-rendered, with its own cookie-based settings page (`/settings`)
 
+The no-JavaScript settings support themes, all three layouts, feed/comment defaults,
+the logged-in Home feed choice, server-fetched comment pictures, awards, media privacy,
+and content filters, with a reset-to-defaults button. They are independent of the JS
+app's browser settings. Navigation uses links/forms, comment and spoiler toggles use
+native disclosures, and feeds use previous/next links. Profile details and trophies,
+account actions and media downloads are also available. Comment pictures use the
+backend's bounded initial batch; additional pictures need the JS client's lazy loading.
+Browser-local saved posts, local subscriptions, read history, clipboard actions,
+keyboard shortcuts and custom media controls require JavaScript. Native Reddit video
+plays with sound in browsers that support HLS; other browsers get the MP4 fallback.
+
 ## Built with
 
 - **Backend:** [Python](https://www.python.org/) / [Flask](https://flask.palletsprojects.com/) — proxies Reddit's API (spoofed OAuth, public JSON, and the app's GraphQL as a fallback when Reddit blocks REST)

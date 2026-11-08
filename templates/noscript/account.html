@@ -42,7 +42,7 @@
   {{ ui.error_state(page.error) }}
 {% else %}
   <div class="feed-list">
-    {% for it in page['items'] %}
+    {% for it in page['items'] if not (page.tab == 'posts' and it.over_18 and ns.nsfw_hide) %}
       {% set fullname = ('t3_' if page.tab == 'posts' else 't1_') ~ it.id %}
       <div class="acct-item">
         {% if page.tab == 'posts' %}
@@ -55,7 +55,7 @@
               <span>&middot;</span>
               <a class="ucc-post-link" href="{{ post_url }}">{{ it.link_title }}</a>
             </div>
-            <div class="ucc-body md">{{ it.body | mdtext }}</div>
+            <div class="ucc-body md">{% if it.body_html %}{{ it.body_html | md }}{% else %}{{ it.body | mdtext }}{% endif %}</div>
             <div class="ucc-footer">
               <span class="ucc-score">&#9650; {{ it.score | fmtnum }}</span>
               <a class="ucc-permalink" href="{{ post_url }}/_/{{ it.id }}" title="{{ it.created_utc | fmtdatetime }}">{{ it.created_utc | timeago }}</a>

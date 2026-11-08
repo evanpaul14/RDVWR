@@ -6,5 +6,8 @@
     <span class="wiki-sep">/</span>
     <span class="wiki-title">{% if page.page != 'index' %}<a href="/r/{{ page.sub }}/wiki">wiki</a>/{{ page.page }}{% else %}wiki{% endif %}</span>
   </div>
-  {% if page.error %}{{ ui.empty_state(page.error.message) }}{% else %}<div class="wiki-body md">{{ page.html | md }}</div>{% endif %}
+  {% if page.error %}{{ ui.empty_state(page.error.message) }}{% else %}
+    {% if page.revision_date %}<div class="wiki-meta">Last revised {{ page.revision_date | fmtdate }}</div>{% endif %}
+    <div class="wiki-body md">{{ page.html | md }}</div>
+  {% endif %}
 </div>

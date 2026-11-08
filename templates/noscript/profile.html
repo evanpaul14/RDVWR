@@ -9,7 +9,7 @@
     {%- if about.created_utc %} &middot; joined {{ about.created_utc | fmtdate }}{% endif -%}
   {%- endset %}
   {{ ui.ctx_header('u/' ~ about.name, stats, about.icon) }}
-  {% if about.description %}<div class="ns-about-panel"><details class="ns-about"><summary>About</summary><div class="sidebar-section"><div class="sidebar-desc">{{ about.description | mdtext }}</div></div></details></div>{% endif %}
+  {% include 'noscript/profile_about.html' %}
 {% else %}
   {{ ui.ctx_header('u/' ~ page.username) }}
 {% endif %}
@@ -18,7 +18,7 @@
   {% for t, url in page.tab_links %}{{ ui.sort_link(t | capitalize, url, t == page.tab) }}{% endfor %}
   <span class="ns-sort-divider"></span>
   {% for s, url in page.sort_links %}{{ ui.sort_link(s | capitalize, url, s == page.sort) }}{% endfor %}
-  {% if page.sort == 'top' %}{{ ui.time_filter(page.base, page.time, {'tab': page.tab if page.tab != 'overview' else '', 'sort': 'top'}) }}{% endif %}
+  {% if page.sort == 'top' %}{{ ui.time_filter(page.base, page.time, {'tab': page.tab if page.tab != 'overview' else '', 'sort': 'top', 'about': '1' if page.show_about else ''}) }}{% endif %}
 </div>
 
 {% if page.error %}
