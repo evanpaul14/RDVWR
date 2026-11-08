@@ -283,6 +283,7 @@ const SUB_STATE_LABELS = {
 };
 
 export async function loadAbout(sub) {
+  const myGen = state.feedGen;
   try {
     let d;
     const key = sub.toLowerCase();
@@ -300,6 +301,8 @@ export async function loadAbout(sub) {
       d = await res.json();
       _aboutCache.set(key, { d, ts: Date.now() });
     }
+    // Metadata can finish after the user has left this feed.
+    if (myGen !== state.feedGen || state.currentSub.toLowerCase() !== key) return;
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
       ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" data-onerror="hide">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;
@@ -392,8 +395,10 @@ export async function loadSubreddit(sub, sort='top', time='all', after=null) {
   sortBar.innerHTML = buildSubSortHtml(sort, time, sub);
   sortBar.style.display = 'flex';
   ctxInfo.classList.remove('visible');
+  // Start the listing first so metadata shares its navigation generation.
+  const listing = loadSubFeed(state.currentSub, state.currentSort, state.currentTime, after);
   loadAbout(state.currentSub);
-  return await loadSubFeed(state.currentSub, state.currentSort, state.currentTime, after);
+  return await listing;
 }
 
 // ── Multi feed ────────────────────────────────────────────────────────────────
