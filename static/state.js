@@ -1,5 +1,12 @@
 import { storeGet, storeSet } from './storage.js';
 
+// Route changes also invalidate work that starts before a listing's feedGen exists
+// (subscriptions) or finishes after it (header/about data).
+export function navigationGuard() {
+  const generation = state.navigationGen;
+  return () => generation === state.navigationGen;
+}
+
 export function setMutePref(muted) {
   state.userPrefersMuted = muted;
   storeSet('mutePreference', muted ? 'muted' : 'unmuted');
@@ -25,6 +32,7 @@ export const state = {
   currentAfter: null,
   loading: false,
   feedGen: 0,
+  navigationGen: 0,
 
   // Home
   homeMode: false,

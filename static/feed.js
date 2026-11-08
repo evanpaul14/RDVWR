@@ -1,6 +1,6 @@
 import { streamHomePages } from './home-pagination.js';
 import { takeInitialListing } from './hydration.js';
-import { state } from './state.js';
+import { state, navigationGuard } from './state.js';
 import { settings, personalizedHomeMode } from './settings.js';
 import { escHtml, fmtNum, fmtDate, errState, buildTimeFilterHtml, SKELETON_COUNT, openOnReddit, BASE } from './utils.js';
 import { renderPost, waitForMdLibs } from './render.js';
@@ -227,11 +227,16 @@ export async function loadSaved() {
 // `base` is the URL prefix the feed lives under: /home when it stands in for the
 // anonymous home feed, /subscribed when a personalized home feed takes /home.
 export async function loadSubscribed(sort='hot', time='all', after=null, base='/subscribed') {
+  const myGen = ++state.feedGen;
+  const onCurrentRoute = navigationGuard();
+  state.loading = true;
+  showSkeletons();
   let subs = getSubs();
   if (accountActive()) {
     try { subs = (await (await fetch('/api/subscriptions')).json()).subs || []; }
     catch { subs = []; }
   }
+  if (!onCurrentRoute() || myGen !== state.feedGen) return;
   state.subsMode    = true;
   state.subsBase    = base;
   state.homeMode    = false;
@@ -284,6 +289,7 @@ const SUB_STATE_LABELS = {
 
 export async function loadAbout(sub) {
   const myGen = state.feedGen;
+  const onCurrentRoute = navigationGuard();
   try {
     let d;
     const key = sub.toLowerCase();
@@ -302,7 +308,7 @@ export async function loadAbout(sub) {
       _aboutCache.set(key, { d, ts: Date.now() });
     }
     // Metadata can finish after the user has left this feed.
-    if (myGen !== state.feedGen || state.currentSub.toLowerCase() !== key) return;
+    if (!onCurrentRoute() || myGen !== state.feedGen || state.currentSub.toLowerCase() !== key) return;
     document.getElementById('ctx-icon-wrap').innerHTML = d.icon
       ? `<img class="ctx-icon" src="${escHtml(d.icon)}" alt="" data-onerror="hide">` : '';
     document.getElementById('ctx-title').textContent = d.title || `r/${sub}`;
