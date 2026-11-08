@@ -7,6 +7,12 @@ from parsing.media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_
                               GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls, proxy_hls)
 
 
+def _is_nsfw(el):
+    # Current partials use nsfw/subreddit-nsfw; older markup used is-nsfw.
+    # is-not-brand-safe is also present on unflagged posts, so it isn't a substitute.
+    return any(el.has_attr(attr) for attr in ('nsfw', 'subreddit-nsfw', 'is-nsfw'))
+
+
 def _parse_shreddit_crosspost(el):
     """Extract the original post's subreddit/title/media from a crosspost shreddit-post
     element's embedded 'post-media-container' block (the original media is inlined there)."""
@@ -108,7 +114,7 @@ def _parse_shreddit_crosspost(el):
         'is_video': is_video, 'video_url': video_url, 'hls_url': hls_url, 'audio_url': audio_url,
         'youtube_id': None, 'tiktok_id': None, 'streamable_id': None, 'embed_url': None,
         'redgifs_id': None, 'gif_url': None, 'gif_is_video': False, 'imgur_album_id': None,
-        'post_hint': '', 'is_devvit': False, 'devvit_url': None, 'over_18': el.has_attr('is-nsfw'),
+        'post_hint': '', 'is_devvit': False, 'devvit_url': None, 'over_18': _is_nsfw(el),
         'flair': '', 'flair_richtext': [], 'flair_type': 'text', 'flair_bg': '', 'flair_tc': 'dark',
         'domain': el.get('domain', ''), 'poll': None, 'crosspost_from': None, 'linked_post': None,
         'is_stickied': False, 'is_oc': False, 'is_spoiler': False, 'locked': False,
@@ -282,7 +288,7 @@ def _parse_shreddit_post(el):
         'redgifs_id': redgifs_id, 'gif_url': gif_url, 'gif_is_video': gif_is_video,
         'imgur_album_id': None, 'post_hint': post_type,
         'is_devvit': is_devvit, 'devvit_url': devvit_url,
-        'over_18': el.has_attr('is-nsfw'),
+        'over_18': _is_nsfw(el),
         'flair': '', 'flair_richtext': [], 'flair_type': 'text',
         'flair_bg': '', 'flair_tc': 'dark',
         'domain': domain_str, 'poll': None,

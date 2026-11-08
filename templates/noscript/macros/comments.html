@@ -36,6 +36,7 @@
     {%- set permalink = '/r/' ~ post.subreddit ~ '/comments/' ~ post.id ~ '/_/' ~ c.id -%}
     <details class="comment{% if deleted %} comment-deleted{% endif %}{% if c.stickied %} comment-stickied{% endif %}" data-depth="{{ depth }}"{% if not (c.author == 'AutoModerator' or is_bot(c.author)) %} open{% endif %}>
       <summary class="comment-header">
+        {% if ns.show_avatars and ns.layout != 'minimal' and c.author_icon %}<img class="comment-avatar" src="{{ c.author_icon }}" alt="" loading="lazy">{% endif %}
         <a class="comment-author{% if is_mod %} is-mod{% endif %}" href="/user/{{ c.author }}">{{ c.author }}</a>
         {%- if is_mod %}<span class="comment-mod">MOD</span>{% endif -%}
         {%- if c.distinguished == 'admin' %}<span class="comment-admin">ADMIN</span>{% endif -%}

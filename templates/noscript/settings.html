@@ -31,26 +31,31 @@
     {{ select_row('sub_sort', 'Default sort', 'Used when browsing a subreddit without picking a sort.', [('hot', 'Hot'), ('new', 'New'), ('top', 'Top'), ('rising', 'Rising'), ('controversial', 'Controversial')]) }}
     {{ select_row('sub_time', 'Default time', 'Used for Top/Controversial when no time filter is chosen.', [('hour', 'Past hour'), ('day', 'Today'), ('week', 'Past week'), ('month', 'Past month'), ('year', 'Past year'), ('all', 'All time')]) }}
 
-    {% if page.login and page.login.username %}
+    {% if page.login and page.login.username and not disable_personalized_home %}
     <input type="hidden" name="personalized_home_shown" value="1">
     {{ check_row('personalized_home', 'Personalized home feed', 'Home shows your Reddit account\'s feed instead of the logged-out front page.') }}
+    {{ select_row('home_feed', 'Home feed', 'Used while personalized home is enabled.', [('personalized', 'Personalized'), ('subscribed', 'Subscribed'), ('popular', 'Popular')]) }}
     {% endif %}
 
     <div class="settings-section-title">Comments</div>
+    {{ check_row('show_avatars', 'Show profile pictures', 'Show available commenter pictures fetched with the page.') }}
     {{ check_row('show_awards', 'Show awards', 'Show award icons on posts and comments.') }}
     {{ select_row('comment_sort', 'Default sort', '', [('confidence', 'Best'), ('top', 'Top'), ('new', 'New'), ('controversial', 'Controversial'), ('old', 'Old'), ('qa', 'Q&A')]) }}
 
     <div class="settings-section-title">Privacy</div>
-    {{ check_row('link_external_media', "Don't embed third-party media", 'Show a plain link instead of embedding YouTube, TikTok, Streamable, redgifs or other outside players.') }}
+    {{ check_row('link_external_media', "Don't embed third-party media", 'Show a plain link instead of loading unproxied images, GIFs, videos or outside players.') }}
 
+    {% if not disable_nsfw %}
     <div class="settings-section-title">NSFW</div>
     {{ check_row('nsfw_blur', 'Blur NSFW content', 'Hide NSFW post media and text behind a click-to-reveal.') }}
     {{ check_row('nsfw_hide', 'Hide NSFW posts', 'Leave NSFW posts out of feeds and profiles entirely.') }}
     {{ check_row('nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW posts out of search results.') }}
     {% if nsfw_only_search %}{{ check_row('nsfw_only_search', 'Offer "NSFW only" in search', 'Show a checkbox next to the search sort options that limits results to NSFW posts.') }}{% endif %}
+    {% endif %}
 
     <div class="ns-settings-actions">
       <button type="submit">Save</button>
+      <button type="submit" name="reset" value="1" formnovalidate>Reset to defaults</button>
       <a class="ns-settings-cancel" href="{{ page.next }}">Cancel</a>
     </div>
   </form>

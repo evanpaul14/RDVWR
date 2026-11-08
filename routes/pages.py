@@ -50,7 +50,16 @@ def _feed_sort(sort, default):
 @bp.route("/home/<sort>", strict_slashes=False)
 def home(sort='best'):
     cookie = None if DISABLE_PERSONALIZED_HOME or not get_pref('personalized_home') else reddit_login.request_cookie_header()
-    return _respond(build_home(_feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after'), cookie))
+    sort, t, after = _feed_sort(sort, 'best'), clean_time(_arg('t'), 'all'), _arg('after')
+    if cookie and get_pref('home_feed') == 'popular':
+        return _respond(build_subreddit('popular', 'hot' if sort == 'best' else sort, t, after))
+    if cookie and get_pref('home_feed') == 'subscribed':
+        return _respond(build_subscribed(sort, t, after, base='/home'))
+    try:
+        distance = min(max(int(_arg('distance', '4')), 4), 500)
+    except ValueError:
+        distance = 4
+    return _respond(build_home(sort, t, after, cookie, distance))
 
 
 @bp.route("/r/<sub>", strict_slashes=False)
@@ -149,7 +158,7 @@ def profile(username, rest=''):
     if not USERNAME_RE.match(username):
         return _not_found()
     return _respond(build_profile(username, _arg('tab', 'overview'), _arg('sort', 'new'),
-                                  clean_time(_arg('t'), 'all'), _arg('after'), _arg('archive') == '1'))
+                                  clean_time(_arg('t'), 'all'), _arg('after'), _arg('archive') == '1', _arg('about') == '1'))
 
 
 def _search_shortcut(q):

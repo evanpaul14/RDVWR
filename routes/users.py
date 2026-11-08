@@ -87,16 +87,16 @@ def get_user_about(username):
         return error_response(500)
 
 
-@bp.route("/api/user/<username>/trophies")
-@validate_params(username=USERNAME_RE)
-@server_cache(CACHE_TTL_SUBREDDIT)
-def get_user_trophies(username):
+@fetch_cache(CACHE_TTL_SUBREDDIT, empty_ttl=60)
+@budgeted
+def fetch_user_trophies(username, timeout=10):
+    """Public profile trophies, shared with the no-JS profile details page."""
     try:
         resp = reddit_get(
             f"https://www.reddit.com/api/v1/user/{username}/trophies.json",
-            params={"raw_json": 1}, timeout=10)
+            params={"raw_json": 1}, timeout=timeout)
         if resp.status_code != 200:
-            return jsonify({"trophies": []})
+            return []
         trophies = resp.json().get("data", {}).get("trophies", [])
         out = []
         for t in trophies:
@@ -109,10 +109,17 @@ def get_user_trophies(username):
                 "icon":        clean_url(td.get("icon_40") or td.get("icon_70") or ""),
                 "granted_at":  td.get("granted_at") or 0,
             })
-        return cached_json({"trophies": out}, CACHE_TTL_SUBREDDIT)
+        return out
     except Exception as e:
         log.warning("get_user_trophies failed user=%s: %s", username, e)
-        return jsonify({"trophies": []})
+        return []
+
+
+@bp.route("/api/user/<username>/trophies")
+@validate_params(username=USERNAME_RE)
+@server_cache(CACHE_TTL_SUBREDDIT)
+def get_user_trophies(username):
+    return cached_json({"trophies": fetch_user_trophies(username)}, CACHE_TTL_SUBREDDIT)
 
 
 _PROFILE_GONE = "User not found or profile is private"
