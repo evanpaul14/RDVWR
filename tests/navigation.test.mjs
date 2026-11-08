@@ -140,3 +140,18 @@ test('current subreddit and profile headers still render', async () => {
   await renderRoute({ type: 'user', username: 'currentuser' });
   assert.equal(element('ctx-title').textContent, 'u/currentuser');
 });
+
+for (const mode of ['login', null, 'cookies']) test(`identity changes discard pending ${mode || 'frontpage'} pages and their persisted cursors`, async () => {
+  ui.mode = mode;
+  ui.settings.redditCookies = 'fixture_alice';
+  const pending = deferred();
+  global.fetch = () => pending.promise;
+  const old = feed.loadHomeFeed('best', 'all');
+  await flush();
+  window.__REDDIT_LOGIN__ = { username: 'bob' };
+  ui.settings.redditCookies = 'fixture_bob';
+  pending.resolve(response({ posts: [], after: 'alice_cursor' }));
+  await old;
+  assert.equal(state.afterToken, null);
+  assert.equal([...storage.values()].some(value => value.includes('alice_cursor')), false);
+});

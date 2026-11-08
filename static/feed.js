@@ -8,7 +8,7 @@ import { initMedia, initGifVideos } from './media.js';
 import { getSavedPosts } from './saved.js';
 import { getSubs } from './subscriptions.js';
 import { accountActive } from './vote.js';
-import { isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
+import { homeFeedScope, isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const feed        = document.getElementById('feed');
@@ -96,16 +96,15 @@ export function buildHomeSortHtml(sort='best', time='all') {
 const HOME_TARGET_UNSEEN = 20;
 const HOME_MAX_EXTRA_FETCHES = 3;
 
-async function _fetchHomePage(sort, time, after, distance) {
+async function _fetchHomePage(sort, time, after, distance, mode, identity) {
   let url = `/api/home?sort=${sort}`;
   if (sort === 'top' || sort === 'controversial') url += `&t=${time || 'all'}`;
   if (after) url += `&after=${encodeURIComponent(after)}`;
   if (distance) url += `&distance=${distance}`;
-  const mode = personalizedHomeMode();
   if (mode === 'login') url += '&login=1';
   const initial = takeInitialListing('home', { sort, time: ['top', 'controversial'].includes(sort) ? (time || 'all') : '', after: after || '', mode, distance: distance || 4 });
   if (initial) return { res: { ok: true }, data: initial };
-  const fetchOpts = mode === 'cookies' ? { headers: { 'X-Reddit-Cookie': settings.redditCookies } } : {};
+  const fetchOpts = mode === 'cookies' ? { headers: { 'X-Reddit-Cookie': identity } } : {};
   const res  = await fetch(url, fetchOpts);
   const data = await res.json();
   return { res, data };
@@ -115,16 +114,22 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
   if (append && state.loading) return;
   if (!append) state.feedGen++;
   const myGen = state.feedGen;
+  const mode = personalizedHomeMode();
+  const currentIdentity = () => mode === 'cookies' ? settings.redditCookies : window.__REDDIT_LOGIN__?.username || '';
+  const identity = currentIdentity();
+  const isCurrent = () => myGen === state.feedGen && mode === personalizedHomeMode() && identity === currentIdentity();
   state.loading = true;
   if (!append) showSkeletons();
   else sentinel.classList.add('loading');
   try {
+    const scope = await homeFeedScope(mode, identity);
+    if (!isCurrent()) return;
     // On a fresh (non-append) load, resume from the last-known cursor so a
     // plain refresh pages deeper into Reddit's feed instead of re-fetching
     // the same first page, then dedupe against posts already shown.
     let curAfter = after;
     let curDistance = 4;
-    const cursor = getHomeCursor(sort, time);
+    const cursor = getHomeCursor(sort, time, scope);
     if (cursor) {
       curDistance = cursor.distance || 4;
       if (!append && !after) curAfter = cursor.after;
@@ -134,13 +139,13 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
     await streamHomePages({
       after: curAfter, distance: curDistance,
       maxPages: append ? 1 : HOME_MAX_EXTRA_FETCHES + 1, target: HOME_TARGET_UNSEEN,
-      isCurrent: () => myGen === state.feedGen,
+      isCurrent,
       fetchPage: async (cursor, distance) => {
-        const { res, data } = await _fetchHomePage(sort, time, cursor, distance);
+        const { res, data } = await _fetchHomePage(sort, time, cursor, distance, mode, identity);
         if (!res.ok) throw new Error(data.error || 'Error');
         return data;
       },
-      filterPage: posts => append ? posts : posts.filter(p => !isHomeSeen(p.id)),
+      filterPage: posts => append ? posts : posts.filter(p => !isHomeSeen(p.id, scope)),
       onPage: (posts, cursor, distance) => {
         if (posts.length) {
           if (!append && !rendered) feed.innerHTML = '';
@@ -152,18 +157,18 @@ export async function loadHomeFeed(sort, time, after=null, append=false) {
           feed.append(...cards);
           cards.forEach(initGifVideos);
           rendered += posts.length;
-          markHomeSeen(posts.map(p => p.id));
+          markHomeSeen(posts.map(p => p.id), scope);
         }
-        setHomeCursor(sort, time, cursor, distance);
+        setHomeCursor(sort, time, cursor, distance, scope);
         state.afterToken = cursor;
       },
     });
-    if (myGen !== state.feedGen) return;
+    if (!isCurrent()) return;
     if (!rendered && !append) {
       feed.innerHTML = '<div class="state"><div class="state-icon">∅</div><div class="state-title">No posts found</div></div>';
     }
   } catch (error) {
-    if (!append && myGen === state.feedGen && !feed.querySelector('.post')) {
+    if (!append && isCurrent() && !feed.querySelector('.post')) {
       feed.innerHTML = errState(escHtml(error.message || 'Network error'), 'feed');
     }
   }
