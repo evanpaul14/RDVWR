@@ -1,3 +1,10 @@
+/* Newer emoji the OS font may lack (Unicode 17: distorted face) */
+@font-face {
+  font-family: 'Emoji Fallback';
+  font-display: swap;
+  src: url(fonts/noto-emoji-1faea.woff2) format('woff2');
+  unicode-range: U+1FAEA;
+}
 /* Self-hosted Google Fonts (static/fonts/) so pages make no third-party requests. */
 /* latin-ext */
 @font-face {
@@ -261,9 +268,9 @@
   --up:   #ff6b35;
   --hdr-bg: rgba(12,12,12,.92); --pvhdr-bg: rgba(12,12,12,.95);
   --shadow-card: 0 4px 24px rgba(0,0,0,.4); --shadow-dropdown: 0 8px 24px rgba(0,0,0,.5);
-  --serif:'Instrument Serif', Georgia, serif;
-  --mono: 'JetBrains Mono', monospace;
-  --sans: 'DM Sans', system-ui, sans-serif;
+  --serif:'Instrument Serif', Georgia, 'Emoji Fallback', serif;
+  --mono: 'JetBrains Mono', monospace, 'Emoji Fallback';
+  --sans: 'DM Sans', system-ui, sans-serif, 'Emoji Fallback';
 }
 
 /* ── Light theme vars ────────────────────────────────────────────────────── */
