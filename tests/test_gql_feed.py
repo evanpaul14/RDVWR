@@ -766,3 +766,34 @@ def test_multireddit_joins_subreddits_with_an_encoded_plus():
          patch.object(subreddit_routes, "hydrate_linked_posts"):
         subreddit_routes.fetch_multireddit("someone", "mix_encoded", "hot")
     assert get.call_args_list[1].args[0] == "https://www.reddit.com/r/aww%2Bpics/hot.json"
+
+
+def test_posts_by_id_uses_by_id_endpoint():
+    ok = MagicMock(status_code=200, ok=True, headers={"content-type": "application/json"})
+    ok.json.return_value = {"data": {"children": []}}
+    with patch.object(helpers, "reddit_get", return_value=ok) as get:
+        helpers.fetch_posts_by_id(["a1", "b2"])
+    assert get.call_args.args[0] == "https://www.reddit.com/by_id/t3_a1,t3_b2.json"
+
+
+def test_gql_403_is_not_treated_as_a_rotated_hash():
+    from gql import client as gql_client
+    blocked = MagicMock(status_code=403, headers={"content-type": "text/html"})
+    with patch.object(gql_client, "_post", return_value=blocked) as post, \
+         patch.object(gql_client, "_refresh_hashes") as refresh, \
+         patch.object(gql_client, "_dispatch_workflow") as dispatch:
+        with pytest.raises(RuntimeError):
+            gql_client.gql_query("PostsByIds", {"ids": ["t3_x"]})
+    assert post.call_count == 1
+    refresh.assert_not_called()
+    dispatch.assert_not_called()
+
+
+def test_gql_post_skipped_during_waf_cooldown():
+    import time
+    from gql import client as gql_client
+    from reddit import waf as reddit_waf
+    reddit_waf._waf_until = time.monotonic() + 30
+    with patch.object(gql_client, "_get_device") as dev:
+        assert gql_client._post({}, 5).status_code == 403
+    dev.assert_not_called()

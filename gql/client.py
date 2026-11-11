@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from parsing.media_detection import clean_url
 from reddit.client import _get_device, SESSION
+from reddit.waf import note_waf_block, waf_blocked_response, waf_cooling
 from core.helpers import log
 
 GQL_URL = "https://gql-fed.reddit.com/"
@@ -166,6 +167,9 @@ def _comment(n, depth):
 
 
 def _post(body, timeout):
+    """POST a query; during a WAF cooldown answer with the block page without sending it."""
+    if waf_cooling():
+        return waf_blocked_response(GQL_URL)
     resp = None
     for attempt in range(2):
         device = _get_device()
@@ -176,6 +180,8 @@ def _post(body, timeout):
             device.expires_at = 0.0  # force this device to re-auth next use
             continue
         break
+    if resp.status_code == 403:
+        note_waf_block()
     return resp
 
 
@@ -195,8 +201,9 @@ def gql_query(operation, variables, timeout=15):
             return data
         log.warning("gql %s failed status=%s errors=%s", operation, resp.status_code,
                     (errors or [{}])[0].get("message"))
-        if attempt == 1 or not _refresh_hashes():
-            _dispatch_workflow()
+        if resp.status_code == 403 or attempt == 1 or not _refresh_hashes():
+            if resp.status_code != 403:   # a 403 is the WAF, not a rotated hash
+                _dispatch_workflow()
             raise RuntimeError(f"GraphQL {operation} failed")
 
 
@@ -221,8 +228,9 @@ def fetch_gql_comments(post_id, sort="confidence", after=None, comment_id=None, 
             break
         log.warning("gql comments failed post=%s status=%s errors=%s",
                     post_id, resp.status_code, (data.get("errors") or [{}])[0].get("message"))
-        if attempt == 1 or not _refresh_hashes():
-            _dispatch_workflow()
+        if resp.status_code == 403 or attempt == 1 or not _refresh_hashes():
+            if resp.status_code != 403:   # a 403 is the WAF, not a rotated hash
+                _dispatch_workflow()
             raise RuntimeError("GraphQL comment fetch failed")
 
     by_id, roots, author_fullnames = {}, [], {}
@@ -257,8 +265,9 @@ def fetch_gql_user_about(username, timeout=10):
             break
         log.warning("gql user about failed user=%s status=%s errors=%s",
                     username, resp.status_code, (data.get("errors") or [{}])[0].get("message"))
-        if attempt == 1 or not _refresh_hashes():
-            _dispatch_workflow()
+        if resp.status_code == 403 or attempt == 1 or not _refresh_hashes():
+            if resp.status_code != 403:   # a 403 is the WAF, not a rotated hash
+                _dispatch_workflow()
             raise RuntimeError("GraphQL user fetch failed")
     user = data["data"].get("redditorInfoByName")
     if not user:

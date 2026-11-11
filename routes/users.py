@@ -45,7 +45,7 @@ def fetch_user_about(username, timeout=10):
     blocks it, the app's GraphQL profile query answers instead."""
     resp = reddit_get(
         f"https://www.reddit.com/user/{username}/about.json",
-        params={"raw_json": 1}, timeout=timeout)
+        params={"raw_json": 1}, timeout=timeout, waf_key="user_about")
     if is_waf_block(resp):
         try:
             about = fetch_gql_user_about(username, timeout=timeout)

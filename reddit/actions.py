@@ -122,7 +122,8 @@ def _finished_comment(made, tries=8):
             return made
         time.sleep(1.5)
         try:
-            r = reddit_get('https://www.reddit.com/api/info.json', params={'id': made['name'], 'raw_json': 1}, timeout=10)
+            r = reddit_get('https://www.reddit.com/api/info.json', params={'id': made['name'], 'raw_json': 1},
+                             timeout=10, waf_key='api_info')
             children = r.json()['data']['children'] if r.ok else []
         except Exception:
             continue

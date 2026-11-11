@@ -8,6 +8,7 @@ import logging
 import requests
 from reddit.budget import budgeted, request as budget_request, remaining, backoff
 from curl_cffi import requests as cffi_requests
+from reddit.waf import note_waf_block, waf_blocked_response, waf_cooling, waf_endpoint_blocked
 
 log = logging.getLogger(__name__)
 
@@ -496,11 +497,13 @@ def _record_ratelimit(device: _OAuthDevice, resp):
 
 
 @budgeted
-def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
+def reddit_get(url, *, quarantine=False, rotate_on_403=False, waf_key=None, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
     Pass quarantine=True to use the quarantine-opted-in session instead of OAuth.
     Pass rotate_on_403=True to retry once on a fresh token and identity when Reddit answers
-    403 (often a WAF block tied to one device token); a second 403 is returned as is."""
+    403 (often a WAF block tied to one device token); a second 403 is returned as is.
+    Pass waf_key for an endpoint Reddit may block outright: once it does, the anonymous
+    path skips it (answering with the block page) for an hour so the caller's fallback runs."""
     if not quarantine and USER_TOKEN_PROVIDER:
         user_token = USER_TOKEN_PROVIDER()
         if user_token:
@@ -518,6 +521,8 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
         return budget_request(sess.get, url, **kwargs)
     url = url.replace("https://www.reddit.com/", "https://oauth.reddit.com/", 1)
     url = url.replace("https://old.reddit.com/", "https://oauth.reddit.com/", 1)
+    if waf_cooling() or waf_endpoint_blocked(waf_key):
+        return waf_blocked_response(url)
     extra_headers = kwargs.pop("headers", {})
     rotated = False
     for attempt in range(3):
@@ -544,8 +549,13 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, **kwargs):
             ctype = resp.headers.get("content-type") or ""
             log.warning("reddit 403 on %s via device %s (%s, %s) content-type=%r attempt=%d",
                         url, device.device_id[:8], device.impersonate, device.user_agent, ctype, attempt + 1)
-            if attempt < 2 and "json" not in ctype:
-                continue  # the WAF's HTML block page: the pool's next device may get through
+            if "json" not in ctype:
+                # The WAF's HTML block page. It's mostly per-IP, so one more device is worth
+                # a try for an ordinary endpoint, but not a hard-blocked one or a third try.
+                if attempt == 0 and not waf_key and not waf_cooling():
+                    continue
+                note_waf_block(waf_key)
+                return resp
         if resp.status_code == 401 and attempt < 2:
             device.expires_at = 0.0  # force this device to re-auth next use
             continue

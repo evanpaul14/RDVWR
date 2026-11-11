@@ -9,6 +9,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from reddit import client as app_module
+from reddit import waf
 from reddit.client import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
 
 
@@ -175,10 +176,45 @@ class TestRedditGetWafRetry:
         assert self._get([bad, good]).status_code == 200
         assert good.session.get.call_count == 1
 
-    def test_gives_up_after_three_html_403s(self):
+    def test_gives_up_after_two_html_403s(self):
         devs = [self._device(403, "text/html") for _ in range(3)]
         assert self._get(devs).status_code == 403
-        assert all(d.session.get.call_count == 1 for d in devs)
+        assert [d.session.get.call_count for d in devs] == [1, 1, 0]
+
+    def test_burst_of_blocks_pauses_upstream_calls(self):
+        for _ in range(waf._WAF_BURST_COUNT):
+            self._get([self._device(403, "text/html") for _ in range(2)])
+        assert waf.waf_cooling()
+        spare = self._device(200, "application/json")
+        resp = self._get([spare])
+        assert resp.status_code == 403 and "json" not in resp.headers["content-type"]
+        assert spare.session.get.call_count == 0
+
+    def test_cooldown_ends(self):
+        waf._waf_until = time.monotonic() - 1
+        good = self._device(200, "application/json")
+        assert self._get([good]).status_code == 200
+
+    def _get_keyed(self, devices):
+        with patch.object(app_module, "USER_TOKEN_PROVIDER", None), \
+             patch.object(app_module, "REDDIT_OAUTH", True), \
+             patch.object(app_module, "_get_device", side_effect=devices):
+            return app_module.reddit_get("https://www.reddit.com/user/x/about.json", waf_key="user_about")
+
+    def test_waf_key_skips_retry_then_skips_the_endpoint(self):
+        bad, spare = self._device(403, "text/html"), self._device(200, "application/json")
+        assert self._get_keyed([bad, spare]).status_code == 403
+        assert spare.session.get.call_count == 0
+        later = self._device(200, "application/json")
+        assert self._get_keyed([later]).status_code == 403
+        assert later.session.get.call_count == 0
+        # other endpoints are unaffected
+        assert self._get([self._device(200, "application/json")]).status_code == 200
+
+    def test_waf_key_endpoint_reprobed_after_ttl(self):
+        waf._waf_endpoints["user_about"] = time.monotonic() - 1
+        good = self._device(200, "application/json")
+        assert self._get_keyed([good]).status_code == 200
 
     def test_json_403_is_not_retried(self):
         private, spare = self._device(403, "application/json"), self._device(200, "application/json")
