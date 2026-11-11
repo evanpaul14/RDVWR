@@ -358,42 +358,50 @@ class TestMoreChildren:
         assert resp.get_json()["comments"] == []
         mock_get.assert_not_called()
 
-    @patch.object(reddit_client.SESSION, "get")
-    def test_happy_path(self, mock_get, client):
-        mock_get.return_value = _session_get({
-            "json": {"data": {"things": [
-                {"kind": "t1", "data": {
-                    "id": "c1", "author": "user", "body": "hello", "score": 5,
-                    "created_utc": 0, "edited": False, "depth": 1,
-                    "parent_id": "t3_abc123", "distinguished": None,
-                    "stickied": False, "author_flair_text": None,
-                    "author_flair_richtext": [], "author_flair_type": "text",
-                    "author_flair_background_color": None,
-                    "author_flair_text_color": None, "all_awardings": [],
-                }}
-            ]}}
-        })
-        resp = client.get("/api/r/testsubreddit/morechildren/abc123?children=c1")
-        assert resp.status_code == 200
-        assert len(resp.get_json()["comments"]) == 1
+    @staticmethod
+    def _focused(post_id, sort, comment_id=None, **kw):
+        """fetch_gql_comments focused on one comment: that comment with a reply."""
+        reply = {"id": f"{comment_id}r", "author": "v", "body": "reply", "replies": []}
+        return [{"id": comment_id, "author": "u", "body": "hi", "replies": [reply]}], {"u": "t2_u"}
 
     @patch.object(reddit_client.SESSION, "get")
-    def test_403_falls_back_to_permalinks(self, mock_get, client):
-        def fake_get(url, **kw):
-            if "morechildren" in url:
-                return MockResponse({}, status_code=403)
-            cid = kw["params"]["comment"]
-            return MockResponse([{}, {"data": {"children": [
-                {"kind": "t1", "data": {"id": cid, "author": "u", "body": "hi", "replies": ""}},
-            ]}}])
-        mock_get.side_effect = fake_get
+    def test_loads_each_comment_via_graphql_not_rest(self, mock_get, client, monkeypatch):
+        monkeypatch.setattr(comments_routes, "fetch_gql_comments", self._focused)
+        resp = client.get("/api/r/testsubreddit/morechildren/abc123?children=c1,c2")
+        assert resp.status_code == 200
+        comments = resp.get_json()["comments"]
+        assert [c["id"] for c in comments] == ["c1", "c2"]
+        assert comments[0]["replies"][0]["id"] == "c1r"
+        # never /api/morechildren or a comment permalink: both are WAF-blocked
+        mock_get.assert_not_called()
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_batches_and_returns_the_rest_as_a_stub(self, mock_get, client, monkeypatch):
+        monkeypatch.setattr(comments_routes, "fetch_gql_comments", self._focused)
         ids = ",".join(f"c{i}" for i in range(25))
         resp = client.get(f"/api/r/testsubreddit/morechildren/abc124?children={ids}")
         assert resp.status_code == 200
         comments = resp.get_json()["comments"]
-        assert [c["id"] for c in comments[:20]] == [f"c{i}" for i in range(20)]
-        assert comments[20]["kind"] == "more"
-        assert comments[20]["children"] == [f"c{i}" for i in range(20, 25)]
+        n = comments_routes.MORECHILDREN_BATCH
+        assert [c["id"] for c in comments[:n]] == [f"c{i}" for i in range(n)]
+        assert comments[n]["kind"] == "more"
+        assert comments[n]["children"] == [f"c{i}" for i in range(n, 25)]
+
+    def test_archive_fills_in_when_graphql_fails(self, client, monkeypatch):
+        tree = [{"kind": "t1", "data": {"id": "p1", "author": "a", "body": "parent", "replies": {
+            "kind": "Listing", "data": {"children": [
+                {"kind": "t1", "data": {"id": "c9", "author": "b", "body": "archived", "replies": ""}}]}}}}]
+        monkeypatch.setattr(comments_routes, "fetch_archived_comment_tree", lambda post_id, *a, **kw: tree)
+        resp = client.get("/api/r/testsubreddit/morechildren/abc125?children=c9")
+        assert resp.status_code == 200
+        assert [c["id"] for c in resp.get_json()["comments"]] == ["c9"]
+
+    def test_fails_when_nothing_can_load_them(self, client, monkeypatch):
+        def down(*a, **kw):
+            raise RuntimeError("archive down")
+        monkeypatch.setattr(comments_routes, "fetch_archived_comment_tree", down)
+        resp = client.get("/api/r/testsubreddit/morechildren/abc126?children=c1")
+        assert resp.status_code == 502
 
 
 # ── /api/search ───────────────────────────────────────────────────────────────

@@ -83,6 +83,11 @@ _ANDROID_APP_VERSIONS = [
     "Version 2026.33.2/Build 2633220",
 ]
 _REDDIT_ANDROID_CLIENT_ID = "ohXpoqrZYub1kg"
+# `MANUFACTURER;MODEL`, as the app sends it in Device-Name (from Nachtalb/redlib).
+_ANDROID_DEVICES = [
+    "samsung;SM-S921B", "samsung;SM-S928B", "samsung;SM-A556B", "Google;Pixel 8",
+    "Google;Pixel 9 Pro", "Google;Pixel 7a", "OnePlus;CPH2581", "Xiaomi;23127PN0CG",
+]
 # TLS fingerprints Reddit still serves (per Nachtalb/redlib's probes, Nov 2026):
 # Chrome 124-131 and Safari 17-26. Reddit blocks Chrome 132+, every Firefox and
 # OkHttp. Profiles the installed curl_cffi doesn't know are dropped below.
@@ -103,6 +108,10 @@ def _supported_profiles(wanted):
 
 
 _CFFI_PROFILES            = _supported_profiles(_CFFI_WANTED)
+# Reddit sometimes starts refusing one TLS fingerprint ("blocked by network security").
+# That isn't the IP's fault: leave the profile out this long and move devices off it.
+_FINGERPRINT_BLOCK_SECS   = 6 * 3600
+_blocked_profiles         = {}  # profile -> time.time() its block expires
 _TOKEN_POOL_SIZE          = 3
 # Keep each token (and its device identity) until it nears expiry (~24h), like
 # the real app and redlib do. Minting a fresh device every few minutes from one
@@ -111,6 +120,27 @@ _TOKEN_POOL_SIZE          = 3
 # this low, rather than waiting for it to run out and get 429s (mirrors redlib's
 # OAUTH_RATELIMIT_REMAINING approach).
 _RATELIMIT_LOW_WATERMARK = 30
+# GraphQL has its own budget, 600 per token; rotate below 60 like redlib does.
+_GQL_RATELIMIT_LOW_WATERMARK = 60
+
+
+def _pick_profile(exclude=None):
+    """A random TLS profile that Reddit isn't currently refusing, other than `exclude`."""
+    now = time.time()
+    others = [p for p in _CFFI_PROFILES if p != exclude] or list(_CFFI_PROFILES)
+    return random.choice([p for p in others if _blocked_profiles.get(p, 0) <= now] or others)
+
+
+def is_fingerprint_block(resp):
+    """Reddit's block page for a refused TLS fingerprint. Private or banned subs answer
+    JSON 403s, and the IP-level block page has other wording."""
+    if resp.status_code != 403 or not (resp.headers.get("content-type") or "").startswith("text/html"):
+        return False
+    try:
+        body = resp.text
+    except Exception:
+        return False
+    return isinstance(body, str) and "blocked by network security" in body.lower()
 
 
 class _OAuthDevice:
@@ -119,14 +149,10 @@ class _OAuthDevice:
         self.token       = None
         self.expires_at  = 0.0
         self.acquired_at = 0.0
-        self.device_id   = str(_uuid_mod.uuid4())
-        self.impersonate = random.choice(_CFFI_PROFILES)
-        self.qos         = random.uniform(1.0, 100.0)
-        app_ver          = random.choice(_ANDROID_APP_VERSIONS)
-        android_v        = random.randint(12, 16)
-        self.user_agent  = f"Reddit/{app_ver}/Android {android_v}"
         self.extra        = {}  # loid, session headers from auth response
         self.ratelimit_remaining = None  # last x-ratelimit-remaining seen for this token
+        self.gql_ratelimit_remaining = None  # same for GraphQL, which has its own budget
+        self.reset_identity()
         # Reused across requests (thread-local curl handle under the hood) so
         # repeated calls for this device get TCP/TLS connection keep-alive
         # instead of a fresh handshake every time.
@@ -136,32 +162,51 @@ class _OAuthDevice:
         now = time.time()
         if self.ratelimit_remaining is not None and self.ratelimit_remaining < _RATELIMIT_LOW_WATERMARK:
             return True
+        if self.gql_ratelimit_remaining is not None and self.gql_ratelimit_remaining < _GQL_RATELIMIT_LOW_WATERMARK:
+            return True
         return not self.token or now >= self.expires_at
 
+    def device_headers(self):
+        """The headers the Android app sends on every request, token request included
+        (the set Nachtalb/redlib sends)."""
+        return {
+            "User-Agent":            self.user_agent,
+            "x-reddit-retry":        "attempt=0, max=3",
+            "x-reddit-compression":  "1",
+            "x-reddit-qos":          f"down-rate-mbps={self.qos:.3f}",
+            "x-reddit-media-codecs": self.codecs,
+            "Content-Type":          "application/json; charset=UTF-8",
+            "client-vendor-id":      self.device_id,
+            "X-Reddit-Device-Id":    self.device_id,
+            "X-Dev-Ad-Id":           self.ad_id,
+            "Device-Name":           self.device_name,
+            "Accept-Language":       "en-US",
+            "X-Reddit-Http-QoS":     "GOOD",
+        }
+
     def api_headers(self):
-        codecs = "available-codecs=video/avc, video/hevc"
-        if random.random() < 0.5:
-            codecs += ", video/x-vnd.on2.vp9"
-        pairs = [
-            ("User-Agent",            self.user_agent),
-            ("Authorization",         f"Bearer {self.token}" if self.token else ""),
-            ("x-reddit-retry",        "algo=no-retries"),
-            ("x-reddit-compression",  "1"),
-            ("x-reddit-qos",          f"{self.qos:.3f}"),
-            ("x-reddit-media-codecs", codecs),
-            ("client-vendor-id",      self.device_id),
-            ("X-Reddit-Device-Id",    self.device_id),
-        ]
+        pairs = list(self.device_headers().items())
+        pairs.append(("Authorization", f"Bearer {self.token}" if self.token else ""))
         pairs.extend(self.extra.items())
         random.shuffle(pairs)
         return dict(pairs)
+
+    def switch_profile(self, exclude=None):
+        """Move to another TLS profile, keeping the token. A fresh session, so no
+        keep-alive connection made with the old fingerprint gets reused."""
+        self.impersonate = _pick_profile(exclude)
+        self.session     = cffi_requests.Session(proxies=PROXIES)
 
     def drift_qos(self):
         self.qos = max(1.0, min(100.0, self.qos + random.gauss(0, 3)))
 
     def reset_identity(self):
         self.device_id   = str(_uuid_mod.uuid4())
-        self.impersonate = random.choice(_CFFI_PROFILES)
+        self.ad_id       = str(_uuid_mod.uuid4())
+        self.device_name = random.choice(_ANDROID_DEVICES)
+        # One phone's codec support doesn't change between requests.
+        self.codecs      = "available-codecs=video/avc, video/hevc" + (", video/x-vnd.on2.vp9" if random.random() < 0.5 else "")
+        self.impersonate = _pick_profile()
         self.qos         = random.uniform(1.0, 100.0)
         app_ver          = random.choice(_ANDROID_APP_VERSIONS)
         android_v        = random.randint(12, 16)
@@ -193,6 +238,7 @@ def _refresh_device(device: _OAuthDevice):
         device.acquired_at = time.time()
         device.extra       = extra
         device.ratelimit_remaining = None  # fresh token, fresh budget
+        device.gql_ratelimit_remaining = None
         log.info("token refresh ok: method=_fetch_android_token expires_in=%s", expires_in)
     except Exception as e:
         log.warning("token refresh failed: method=_fetch_android_token error=%s", e)
@@ -212,23 +258,18 @@ def _cffi_post(url, device, **kwargs):
 
 def _fetch_android_token(device: _OAuthDevice):
     auth = base64.b64encode(f"{_REDDIT_ANDROID_CLIENT_ID}:".encode()).decode()
-    resp = _cffi_post(
-        "https://www.reddit.com/auth/v2/oauth/access-token/loid",
-        device,
-        headers={
-            "User-Agent":            device.user_agent,
-            "Authorization":         f"Basic {auth}",
-            "x-reddit-retry":        "algo=no-retries",
-            "x-reddit-compression":  "1",
-            "x-reddit-qos":          f"{device.qos:.3f}",
-            "x-reddit-media-codecs": "available-codecs=video/avc, video/hevc",
-            "client-vendor-id":      device.device_id,
-            "X-Reddit-Device-Id":    device.device_id,
-            "Content-Type":          "application/json; charset=UTF-8",
-        },
-        json={"scopes": ["*", "email", "pii"]},
-        timeout=10,
-    )
+    for attempt in range(2):
+        resp = _cffi_post(
+            "https://www.reddit.com/auth/v2/oauth/access-token/loid",
+            device,
+            headers={**device.device_headers(), "Authorization": f"Basic {auth}"},
+            json={"scopes": ["*", "email", "pii", "adsread", "adsedit"]},
+            timeout=10,
+        )
+        if attempt == 0 and is_fingerprint_block(resp):
+            fingerprint_blocked(device.impersonate)
+            continue
+        break
     if not resp.ok:
         log.warning("android token HTTP %s: %s", resp.status_code, resp.text[:200])
     resp.raise_for_status()
@@ -299,24 +340,40 @@ def _get_quarantine_session() -> "requests.Session":
     return _quarantine_session
 
 
-def _record_ratelimit(device: _OAuthDevice, resp):
+def fingerprint_blocked(profile):
+    """Reddit refused TLS profile `profile`: leave it out for _FINGERPRINT_BLOCK_SECS and
+    move every device using it onto another one (tokens are kept)."""
+    now = time.time()
+    with _pool_lock:
+        if _blocked_profiles.get(profile, 0) <= now:
+            log.warning("reddit blocks TLS fingerprint %s; leaving it out for %dh",
+                        profile, _FINGERPRINT_BLOCK_SECS // 3600)
+        _blocked_profiles[profile] = now + _FINGERPRINT_BLOCK_SECS
+        for d in _device_pool:
+            if d.impersonate == profile:
+                d.switch_profile(exclude=profile)
+
+
+def _record_ratelimit(device: _OAuthDevice, resp, gql=False):
     """Track Reddit's per-token request budget from the response headers, so
     needs_refresh() can rotate this device before it actually runs dry."""
     remaining = resp.headers.get("x-ratelimit-remaining")
     if remaining is None:
         return
     try:
-        device.ratelimit_remaining = float(remaining)
-    except ValueError:
+        if gql:
+            device.gql_ratelimit_remaining = float(remaining)
+        else:
+            device.ratelimit_remaining = float(remaining)
+    except (TypeError, ValueError):
         pass
 
 
 @budgeted
-def reddit_get(url, *, quarantine=False, rotate_on_403=False, waf_key=None, **kwargs):
+def reddit_get(url, *, quarantine=False, waf_key=None, **kwargs):
     """GET a Reddit API URL, optionally via oauth.reddit.com with browser TLS impersonation.
     Pass quarantine=True to use the quarantine-opted-in session instead of OAuth.
-    Pass rotate_on_403=True to retry once on a fresh token and identity when Reddit answers
-    403 (often a WAF block tied to one device token); a second 403 is returned as is.
+    A 403 for a refused TLS fingerprint retries once on another fingerprint (same token).
     Pass waf_key for an endpoint Reddit may block outright: once it does, the anonymous
     path skips it (answering with the block page) for an hour so the caller's fallback runs."""
     if not quarantine and USER_TOKEN_PROVIDER:
@@ -339,13 +396,14 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, waf_key=None, **kw
     if waf_cooling() or waf_endpoint_blocked(waf_key):
         return waf_blocked_response(url)
     extra_headers = kwargs.pop("headers", {})
-    rotated = False
+    fingerprint_retried = False
     for attempt in range(3):
         device = _get_device()
         device.drift_qos()
         headers = {**device.api_headers(), **extra_headers}
+        profile = device.impersonate
         try:
-            resp = budget_request(device.session.get, url, headers=headers, impersonate=device.impersonate, **kwargs)
+            resp = budget_request(device.session.get, url, headers=headers, impersonate=profile, **kwargs)
         except Exception as e:
             # TLS handshake failure (e.g. BoringSSL TLS13_DOWNGRADE on ARM) — use requests
             return budget_request(SESSION.get, url, headers=headers, **kwargs)
@@ -353,13 +411,13 @@ def reddit_get(url, *, quarantine=False, rotate_on_403=False, waf_key=None, **kw
         if resp.status_code == 429:
             backoff(min(int(resp.headers.get("Retry-After", 5)), 5))
             continue
-        if resp.status_code == 403 and rotate_on_403 and not rotated and attempt < 2:
-            rotated = True
-            log.warning("reddit 403 on %s via device %s; cycling token and retrying",
-                        url, device.device_id[:8])
-            device.reset_identity()
-            device.expires_at = 0.0  # force this device to re-auth with its new identity
-            continue
+        if is_fingerprint_block(resp):
+            # Not the IP's fault, so no WAF cooldown: switch fingerprint and try once more.
+            fingerprint_blocked(profile)
+            if not fingerprint_retried and attempt < 2:
+                fingerprint_retried = True
+                continue
+            return resp
         if resp.status_code == 403:
             ctype = resp.headers.get("content-type") or ""
             log.warning("reddit 403 on %s via device %s (%s, %s) content-type=%r attempt=%d",
