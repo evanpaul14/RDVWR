@@ -2232,7 +2232,10 @@ def test_healthz_reports_state_without_secrets():
     assert r.status_code == 200
     d = r.get_json()
     assert d["status"] == "ok"
-    assert set(d) == {"status", "oauth", "gql", "cache"}
+    assert set(d) == {"status", "reasons", "warnings", "uptime_secs", "commit", "python",
+                      "oauth", "waf", "gql", "cache"}
+    assert d["reasons"] == [] and isinstance(d["oauth"]["tokens"], list)
+    assert set(d["waf"]) == {"cooling", "cooldown_secs_left", "blocked_endpoints"}
     assert d["cache"]["backend"] == "memory"
     assert r.headers["Cache-Control"] == "no-store"
 
@@ -2244,3 +2247,4 @@ def test_healthz_degraded_when_every_token_expired():
         r = app.test_client().get("/healthz")
     assert r.status_code == 503
     assert r.get_json()["status"] == "degraded"
+    assert r.get_json()["reasons"] == ["no valid OAuth tokens"]

@@ -44,6 +44,15 @@ def waf_endpoint_blocked(waf_key):
     return bool(waf_key) and time.monotonic() < _waf_endpoints.get(waf_key, 0.0)
 
 
+def waf_status():
+    """Snapshot for /healthz: cooldown state and how many endpoints are skipped."""
+    now = time.monotonic()
+    with _waf_lock:
+        blocked = sorted(k for k, t in _waf_endpoints.items() if now < t)
+    return {"cooling": now < _waf_until, "cooldown_secs_left": max(0, round(_waf_until - now)),
+            "blocked_endpoints": blocked}
+
+
 def waf_blocked_response(url=""):
     """A stand-in for Reddit's block page, returned without touching the network."""
     resp = requests.Response()
