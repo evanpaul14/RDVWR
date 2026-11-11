@@ -24,7 +24,8 @@ _NO_STORE = {'Cache-Control': 'private, no-store'}
 def fetch_full_texts(fullnames, timeout=10):
     """{fullname: raw markdown} for the account's own posts/comments. Listings cut post text
     short, so anything that pre-fills an edit box needs this to avoid saving a truncated copy."""
-    resp = reddit_get("https://www.reddit.com/api/info.json", params={"id": ",".join(fullnames), "raw_json": 1}, timeout=timeout)
+    resp = reddit_get("https://www.reddit.com/api/info.json", params={"id": ",".join(fullnames), "raw_json": 1},
+                      timeout=timeout, waf_key="api_info")
     if resp.status_code != 200:
         raise UpstreamError.from_status(resp.status_code)
     return {c["data"]["name"]: c["data"].get("selftext") if c["kind"] == "t3" else c["data"].get("body")

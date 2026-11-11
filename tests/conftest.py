@@ -20,3 +20,16 @@ def _no_gql_network():
     yield
     for p in patches:
         p.stop()
+
+
+@pytest.fixture(autouse=True)
+def _reset_waf_guard():
+    """Each test starts with no WAF cooldown or blocked endpoints carried over."""
+    from reddit import waf
+    waf._waf_hits.clear()
+    waf._waf_endpoints.clear()
+    waf._waf_until = 0.0
+    yield
+    waf._waf_hits.clear()
+    waf._waf_endpoints.clear()
+    waf._waf_until = 0.0

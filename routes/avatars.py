@@ -34,7 +34,7 @@ def _fetch_user_icon(username):
     icon = None
     try:
         resp = reddit_get(f"https://www.reddit.com/user/{username}/about.json",
-                           params={"raw_json": 1}, timeout=6)
+                           params={"raw_json": 1}, timeout=6, waf_key="user_about")
         if resp.status_code == 200:
             d = resp.json().get("data", {})
             icon = clean_url(d.get("icon_img") or d.get("snoovatar_img") or "") or None
