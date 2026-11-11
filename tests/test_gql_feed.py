@@ -768,12 +768,17 @@ def test_multireddit_joins_subreddits_with_an_encoded_plus():
     assert get.call_args_list[1].args[0] == "https://www.reddit.com/r/aww%2Bpics/hot.json"
 
 
-def test_posts_by_id_uses_by_id_endpoint():
+def test_posts_by_id_uses_by_id_for_one_and_graphql_for_several():
     ok = MagicMock(status_code=200, ok=True, headers={"content-type": "application/json"})
     ok.json.return_value = {"data": {"children": []}}
     with patch.object(helpers, "reddit_get", return_value=ok) as get:
-        helpers.fetch_posts_by_id(["a1", "b2"])
-    assert get.call_args.args[0] == "https://www.reddit.com/by_id/t3_a1,t3_b2.json"
+        helpers.fetch_posts_by_id(["a1"])
+    assert get.call_args.args[0] == "https://www.reddit.com/by_id/t3_a1.json"
+    with patch.object(helpers, "reddit_get") as get, \
+         patch.object(gql_posts, "fetch_gql_posts_by_id", return_value={"a1": {}, "b2": {}}) as gql:
+        assert set(helpers.fetch_posts_by_id(["a1", "b2"])) == {"a1", "b2"}
+    get.assert_not_called()
+    gql.assert_called_once_with(["a1", "b2"])
 
 
 def test_gql_403_is_not_treated_as_a_rotated_hash():

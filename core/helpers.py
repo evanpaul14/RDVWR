@@ -174,11 +174,14 @@ def is_waf_block(resp):
 
 def fetch_posts_by_id(ids):
     """{post id: raw REST-shaped post dict} for these ids, {} when they can't be fetched.
-    REST first (by_id; Reddit's WAF blocks api/info.json for the device tokens outright);
-    its block page falls back to the app's GraphQL API."""
-    resp = reddit_get(f"https://www.reddit.com/by_id/{','.join(f't3_{i}' for i in ids)}.json",
-                      params={'raw_json': 1, 'limit': len(ids)}, timeout=8)
-    if is_waf_block(resp):
+    Reddit's WAF blocks the device tokens outright on api/info.json and on by_id with more
+    than one id, so only a single id goes to REST (by_id); several ids, or a blocked one,
+    go to the app's GraphQL API."""
+    resp = None
+    if len(ids) == 1:
+        resp = reddit_get(f"https://www.reddit.com/by_id/t3_{ids[0]}.json",
+                          params={'raw_json': 1}, timeout=8)
+    if resp is None or is_waf_block(resp):
         try:
             from gql.posts import fetch_gql_posts_by_id   # imported here: gql_posts imports helpers
             return fetch_gql_posts_by_id(ids)
