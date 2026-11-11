@@ -16,11 +16,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 from parsing.media_detection import clean_url
-from reddit.client import _get_device, SESSION
+from reddit.client import _get_device, _record_ratelimit, fingerprint_blocked, is_fingerprint_block, SESSION
 from reddit.waf import note_waf_block, waf_blocked_response, waf_cooling
 from core.helpers import log
 
 GQL_URL = "https://gql-fed.reddit.com/"
+GQL_ACCEPT = "multipart/mixed;deferSpec=20220824, application/graphql-response+json, application/json"
 HASHES_FILE = Path(__file__).parent / "gql_hashes.json"
 HASHES_URL = "https://raw.githubusercontent.com/evanpaul14/RDVWR/main/gql/gql_hashes.json"
 HASHES_REFRESH_MIN_INTERVAL = 600   # seconds between GitHub re-reads
@@ -171,14 +172,29 @@ def _post(body, timeout):
     if waf_cooling():
         return waf_blocked_response(GQL_URL)
     resp = None
-    for attempt in range(2):
+    reauthed = fingerprint_retried = False
+    for _ in range(3):
         device = _get_device()
-        headers = {**device.api_headers(), "Content-Type": "application/json"}
+        profile = device.impersonate
+        # The app's Apollo client names the persisted query in headers too.
+        headers = {**device.api_headers(),
+                   "X-APOLLO-OPERATION-NAME": body["operationName"],
+                   "X-APOLLO-OPERATION-ID": body["extensions"]["persistedQuery"]["sha256Hash"],
+                   "Accept": GQL_ACCEPT}
         resp = budget_request(device.session.post, GQL_URL, headers=headers, json=body,
-                                   impersonate=device.impersonate, timeout=timeout)
-        if resp.status_code == 401 and attempt == 0:
+                                   impersonate=profile, timeout=timeout)
+        _record_ratelimit(device, resp, gql=True)
+        if resp.status_code == 401 and not reauthed:
+            reauthed = True
             device.expires_at = 0.0  # force this device to re-auth next use
             continue
+        if is_fingerprint_block(resp):
+            # Reddit refused this TLS fingerprint, not the IP: no cooldown, switch and retry once.
+            fingerprint_blocked(profile)
+            if not fingerprint_retried:
+                fingerprint_retried = True
+                continue
+            return resp
         break
     if resp.status_code == 403:
         note_waf_block()

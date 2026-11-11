@@ -1,7 +1,6 @@
 """Post comment trees and 'load more' children."""
 from reddit.budget import budgeted
 import time
-from concurrent.futures import ThreadPoolExecutor
 from flask import Blueprint, request
 from parsing.media_detection import process_post, _parse_awards, DISABLE_NSFW
 from parsing.reddit_html import clean_reddit_html
@@ -17,8 +16,9 @@ from routes.avatars import _embed_comment_avatars
 
 bp = Blueprint("comments", __name__)
 
-# Comments fetched per "load more" click when falling back to permalink requests.
-MORECHILDREN_PERMALINK_BATCH = 20
+# Comments loaded per "load more" click for a stub that isn't a GraphQL cursor: each is
+# one GraphQL request, so the rest come back as another "load more".
+MORECHILDREN_BATCH = 10
 
 
 def _parse_comment_fields(d):
@@ -135,7 +135,7 @@ def _listing_comments(subreddit, post_id, comment_id, sort, timeout):
     # (the same trick redlib uses); the encoded form reaches the same endpoint.
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}%2Fcomments/{post_id}.json",
-        params=params, timeout=timeout, rotate_on_403=True)
+        params=params, timeout=timeout)
     if resp.status_code == 403:
         state, _ = _subreddit_error_state(resp)
         if state == "quarantined":
@@ -243,75 +243,67 @@ def fetch_morechildren(post_id, children, sort='confidence', timeout=12, with_av
             raise UpstreamError("Couldn't load these comments", 502)
         avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
         return {"comments": roots, "avatar_prefetch": avatar_prefetch}
-    resp = reddit_get(
-        "https://www.reddit.com/api%2Fmorechildren.json",
-        params={"link_id": f"t3_{post_id}", "children": children, "sort": sort,
-                "api_type": "json", "raw_json": 1},
-        timeout=timeout)
-    if resp.status_code == 403:
-        # Reddit refuses /api/morechildren for the OAuth device tokens, but comment
-        # permalinks still load — fetch each child's thread that way instead.
-        return _morechildren_via_permalinks(post_id, children, sort, timeout, with_avatars)
-    if resp.status_code != 200:
-        raise UpstreamError.from_status(resp.status_code)
-    things = resp.json().get("json", {}).get("data", {}).get("things", [])
-    by_id  = {}
-    ordered = []
-    author_fullnames = {}
-    for thing in things:
-        if thing["kind"] != "t1":
-            continue
-        d = thing["data"]
-        comment = _parse_comment_fields(d)
-        comment["_pid"] = d.get("parent_id", "")
-        author_fullnames.setdefault(comment["author"], d.get("author_fullname"))
-        by_id[d["id"]] = comment
-        ordered.append(comment)
-    roots = []
-    for c in ordered:
-        pid = c.pop("_pid", "")
-        if pid.startswith("t1_"):
-            parent = by_id.get(pid[3:])
-            if parent:
-                parent["replies"].append(c)
-                continue
-        roots.append(c)
-    avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
-    return {"comments": roots, "avatar_prefetch": avatar_prefetch}
+    return _morechildren_by_id(post_id, children, sort, with_avatars)
 
 
-def _morechildren_via_permalinks(post_id, children, sort, timeout, with_avatars):
-    """fetch_morechildren's result built from one permalink request per comment id. Only
-    the first MORECHILDREN_PERMALINK_BATCH ids are fetched; the rest come back as a
-    trailing "more" stub so the page can offer another "load more"."""
+def _find_comment(comments, cid):
+    for c in comments:
+        if c.get("id") == cid and c.get("kind") != "more":
+            return c
+        found = _find_comment(c.get("replies") or [], cid)
+        if found:
+            return found
+    return None
+
+
+def _gql_comment_thread(post_id, cid, sort):
+    """(comment with its replies, author_fullnames) from the app's GraphQL API, focused on
+    that comment; None when GraphQL can't answer."""
+    try:
+        roots, author_fullnames = fetch_gql_comments(post_id, sort, comment_id=cid)
+    except Exception as e:
+        log.warning("gql comment thread failed post=%s comment=%s: %s", post_id, cid, e)
+        return None
+    comment = _find_comment(roots, cid)
+    return (comment, author_fullnames) if comment else None
+
+
+def _morechildren_by_id(post_id, children, sort, with_avatars):
+    """fetch_morechildren's result for a stub listing plain comment ids (from the archive
+    or the REST tree). Reddit's REST endpoints for this (/api/morechildren, comment
+    permalinks) are WAF-blocked for device tokens, and a burst of those blocks pauses every
+    upstream call, so they're never used: each comment comes from GraphQL, and the ones
+    GraphQL can't load from the Arctic Shift archive. Only the first MORECHILDREN_BATCH ids
+    are loaded; the rest come back as a trailing "more" stub."""
     ids = [i for i in children.split(",") if POST_ID_RE.match(i)]
-    batch, rest = ids[:MORECHILDREN_PERMALINK_BATCH], ids[MORECHILDREN_PERMALINK_BATCH:]
-
-    def fetch_one(cid):
-        resp = reddit_get(f"https://www.reddit.com/r/all%2Fcomments/{post_id}.json",
-                          params={"raw_json": 1, "comment": cid, "sort": sort}, timeout=timeout)
-        if resp.status_code != 200:
-            raise UpstreamError.from_status(resp.status_code)
-        return [c for c in resp.json()[1]["data"]["children"] if c["kind"] == "t1"]
-
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        results = list(ex.map(lambda cid: _attempt_fetch(fetch_one, cid), batch))
-    if batch and all(r is None for r in results):
-        raise UpstreamError("Couldn't load these comments", 502)
+    batch, rest = ids[:MORECHILDREN_BATCH], ids[MORECHILDREN_BATCH:]
+    results = parallel(*[lambda cid=cid: _gql_comment_thread(post_id, cid, sort) for cid in batch]) if batch else []
     author_fullnames = {}
-    roots = [_parse_comment_tree(c, author_fullnames) for r in results if r for c in r]
+    found = {}
+    for cid, r in zip(batch, results):
+        if r:
+            found[cid] = r[0]
+            for name, fullname in r[1].items():
+                author_fullnames.setdefault(name, fullname)
+    missing = [cid for cid in batch if cid not in found]
+    if missing:
+        try:
+            archived = [_parse_comment_tree(c, author_fullnames)
+                        for c in fetch_archived_comment_tree(post_id)]
+            for cid in missing:
+                comment = _find_comment(archived, cid)
+                if comment:
+                    found[cid] = comment
+        except Exception as e:
+            log.warning("archived comments failed post=%s: %s", post_id, e)
+    if batch and not found:
+        raise UpstreamError("Couldn't load these comments", 502)
+    roots = [found[cid] for cid in batch if cid in found]
     if rest:
         roots.append({"kind": "more", "id": rest[0], "children": rest,
                       "count": len(rest), "depth": 0})
     avatar_prefetch = _embed_comment_avatars(roots, author_fullnames) if with_avatars else {}
     return {"comments": roots, "avatar_prefetch": avatar_prefetch}
-
-
-def _attempt_fetch(fn, *args):
-    try:
-        return fn(*args)
-    except Exception:
-        return None
 
 
 @bp.route("/api/r/<subreddit>/morechildren/<post_id>")

@@ -248,3 +248,64 @@ class TestRedditGetWafRetry:
         private, spare = self._device(403, "application/json"), self._device(200, "application/json")
         assert self._get([private, spare]).status_code == 403
         assert spare.session.get.call_count == 0
+
+
+class TestAppHeaders:
+    def test_matches_the_android_app(self):
+        d = _OAuthDevice()
+        h = d.api_headers()
+        assert re.fullmatch(r"down-rate-mbps=\d+\.\d{3}", h["x-reddit-qos"])
+        assert h["x-reddit-retry"] == "attempt=0, max=3"
+        assert h["Accept-Language"] == "en-US" and h["X-Reddit-Http-QoS"] == "GOOD"
+        assert h["Device-Name"] in app_module._ANDROID_DEVICES
+        uuid.UUID(h["X-Dev-Ad-Id"])
+        assert h["X-Dev-Ad-Id"] != h["X-Reddit-Device-Id"]
+
+    def test_codecs_stay_the_same_for_one_device(self):
+        d = _OAuthDevice()
+        assert len({d.api_headers()["x-reddit-media-codecs"] for _ in range(20)}) == 1
+
+
+def _block_page(text="<html><title>Blocked</title>You've been blocked by network security.</html>"):
+    return MagicMock(status_code=403, headers={"content-type": "text/html; charset=utf-8"}, text=text)
+
+
+class TestFingerprintBlock:
+    @pytest.fixture(autouse=True)
+    def _clean(self):
+        app_module._blocked_profiles.clear()
+        yield
+        app_module._blocked_profiles.clear()
+
+    def test_detects_only_the_fingerprint_page(self):
+        assert app_module.is_fingerprint_block(_block_page())
+        assert not app_module.is_fingerprint_block(_block_page("<html>Forbidden</html>"))
+        private = MagicMock(status_code=403, headers={"content-type": "application/json"},
+                            text='{"reason": "private"}')
+        assert not app_module.is_fingerprint_block(private)
+
+    def test_blocked_profile_is_left_out_and_devices_move_off_it(self):
+        if len(_CFFI_PROFILES) < 2:
+            pytest.skip("needs two TLS profiles")
+        bad = _CFFI_PROFILES[0]
+        d = _OAuthDevice()
+        d.impersonate, d.token = bad, "tok"
+        with patch.object(app_module, "_device_pool", [d]):
+            app_module.fingerprint_blocked(bad)
+        assert d.impersonate != bad and d.token == "tok"
+        assert all(app_module._pick_profile() != bad for _ in range(50))
+
+    def test_reddit_get_switches_fingerprint_without_waf_cooldown(self):
+        bad = MagicMock(impersonate="chrome124")
+        bad.api_headers.return_value = {}
+        bad.session.get.return_value = _block_page()
+        good = MagicMock(impersonate="safari180")
+        good.api_headers.return_value = {}
+        good.session.get.return_value = MagicMock(status_code=200, headers={"content-type": "application/json"})
+        with patch.object(app_module, "USER_TOKEN_PROVIDER", None), \
+             patch.object(app_module, "REDDIT_OAUTH", True), \
+             patch.object(app_module, "_device_pool", []), \
+             patch.object(app_module, "_get_device", side_effect=[bad, good]):
+            assert app_module.reddit_get("https://www.reddit.com/by_id/t3_x.json").status_code == 200
+        assert "chrome124" in app_module._blocked_profiles
+        assert not waf.waf_cooling() and not waf._waf_hits

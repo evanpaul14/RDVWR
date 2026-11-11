@@ -396,10 +396,13 @@ class TestPostPage:
     def test_more_page_shows_loaded_comments(self, mock_get, client):
         mock_get.side_effect = _reddit({
             r"%2Fcomments/abc123\.json": _comments_payload([_comment("c1", "Top comment")]),
-            r"/api%2Fmorechildren\.json": {"json": {"data": {"things": [
-                {"kind": "t1", "data": {"id": "c8", "author": "x", "body": "Loaded later", "parent_id": "t3_abc123"}}]}}},
         })
-        ns = _noscript(client.get("/r/testsub/comments/abc123?more=c8,c9&sort=top"))
+        def gql(post_id, sort, comment_id=None, **kw):
+            if comment_id != "c8":
+                raise RuntimeError("gql down")
+            return [{"id": "c8", "author": "x", "body": "Loaded later", "replies": []}], {}
+        with patch("routes.comments.fetch_gql_comments", side_effect=gql):
+            ns = _noscript(client.get("/r/testsub/comments/abc123?more=c8,c9&sort=top"))
         assert "Loaded later" in ns and "Top comment" not in ns
         assert "View full thread" in ns
 
