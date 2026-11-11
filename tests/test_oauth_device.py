@@ -10,7 +10,8 @@ from unittest.mock import patch, MagicMock
 
 from reddit import client as app_module
 from reddit import waf
-from reddit.client import _OAuthDevice, _TOKEN_ROTATE_SECS, _CFFI_PROFILES, _ANDROID_APP_VERSIONS
+import re
+from reddit.client import _OAuthDevice, _CFFI_PROFILES, _ANDROID_APP_VERSIONS, _supported_profiles
 
 
 class TestOAuthDeviceInit:
@@ -59,11 +60,18 @@ class TestNeedsRefresh:
         d.acquired_at = time.time()
         assert d.needs_refresh() is True
 
-    def test_true_when_rotation_time_exceeded(self):
+    def test_keeps_token_for_hours_until_expiry(self):
         d = _OAuthDevice()
         d.token = "tok"
         d.expires_at = time.time() + 3600
-        d.acquired_at = time.time() - d.rotate_secs - 1
+        d.acquired_at = time.time() - 6 * 3600
+        assert d.needs_refresh() is False
+
+    def test_true_when_ratelimit_low(self):
+        d = _OAuthDevice()
+        d.token = "tok"
+        d.expires_at = time.time() + 3600
+        d.ratelimit_remaining = 5
         assert d.needs_refresh() is True
 
     def test_false_when_fresh(self):
@@ -72,6 +80,26 @@ class TestNeedsRefresh:
         d.expires_at = time.time() + 3600
         d.acquired_at = time.time()
         assert d.needs_refresh() is False
+
+
+class TestIdentityPool:
+    def test_only_recent_app_builds(self):
+        for v in _ANDROID_APP_VERSIONS:
+            assert v.startswith("Version 2026.")
+
+    def test_android_os_is_recent(self):
+        for _ in range(50):
+            d = _OAuthDevice()
+            assert 12 <= int(re.search(r"Android (\d+)$", d.user_agent).group(1)) <= 16
+
+    def test_no_blocked_fingerprints(self):
+        assert _CFFI_PROFILES
+        for p in _CFFI_PROFILES:
+            assert not p.startswith(("firefox", "tor", "chrome120"))
+
+    def test_unknown_profiles_are_dropped(self):
+        assert _supported_profiles(["chrome131", "nonexistent999"]) == ["chrome131"]
+        assert _supported_profiles(["nonexistent999"])  # never empty
 
 
 class TestApiHeaders:
