@@ -6,7 +6,7 @@
 
 **10-second pitch:** RDVWR is a lightweight front-end for Reddit. Browse subreddits, posts, comments, user profiles, and search — no Reddit account required.
 
-- 🚀 Fast: a fraction of the page weight and requests of reddit.com
+- 🚀 Lightweight: 67–79% fewer requests than reddit.com in the [Pi benchmark](#speed)
 - 🔓 No Reddit account required
 - 🖼️ Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - 🌙 Dark theme, mobile-friendly
@@ -73,16 +73,60 @@ plays with sound in browsers that support HLS; other browsers get the MP4 fallba
 
 ## Speed
 
-Measured with Playwright (Firefox), fresh browser context per run, median of 3 runs.
+Measured **November 11, 2026 (Pacific time)** against the deployed **Raspberry Pi 3
+Model B Rev 1.2**. RDVWR used **72–85% fewer completed-response bytes** and **67–79%
+fewer requests** than reddit.com. The first post was available **70% sooner on
+r/pics**.
 
-| Page | Metric | rdvwr | reddit.com |
-|---|---|---:|---:|
-| Home | Wall load time | 1087 ms | 4278 ms |
-| Home | Data transferred | 182 KB | 5914 KB |
-| Home | Requests | 10 | 104 |
-| Feed (r/pics) | Wall load time | 1038 ms | 3371 ms |
-| Feed (r/pics) | Data transferred | 188 KB | 1721 KB |
-| Feed (r/pics) | Requests | 10 | 57 |
+| Page | Metric | rdvwr on Pi | reddit.com | Change vs. reddit.com |
+|---|---|---:|---:|---:|
+| Home | Browser load event | 199 ms | 847 ms | 76.5% shorter |
+| Home | Completed-response bytes | 1.22 MiB | 8.22 MiB | 85.1% fewer |
+| Home | Requests started | 34 | 162 | 79.0% fewer |
+| Feed (r/pics) | First post available | 238 ms | 797 ms | 70.2% shorter |
+| Feed (r/pics) | Browser load event | 430 ms | 1367 ms | 68.6% shorter |
+| Feed (r/pics) | Completed-response bytes | 1.69 MiB | 6.10 MiB | 72.3% fewer |
+| Feed (r/pics) | Requests started | 31 | 95 | 67.4% fewer |
+
+**Method:** Medians of 5 runs per site/page after one discarded warmup round.
+Visible Chrome 157.0.8103.79 on macOS 26.3 arm64, controlled through Playwright's
+DevTools connection, with a 1365 × 900 viewport and no CPU/network throttling.
+Each visit used a new tab in the same temporary profile, retaining anonymous
+cookies after manual Reddit verification. HTTP caching was disabled and service
+workers bypassed for both sites; server caches were not reset. Site order
+alternated between rounds. All 24 visits, including warmups, rendered actual posts.
+
+Network activity was observed for 10 seconds from navigation, with default media
+settings and no scrolling. Bytes sum Chrome DevTools `Network.loadingFinished`
+`encodedDataLength` values, including compressed responses and headers; transfers
+still in progress at the cutoff are excluded. Requests count starts, including
+failed requests. MiB = 1,048,576 bytes. Percentages use unrounded medians.
+"First post available" measures when the first post element has a nonzero height;
+images or video may still be loading. The browser load event can fire before the
+feed is ready, as it did on RDVWR's home page.
+
+**Conditions:** RDVWR revision `cd3e193` was reached over the local network via
+HTTP; reddit.com was reached over the internet via HTTPS. Default feeds and media
+can differ between the sites. These results describe this deployment and session;
+they do not predict public-internet hosting latency or every visit.
+
+[Raw samples and medians](benchmarks/2026-11-11-pi-vs-reddit.json) ·
+[Benchmark script](scripts/benchmark_pages.py)
+
+To reproduce with an installed Chrome browser (the default executable path is for
+macOS; use `--chrome /path/to/chrome` elsewhere):
+
+```bash
+python3 -m pip install playwright
+python3 scripts/benchmark_pages.py \
+  --base-url http://YOUR_PI:8002 \
+  --runs 5 --window 10 \
+  --output benchmarks/pi-vs-reddit.json
+```
+
+Complete any Reddit verification in the visible window, then leave the browser
+untouched. Timing starts after posts appear; a failed feed stops the benchmark and
+is saved in the raw results.
 
 ---
 
