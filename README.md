@@ -73,7 +73,7 @@ plays with sound in browsers that support HLS; other browsers get the MP4 fallba
 
 ## Speed
 
-| Page | Metric | rdvwr on Pi | reddit.com | Change vs. reddit.com |
+| Page | Metric | self-hosted rdvwr | reddit.com | Change vs. reddit.com |
 |---|---|---:|---:|---:|
 | Home | Browser load event | 199 ms | 847 ms | 76.5% shorter |
 | Home | Completed-response bytes | 1.22 MiB | 8.22 MiB | 85.1% fewer |
