@@ -163,6 +163,21 @@ export function renderAwards(awards) {
   ).join('')}</span>`;
 }
 
+// Reddit can supply dark text even for near-black author flair backgrounds.
+// Keep its preferred color when readable, otherwise use the higher-contrast one.
+export function authorFlairColor(bg, preference) {
+  const channels = bg.slice(1).match(/../g).map(h => {
+    const v = parseInt(h, 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = channels.reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const dark = (luminance + 0.05) / (0.010329823 + 0.05); // #1a1a1a
+  const light = 1.05 / (luminance + 0.05);
+  if (preference === 'light' && light >= 4.5) return '#fff';
+  if (preference !== 'light' && dark >= 4.5) return '#1a1a1a';
+  return light >= dark ? '#fff' : '#1a1a1a';
+}
+
 export function renderAuthorFlair(c) {
   const hasRichtext = c.author_flair_type === 'richtext' && c.author_flair_richtext?.length;
   if (!hasRichtext && !c.author_flair_text) return '';
@@ -178,7 +193,7 @@ export function renderAuthorFlair(c) {
   }
   if (!inner.trim() && !c.author_flair_richtext?.some(p => p.e === 'emoji')) return '';
   const bg = isUsableBg(c.author_flair_bg) ? c.author_flair_bg : '';
-  const style = bg ? ` style="background:${escHtml(bg)};color:${c.author_flair_tc==='light'?'#fff':'#1a1a1a'}"` : '';
+  const style = bg ? ` style="background:${escHtml(bg)};color:${authorFlairColor(bg, c.author_flair_tc)}"` : '';
   return `<span class="author-flair"${style}>${inner}</span>`;
 }
 
