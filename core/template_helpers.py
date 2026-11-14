@@ -63,6 +63,21 @@ def usable_bg(hex_color):
     return 0.299 * r + 0.587 * g_ + 0.114 * b < 180
 
 
+def author_flair_color(bg, preference):
+    """Match utils.js authorFlairColor for a validated flair background."""
+    channels = [int(bg[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+              for v in channels]
+    luminance = sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+    dark = (luminance + 0.05) / (0.010329823 + 0.05)
+    light = 1.05 / (luminance + 0.05)
+    if preference == 'light' and light >= 4.5:
+        return '#fff'
+    if preference != 'light' and dark >= 4.5:
+        return '#1a1a1a'
+    return '#fff' if light >= dark else '#1a1a1a'
+
+
 # Matches render.js's bot detection for auto-collapsing comments: "bot" at the end of
 # the name, at its start, or next to a separator/digit (so not e.g. "Robotics").
 _BOT_NAME_RE = re.compile(r'(?:^|[_\-\d])bot(?:[_\-\d]|$)|bot$', re.I)
@@ -283,7 +298,7 @@ def pager_urls(next_url):
 
 
 def register(app):
-    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, md, mdtext):
+    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, author_flair_color, md, mdtext):
         app.add_template_filter(f)
     for fn in (is_bot, link_domain, is_article, article_url, local_media_url, links_out_media, media_link):
         app.add_template_global(fn)

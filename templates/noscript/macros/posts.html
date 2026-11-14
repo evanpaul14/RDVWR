@@ -33,7 +33,7 @@
 
 {% macro author_flair(c) -%}
   {%- if c.author_flair_text or c.author_flair_richtext -%}
-    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ '#fff' if c.author_flair_tc == 'light' else '#1a1a1a' }}"{% endif %}>
+    <span class="author-flair"{% if c.author_flair_bg | usable_bg %} style="background:{{ c.author_flair_bg }};color:{{ c.author_flair_bg | author_flair_color(c.author_flair_tc) }}"{% endif %}>
       {%- if c.author_flair_type == 'richtext' and c.author_flair_richtext -%}
         {%- for part in c.author_flair_richtext -%}
           {%- if part.e == 'text' %}{{ part.t }}{% elif part.e == 'emoji' %}<img class="author-flair-emoji" src="{{ part.u }}" alt="{{ part.a or '' }}" loading="lazy">{% endif -%}
