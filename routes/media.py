@@ -140,7 +140,7 @@ def proxy_redgifs_media(filename):
         return error_response(502)
 
 
-IMG_PROXY_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
+IMG_PROXY_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
 
 @bp.route("/api/img")
 def proxy_img():
