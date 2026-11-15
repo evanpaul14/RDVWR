@@ -86,14 +86,6 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro embed(p, full, href, label, iframe_src, extra_cls='', attrs='') -%}
-  {%- if ns.link_external_media -%}
-    {{ link_out(href, label) }}
-  {%- else -%}
-    <div class="{{ 'pv-media' if full else 'post-video' }}{{ extra_cls }}"><iframe src="{{ iframe_src }}" loading="lazy" allowfullscreen {{ attrs | safe }}></iframe></div>
-  {%- endif -%}
-{%- endmacro %}
-
 {% macro gallery(p, full) -%}
   {%- if full -%}
     {# Horizontally scroll-snapping strip standing in for the JS gallery carousel; each
@@ -133,20 +125,20 @@
   {%- elif p.gif_url -%}
     <div class="{{ cls }}"><img loading="lazy" src="{{ p.gif_url }}" alt=""></div>
   {%- elif p.redgifs_id -%}
-    {{ embed(p, full, 'https://www.redgifs.com/watch/' ~ p.redgifs_id, 'video on redgifs.com →', 'https://www.redgifs.com/ifr/' ~ p.redgifs_id, attrs='referrerpolicy="no-referrer"') }}
+    {{ link_out('https://www.redgifs.com/watch/' ~ p.redgifs_id, 'video on redgifs.com →') }}
   {%- elif p.youtube_id -%}
-    {{ embed(p, full, 'https://www.youtube.com/watch?v=' ~ p.youtube_id, 'YouTube video — watch on youtube.com →', 'https://www.youtube-nocookie.com/embed/' ~ p.youtube_id, attrs='referrerpolicy="strict-origin-when-cross-origin"') }}
+    {{ link_out('https://www.youtube.com/watch?v=' ~ p.youtube_id, 'YouTube video — watch on youtube.com →') }}
   {%- elif p.tiktok_id -%}
-    {{ embed(p, full, 'https://www.tiktok.com/embed/v2/' ~ p.tiktok_id, 'TikTok video — watch on tiktok.com →', 'https://www.tiktok.com/player/v1/' ~ p.tiktok_id, ' tiktok-wrap', 'sandbox="allow-scripts allow-same-origin allow-popups"') }}
+    {{ link_out(p.url or 'https://www.tiktok.com/@_/video/' ~ p.tiktok_id, 'TikTok video — watch on tiktok.com →') }}
   {%- elif p.streamable_id -%}
-    {{ embed(p, full, 'https://streamable.com/' ~ p.streamable_id, 'video on streamable.com →', 'https://streamable.com/e/' ~ p.streamable_id) }}
+    {{ link_out('https://streamable.com/' ~ p.streamable_id, 'video on streamable.com →') }}
   {%- elif p.imgur_album_id -%}
     {{ link_out('https://imgur.com/a/' ~ p.imgur_album_id, 'Imgur album — view on imgur.com →') }}
   {%- elif p.is_devvit -%}
     {%- if p.preview_img %}<div class="{{ cls }}"><img loading="lazy" src="{{ p.preview_img }}" alt=""></div>{% endif %}
     <p class="ns-note">Interactive app &mdash; <a href="{{ p.permalink }}" target="_blank" rel="noopener">open on reddit.com &rarr;</a></p>
   {%- elif p.embed_url -%}
-    {{ embed(p, full, p.embed_url, 'embedded media — open source →', p.embed_url) }}
+    {{ link_out(p.url or p.embed_url, 'embedded media — open source →') }}
   {%- elif p.preview_img or p.thumb_url -%}
     {# Feed cards show the ~640px thumb; the link still opens the full-size original. #}
     {%- set src = p.preview_img or p.thumb_url -%}
