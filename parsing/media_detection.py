@@ -2,13 +2,31 @@ import os
 import re
 import time as _time
 import logging
-from urllib.parse import quote as url_quote, urlparse
+import html as html_lib
+from urllib.parse import quote as url_quote, urlparse, parse_qs
 from core.base_path import app_path
 from parsing.reddit_html import clean_reddit_html
 
 log = logging.getLogger(__name__)
 
 SELFTEXT_MAX_LEN = 600
+
+
+def _vimeo_player_url(oembed):
+    """Use Vimeo's responsive player instead of the fixed-size Reddit wrapper."""
+    markup = html_lib.unescape(oembed.get("html") or "")
+    match = re.search(r'<iframe\b[^>]*\bsrc=[\"\']([^\"\']+)', markup, re.I)
+    if not match:
+        return None
+    src = match.group(1)
+    parsed = urlparse(src)
+    if parsed.hostname == "cdn.embedly.com" and parsed.path == "/widgets/media.html":
+        src = parse_qs(parsed.query).get("src", [""])[0]
+        parsed = urlparse(src)
+    if (parsed.scheme in ("https", "") and parsed.netloc == "player.vimeo.com"
+            and re.fullmatch(r"/video/\d+", parsed.path)):
+        return "https:" + src if src.startswith("//") else src
+    return None
 
 DISABLE_NSFW = os.environ.get('DISABLE_NSFW', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
@@ -237,14 +255,25 @@ def process_post(p):
     # Generic iframe embed (non-redgifs, non-reddit, non-youtube, non-tiktok, non-streamable)
     embed_url = None
     embed_height = None
+    embed_aspect_ratio = None
     tweet_id = None
     if not redgifs_id and not is_video and not youtube_id and not tiktok_id and not streamable_id:
         sec       = p.get("secure_media_embed") or {}
         media_url = clean_url(sec.get("media_domain_url", ""))
         if media_url:
             embed_url = media_url
-            # Tweets are portrait-ish and vary in height; a 16:9 frame cuts them off.
             oembed = (p.get("secure_media") or {}).get("oembed") or {}
+            vimeo_url = _vimeo_player_url(oembed)
+            if vimeo_url:
+                embed_url = vimeo_url
+                try:
+                    width = int(oembed.get("width") or sec.get("width") or 0)
+                    height = int(oembed.get("height") or sec.get("height") or 0)
+                    if 0 < width <= 100000 and 0 < height <= 100000:
+                        embed_aspect_ratio = f"{width}/{height}"
+                except (TypeError, ValueError, OverflowError):
+                    pass
+            # Tweets are portrait-ish and vary in height; a 16:9 frame cuts them off.
             if "twitter" in (oembed.get("provider_name") or "").lower() or "twitter" in media_url:
                 embed_height = int(sec.get("height") or oembed.get("height") or 0) or 600
                 m = TWEET_RE.search(p.get("url", ""))
@@ -348,6 +377,7 @@ def process_post(p):
         "streamable_id":  streamable_id,
         "embed_url":      embed_url,
         "embed_height":   embed_height,
+        "embed_aspect_ratio": embed_aspect_ratio,
         "tweet_id":       tweet_id,
         "redgifs_id":     redgifs_id,
         "redgifs_fallback_url": redgifs_fallback_url,

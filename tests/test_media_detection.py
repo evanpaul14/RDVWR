@@ -322,6 +322,44 @@ class TestProcessPost:
         result = process_post(p)
         assert result["embed_url"] == "https://embed.example.com/v/abc"
 
+    @pytest.mark.parametrize("src", [
+        "https://player.vimeo.com/video/421373942?app_id=122963",
+        "https://cdn.embedly.com/widgets/media.html?src=https%3A%2F%2Fplayer.vimeo.com%2Fvideo%2F421373942%3Fapp_id%3D122963&amp;display_name=Vimeo",
+    ])
+    def test_vimeo_uses_responsive_player(self, src):
+        result = process_post(_post(
+            secure_media_embed={"media_domain_url": "https://www.redditmedia.com/mediaembed/abc123"},
+            secure_media={"oembed": {"html": f'<iframe src="{src}" width="600" height="338"></iframe>',
+                                      "width": 600, "height": 338}},
+        ))
+        assert result["embed_url"] == "https://player.vimeo.com/video/421373942?app_id=122963"
+        assert result["embed_aspect_ratio"] == "600/338"
+        assert result["embed_height"] is None
+
+    @pytest.mark.parametrize("src", [
+        "https://player.vimeo.com.evil.example/video/123",
+        "https://player.vimeo.com@evil.example/video/123",
+        "https://other.example/video/123",
+    ])
+    def test_other_players_keep_reddit_wrapper(self, src):
+        wrapper = "https://www.redditmedia.com/mediaembed/abc123"
+        result = process_post(_post(
+            secure_media_embed={"media_domain_url": wrapper},
+            secure_media={"oembed": {"html": f'<iframe src="{src}"></iframe>'}},
+        ))
+        assert result["embed_url"] == wrapper
+        assert result["embed_aspect_ratio"] is None
+
+    @pytest.mark.parametrize("width,height", [(None, None), (600, 0), ("bad", 338)])
+    def test_vimeo_without_valid_dimensions_uses_default_ratio(self, width, height):
+        result = process_post(_post(
+            secure_media_embed={"media_domain_url": "https://www.redditmedia.com/mediaembed/abc123"},
+            secure_media={"oembed": {"html": '<iframe src="https://player.vimeo.com/video/123"></iframe>',
+                                      "width": width, "height": height}},
+        ))
+        assert result["embed_url"] == "https://player.vimeo.com/video/123"
+        assert result["embed_aspect_ratio"] is None
+
     def test_embed_not_set_when_redgifs(self):
         p = _post(
             url="https://redgifs.com/watch/Abc",
