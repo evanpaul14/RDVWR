@@ -11,7 +11,8 @@ from markupsafe import Markup
 from reddit import login as reddit_login
 from parsing.media_detection import DISABLE_NSFW
 from core.helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, NSFW_ONLY_SEARCH
-from parsing.reddit_html import EXTERNAL_MEDIA_CLASS, linkify_plain_text
+from parsing.reddit_html import EXTERNAL_MEDIA_CLASS
+from parsing.markdown import render_markdown
 from core.ns_prefs import all_prefs, get_pref
 from core.base_path import BASE_PATH
 
@@ -101,8 +102,13 @@ def md(sanitized_html):
 
 
 def mdtext(text):
-    """Plain-text body (no *_html) with mentions and markdown links linked."""
-    return md(linkify_plain_text(text))
+    """Render raw Markdown using the no-JS sanitizer and media preferences."""
+    return md(render_markdown(text))
+
+
+def mdbody(text, sanitized_html=None):
+    """Prefer raw Markdown, matching renderMd; retain HTML for HTML-only bodies."""
+    return mdtext(text) if text else md(sanitized_html)
 
 
 # ── Post classification (ports of render.js / postview.js checks) ────────────
@@ -302,7 +308,7 @@ def pager_urls(next_url):
 
 
 def register(app):
-    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, author_flair_color, md, mdtext):
+    for f in (timeago, fmtnum, fmtdate, fmtdatetime, usable_bg, author_flair_color, md, mdtext, mdbody):
         app.add_template_filter(f)
     for fn in (is_bot, link_domain, is_article, article_url, local_media_url, links_out_media, media_link):
         app.add_template_global(fn)

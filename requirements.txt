@@ -6,3 +6,4 @@ curl-cffi>=0.7
 pytest>=8.0
 gunicorn>=22.0
 redis>=5.0
+mistune>=3.2,<4
