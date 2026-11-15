@@ -8,7 +8,7 @@ from reddit.client import reddit_get
 from reddit.archive import fetch_archived_comment_tree
 from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from gql.posts import fetch_gql_post
-from core.helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE,
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE, COMMENT_ID_RE,
                      cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
                      is_waf_block, parallel, UpstreamError, log)
 from routes.subreddit import _subreddit_error_state
@@ -275,7 +275,7 @@ def _morechildren_by_id(post_id, children, sort, with_avatars):
     upstream call, so they're never used: each comment comes from GraphQL, and the ones
     GraphQL can't load from the Arctic Shift archive. Only the first MORECHILDREN_BATCH ids
     are loaded; the rest come back as a trailing "more" stub."""
-    ids = [i for i in children.split(",") if POST_ID_RE.match(i)]
+    ids = [i for i in children.split(",") if COMMENT_ID_RE.fullmatch(i)]
     batch, rest = ids[:MORECHILDREN_BATCH], ids[MORECHILDREN_BATCH:]
     results = parallel(*[lambda cid=cid: _gql_comment_thread(post_id, cid, sort) for cid in batch]) if batch else []
     author_fullnames = {}

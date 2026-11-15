@@ -66,6 +66,8 @@ def _redis_cache_decode(raw):
 SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
 POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
+# Comment permalinks can carry 13-character IDs; posts use the shorter limit.
+COMMENT_ID_RE = re.compile(r'^[A-Za-z0-9]{1,13}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
 FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
 SUB_SORTS    = FEED_SORTS - {'best'}   # sorts offered as a per-visitor default

@@ -4,7 +4,7 @@ fetched server-side: for the JS app's first render and for the no-JS fallback in
 import re
 from flask import Blueprint, jsonify, redirect, render_template, request
 from core.helpers import (DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, FEED_SORTS, COMMENT_SORTS, SEARCH_SORTS, SUBREDDIT_RE,
-                     USERNAME_RE, POST_ID_RE, MULTINAME_RE, log)
+                     USERNAME_RE, POST_ID_RE, COMMENT_ID_RE, MULTINAME_RE, log)
 from parsing.reddit_html import local_reddit_path
 from gql.client import GQL_CURSOR_RE
 from reddit import login as reddit_login
@@ -98,12 +98,12 @@ def multireddit(username, multiname, sort='hot'):
 @bp.route("/r/<sub>/comments/<post_id>/<slug>/<comment_id>", strict_slashes=False)
 def post(sub, post_id, slug='', comment_id=''):
     if not SUBREDDIT_RE.match(sub) or not POST_ID_RE.match(post_id) \
-            or (comment_id and not POST_ID_RE.match(comment_id)):
+            or (comment_id and not COMMENT_ID_RE.fullmatch(comment_id)):
         return _not_found()
     sort = _arg('sort')
     if sort not in COMMENT_SORTS:
         sort = get_pref('comment_sort')
-    more = ','.join(i for i in _arg('more').split(',') if POST_ID_RE.match(i) or GQL_CURSOR_RE.match(i))
+    more = ','.join(i for i in _arg('more').split(',') if COMMENT_ID_RE.fullmatch(i) or GQL_CURSOR_RE.match(i))
     return _respond(build_post(sub, post_id, comment_id, sort, _arg('context') == '1', more))
 
 
