@@ -107,15 +107,19 @@ def mdtext(text):
 
 # ── Post classification (ports of render.js / postview.js checks) ────────────
 
-_EMBED_KEYS = ('is_video', 'youtube_id', 'tiktok_id', 'redgifs_id', 'imgur_album_id', 'streamable_id', 'embed_url')
+# Outside players use the normal link-post presentation in the no-JS UI.
+_EMBED_KEYS = ('is_video', 'imgur_album_id')
 _IMAGE_DOMAIN_RE = re.compile(r'^i\.\w')
 
 
 def link_domain(p):
     """The outside site a link post points to, for the footer's domain link (render.js
     domainHtml), or None for self posts and Reddit-hosted media."""
-    domain = p.get('domain') or ''
     url = p.get('url') or ''
+    try:
+        domain = p.get('domain') or urlparse(url).hostname or ''
+    except ValueError:
+        domain = p.get('domain') or ''
     if p.get('is_self') or not domain or domain.startswith('self.') or domain.endswith('redd.it') \
             or '/gallery/' in url or 'v.redd.it' in url:
         return None
