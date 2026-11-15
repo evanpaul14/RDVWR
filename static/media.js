@@ -651,9 +651,12 @@ export function mediaHtml(p, full = false) {
     const src = p.tweet_id
       ? `https://platform.twitter.com/embed/Tweet.html?id=${escHtml(p.tweet_id)}&theme=dark&dnt=true&hideThread=false`
       : escHtml(p.embed_url);
-    const style = p.embed_height ? `aspect-ratio:auto;height:${+p.embed_height}px`
-      : p.embed_aspect_ratio ? `aspect-ratio:${escHtml(p.embed_aspect_ratio)};height:auto` : '';
-    html = `<div class="${vc}"><iframe src="${src}"${style ? ` style="${style}"` : ''} allowfullscreen loading="lazy" scrolling="no"></iframe></div>`;
+    const style = p.embed_height ? ` style="aspect-ratio:auto;height:${+p.embed_height}px"` : '';
+    const frame = `<iframe src="${src}"${style} allowfullscreen loading="lazy" scrolling="no"></iframe>`;
+    const content = p.embed_aspect_ratio && !p.embed_height
+      ? `<div class="responsive-embed" style="aspect-ratio:${escHtml(p.embed_aspect_ratio)}">${frame}</div>`
+      : frame;
+    html = `<div class="${vc}">${content}</div>`;
   } else if (p.gif_url) {
     html = p.gif_is_video
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
