@@ -113,7 +113,9 @@
 
 {% macro media(p, full) -%}
   {%- set cls = 'pv-media' if full else 'post-media' -%}
-  {%- if links_out_media(p, full) or (ns.layout == 'minimal' and (p.is_video or p.gif_is_video or p.youtube_id or p.tiktok_id or p.redgifs_id or p.streamable_id or p.embed_url or p.imgur_album_id)) -%}
+  {%- if p.youtube_id or p.tiktok_id or p.redgifs_id or p.streamable_id or p.embed_url -%}
+    {# Outside players are ordinary link posts; their URL is rendered with the post. #}
+  {%- elif links_out_media(p, full) or (ns.layout == 'minimal' and (p.is_video or p.gif_is_video or p.youtube_id or p.tiktok_id or p.redgifs_id or p.streamable_id or p.embed_url or p.imgur_album_id)) -%}
     {% set label, href = media_link(p) %}
     {{ link_out(href, label ~ ' — open source →') }}
   {%- elif p.gallery and p.gallery | length > (0 if full else 1) -%}
@@ -124,21 +126,11 @@
     <div class="{{ 'pv-media' if full else 'post-video' }}"><video controls loop muted playsinline preload="{{ 'metadata' if full else 'none' }}" poster="{{ (p.thumb_url or p.preview_img or '') if not full else (p.preview_img or '') }}"><source src="{{ p.gif_url }}" type="video/mp4"></video></div>
   {%- elif p.gif_url -%}
     <div class="{{ cls }}"><img loading="lazy" src="{{ p.gif_url }}" alt=""></div>
-  {%- elif p.redgifs_id -%}
-    {{ link_out('https://www.redgifs.com/watch/' ~ p.redgifs_id, 'video on redgifs.com →') }}
-  {%- elif p.youtube_id -%}
-    {{ link_out('https://www.youtube.com/watch?v=' ~ p.youtube_id, 'YouTube video — watch on youtube.com →') }}
-  {%- elif p.tiktok_id -%}
-    {{ link_out(p.url or 'https://www.tiktok.com/@_/video/' ~ p.tiktok_id, 'TikTok video — watch on tiktok.com →') }}
-  {%- elif p.streamable_id -%}
-    {{ link_out('https://streamable.com/' ~ p.streamable_id, 'video on streamable.com →') }}
   {%- elif p.imgur_album_id -%}
     {{ link_out('https://imgur.com/a/' ~ p.imgur_album_id, 'Imgur album — view on imgur.com →') }}
   {%- elif p.is_devvit -%}
     {%- if p.preview_img %}<div class="{{ cls }}"><img loading="lazy" src="{{ p.preview_img }}" alt=""></div>{% endif %}
     <p class="ns-note">Interactive app &mdash; <a href="{{ p.permalink }}" target="_blank" rel="noopener">open on reddit.com &rarr;</a></p>
-  {%- elif p.embed_url -%}
-    {{ link_out(p.url or p.embed_url, 'embedded media — open source →') }}
   {%- elif p.preview_img or p.thumb_url -%}
     {# Feed cards show the ~640px thumb; the link still opens the full-size original. #}
     {%- set src = p.preview_img or p.thumb_url -%}
