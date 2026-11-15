@@ -102,7 +102,7 @@ def md(sanitized_html):
 
 def mdtext(text):
     """Plain-text body (no *_html) with mentions and markdown links linked."""
-    return Markup(linkify_plain_text(text))
+    return md(linkify_plain_text(text))
 
 
 # ── Post classification (ports of render.js / postview.js checks) ────────────

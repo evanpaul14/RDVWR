@@ -290,3 +290,53 @@ def test_hide_filter_and_award_setting_apply_to_own_profile_posts(client, logged
     assert not html.select('.awards')
     assert not html.select('[data-post-id=hidden]')
     assert html.select('[data-post-id=abc123]')
+
+
+@pytest.mark.parametrize('url', [
+    'https://i.redd.it/comment.png',
+    'https://preview.redd.it/comment.gif?width=320',
+    'https://media.giphy.com/media/abc123/giphy.gif',
+])
+@pytest.mark.parametrize('as_html', [False, True])
+def test_comment_images_and_gifs_render_without_javascript(client, monkeypatch, url, as_html):
+    from gql.client import _comment
+    raw = {'id': 'image', 'body': 'attached image',
+           'body_html': f'<p><img src="{url}" alt="attachment" onerror="alert(1)"></p>'}
+    if as_html:
+        comment = _parse_comment_fields(raw)
+    else:
+        comment = _comment({'id': 't1_image', 'authorInfo': {'name': 'tester'},
+                            'content': {'markdown': '![](asset123)',
+                                        'richtextMedia': [{'id': 'asset123', 'url': url}]}}, 0)
+    monkeypatch.setattr(page_data, 'fetch_comments', Mock(return_value={'post': post(), 'comments': [comment]}))
+    body = soup(client.get('/r/testsub/comments/abc123')).select_one('.comment-body')
+    image = body.select_one('img')
+    assert image is not None
+    if '.redd.it/' in url:
+        assert parse_qs(urlsplit(image['src']).query)['url'] == [url]
+    else:
+        assert image['src'] == url
+    assert not image.has_attr('onerror')
+    client.set_cookie('ns_link_external_media', '1')
+    private = soup(client.get('/r/testsub/comments/abc123')).select_one('.comment-body')
+    assert bool(private.select_one('img')) == ('.redd.it/' in url)
+    assert private.select_one('a') is not None
+
+
+@pytest.mark.parametrize('source', ['javascript:alert(1)', 'data:image/svg+xml,bad', '//example.com/image.png'])
+def test_comment_html_rejects_unsafe_image_sources(source):
+    from parsing.reddit_html import sanitize_reddit_html
+    assert '<img' not in sanitize_reddit_html(f'<img src="{source}" onerror="alert(1)">')
+
+
+def test_comment_giphy_markdown_renders_and_respects_media_preference(client, monkeypatch):
+    from gql.client import _comment
+    comment = _comment({'id': 't1_gif', 'authorInfo': {'name': 'tester'},
+                        'content': {'markdown': '![gif](giphy|abc123)'}}, 0)
+    monkeypatch.setattr(page_data, 'fetch_comments', Mock(return_value={'post': post(), 'comments': [comment]}))
+    body = soup(client.get('/r/testsub/comments/abc123')).select_one('.comment-body')
+    assert body.select_one('img')['src'] == 'https://media.giphy.com/media/abc123/giphy.gif'
+    client.set_cookie('ns_link_external_media', '1')
+    body = soup(client.get('/r/testsub/comments/abc123')).select_one('.comment-body')
+    assert body.select_one('img') is None
+    assert body.select_one('a')['href'] == 'https://media.giphy.com/media/abc123/giphy.gif'

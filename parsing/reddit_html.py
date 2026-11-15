@@ -28,7 +28,7 @@ _REDDIT_LINK_RE = re.compile(rf'^(?:https?://(?:www\.|old\.|new\.|np\.)?reddit\.
 _SUB_SEARCH_RE = re.compile(r'^/r/([A-Za-z0-9_]+)/search/?$', re.I)
 # Bare image links in comments/posts (e.g. a pasted preview.redd.it URL) render inline,
 # same as the JS markdown renderer: Reddit's own image hosts via the /api/img proxy.
-_INLINE_IMG_HOSTS = frozenset({'preview.redd.it', 'external-preview.redd.it'})
+_INLINE_IMG_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
 _INLINE_IMG_EXT_RE = re.compile(r'\.(?:jpe?g|gif|png|webp|avif)(?:\?|$)', re.I)
 # Reddit renders a comment's giphy embed as a link to the giphy page.
 _GIPHY_PAGE_RE = re.compile(r'^https://giphy\.com/gifs/(?:[\w-]*-)?([A-Za-z0-9]+)/?$')
@@ -53,7 +53,7 @@ def local_reddit_path(href):
 # Plain-text "u/name" / "r/name" mentions and literal `[label](target)` markdown links
 # Reddit left unrendered, linkified like the JS renderer's linkifyReddit (render.js).
 _MENTION_RE = re.compile(
-    r'\[(?P<label>[^\]\n]+)\]\((?P<href>[^)\s]+)\)|(?<![\w/])/?(?P<kind>[ur])/(?P<name>[A-Za-z0-9_-]+)')
+    r'(?P<image>!)?\[(?P<label>[^\]\n]*)\]\((?P<href>[^)\s]+)\)|(?<![\w/])/?(?P<kind>[ur])/(?P<name>[A-Za-z0-9_-]+)')
 
 
 def _md_href(href):
@@ -73,13 +73,18 @@ def _linkify_mentions(text):
     out, last = [], 0
     for m in _MENTION_RE.finditer(text):
         if m.group('href'):
-            target = _md_href(m.group('href'))
+            href = m.group('href')
+            if m.group('image') and re.fullmatch(r'giphy\|[A-Za-z0-9]+', href):
+                href = f'https://media.giphy.com/media/{href[6:]}/giphy.gif'
+            target = _md_href(href)
             if not target:
                 continue
             href, external = target
             label = html_lib.escape(m.group('label'))
             ext = ' target="_blank" rel="noopener noreferrer"' if external else ''
-            piece = f'<a href="{html_lib.escape(href, quote=True)}"{ext}>{label}</a>'
+            src = _inline_img_src(href, explicit=True) if m.group('image') else None
+            piece = (_image_link(href, src, m.group('label')) if src else
+                     f'<a href="{html_lib.escape(href, quote=True)}"{ext}>{label}</a>')
         else:
             kind, name = m.group('kind'), m.group('name')
             if kind == 'r' and '-' in name:
@@ -99,15 +104,30 @@ def linkify_plain_text(text):
     return ''.join(f'<p>{_linkify_mentions(p.strip()).replace(chr(10), "<br>")}</p>' for p in paras)
 
 
-def _inline_img_src(href):
+def _inline_img_src(href, explicit=False):
     """(src, is_third_party) for a link that should render as an inline image, else None."""
-    parsed = urlparse(href)
+    try:
+        parsed = urlparse(href)
+    except ValueError:
+        return None
+    if parsed.scheme != 'https' or not parsed.hostname:
+        return None
     if parsed.hostname in _INLINE_IMG_HOSTS and _INLINE_IMG_EXT_RE.search(parsed.path):
         return app_path('/api/img?url=' + url_quote(href, safe='')), False
     m = _GIPHY_PAGE_RE.match(href)
     if m:
         return f'https://media.giphy.com/media/{m.group(1)}/giphy.gif', True
+    if explicit or (parsed.hostname in {'i.imgur.com', 'media.giphy.com'} and _INLINE_IMG_EXT_RE.search(parsed.path)):
+        return href, True
     return None
+
+
+def _image_link(href, source, alt=''):
+    src, third_party = source
+    link = href if third_party else src
+    cls = f' class="{EXTERNAL_MEDIA_CLASS}"' if third_party else ''
+    return (f'<a{cls} href="{html_lib.escape(link, quote=True)}" target="_blank" rel="noopener">'
+            f'<img src="{html_lib.escape(src, quote=True)}" alt="{html_lib.escape(alt, quote=True)}" loading="lazy"></a>')
 
 
 class _AllowlistHtmlSanitizer(HTMLParser):
@@ -124,7 +144,13 @@ class _AllowlistHtmlSanitizer(HTMLParser):
         if tag in ('script', 'style'):
             self._skip_depth += 1
             return
-        if self._img_link:
+        if self._skip_depth or self._img_link:
+            return
+        if tag == 'img':
+            href = attrs.get('src') or ''
+            src = _inline_img_src(href, explicit=True)
+            if src:
+                self.out.append(_image_link(href, src, attrs.get('alt') or ''))
             return
         if tag == 'span':
             # Reddit's >!spoiler!< markup; revealed on hover/focus by CSS (.ns-root .spoiler).
@@ -173,7 +199,9 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             self.out.append(f'</{tag}>')
 
     def handle_startendtag(self, tag, attrs):
-        if tag in ('br', 'hr') and not self._img_link:
+        if tag == 'img':
+            self.handle_starttag(tag, attrs)
+        elif tag in ('br', 'hr') and not self._img_link:
             self.out.append(f'<{tag}>')
 
     def handle_data(self, data):
@@ -190,10 +218,7 @@ class _AllowlistHtmlSanitizer(HTMLParser):
         href, (src, third_party), text = self._img_link
         self._img_link = None
         caption = ''.join(text).strip()
-        link = href if third_party else src
-        cls = f' class="{EXTERNAL_MEDIA_CLASS}"' if third_party else ''
-        img = (f'<a{cls} href="{html_lib.escape(link, quote=True)}" target="_blank" rel="noopener">'
-               f'<img src="{html_lib.escape(src, quote=True)}" alt="" loading="lazy"></a>')
+        img = _image_link(href, (src, third_party))
         if caption and caption != href:
             img = f'<span class="md-img-block">{img}<span class="md-img-caption">{html_lib.escape(caption)}</span></span>'
         self.out.append(img)
