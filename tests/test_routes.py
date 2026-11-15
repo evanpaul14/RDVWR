@@ -840,15 +840,21 @@ class TestLiveUpdates:
 # ── /api/img (image proxy) ────────────────────────────────────────────────────
 
 class TestImgProxy:
+    @pytest.mark.parametrize("url", [
+        "https://preview.redd.it/img.jpg",
+        "https://i.redd.it/frvz3unolo1i1.png",
+    ])
     @patch.object(reddit_client.SESSION, "get")
-    def test_allowed_host(self, mock_get, client):
+    def test_allowed_host(self, mock_get, client, url):
         mock_get.return_value = MockResponse(
             status_code=200,
             headers={"Content-Type": "image/jpeg"},
             raw_bytes=b"\xff\xd8\xff",
         )
-        resp = client.get("/api/img?url=https://preview.redd.it/img.jpg")
+        resp = client.get("/api/img", query_string={"url": url})
         assert resp.status_code == 200
+        assert resp.data == b"\xff\xd8\xff"
+        assert mock_get.call_args.args[0] == url
 
     def test_disallowed_host_rejected(self, client):
         resp = client.get("/api/img?url=https://evil.com/img.jpg")
