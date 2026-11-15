@@ -2024,6 +2024,12 @@ details.comment:not([open]) > .comment-body,
 details.comment:not([open]) > .comment-replies { display:none; }
 .ucc-footer a { color:inherit; text-decoration:none; }
 .ucc-footer a:hover { color:var(--tx2); }
+/* Stretch the comment permalink over no-JS cards, retaining inline links and spoilers. */
+.ns-root .user-comment-card { position:relative; }
+.ns-root .ucc-permalink::after { content:''; position:absolute; inset:0; }
+.ns-root .user-comment-card a:not(.ucc-permalink),
+.ns-root .user-comment-card .spoiler { position:relative; z-index:1; }
+.ns-root .user-comment-card:has(.ucc-permalink:focus-visible) { outline:2px solid var(--ac); outline-offset:2px; }
 
 /* Settings gear link in the noscript header — like .settings-btn but never hidden
    on mobile (there's no bottom nav / JS settings panel to fall back to here). */
