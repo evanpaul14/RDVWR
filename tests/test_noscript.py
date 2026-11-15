@@ -392,27 +392,38 @@ class TestPostPage:
         ns = _noscript(client.get("/r/testsub/comments/abc123"))
         assert '<span class="awards" title="Gold">&#127941;2</span>' in ns
 
+    @pytest.mark.parametrize('comment_id', ['c8', '19soozx3kw49u'])
     @patch.object(reddit_client.SESSION, "get")
-    def test_more_page_shows_loaded_comments(self, mock_get, client):
+    def test_more_page_shows_loaded_comments(self, mock_get, client, comment_id):
         mock_get.side_effect = _reddit({
             r"%2Fcomments/abc123\.json": _comments_payload([_comment("c1", "Top comment")]),
         })
         def gql(post_id, sort, comment_id=None, **kw):
-            if comment_id != "c8":
+            if comment_id != target_id:
                 raise RuntimeError("gql down")
-            return [{"id": "c8", "author": "x", "body": "Loaded later", "replies": []}], {}
+            return [{"id": target_id, "author": "x", "body": "Loaded later", "replies": []}], {}
+        target_id = comment_id
         with patch("routes.comments.fetch_gql_comments", side_effect=gql):
-            ns = _noscript(client.get("/r/testsub/comments/abc123?more=c8,c9&sort=top"))
+            ns = _noscript(client.get(f"/r/testsub/comments/abc123?more={comment_id},c9&sort=top"))
         assert "Loaded later" in ns and "Top comment" not in ns
         assert "View full thread" in ns
 
+    @pytest.mark.parametrize('comment_id', ['c2', '19soozx3kw49u'])
     @patch.object(reddit_client.SESSION, "get")
-    def test_comment_permalink_shows_thread_with_context_link(self, mock_get, client):
-        tree = [_comment("c1", "Parent", replies=[_comment("c2", "Target reply")])]
+    def test_comment_permalink_shows_thread_with_context_link(self, mock_get, client, comment_id):
+        tree = [_comment("c1", "Parent", replies=[_comment(comment_id, "Target reply")])]
         mock_get.side_effect = _reddit({r"%2Fcomments/abc123\.json": _comments_payload(tree)})
-        ns = _noscript(client.get("/r/testsub/comments/abc123/_/c2"))
+        # Follow the timestamp permalink emitted by the comment section itself.
+        from bs4 import BeautifulSoup
+        page = BeautifulSoup(_noscript(client.get('/r/testsub/comments/abc123')), 'html.parser')
+        permalink = page.select('.comment-time')[1]['href']
+        assert permalink == f'/r/testsub/comments/abc123/_/{comment_id}'
+        response = client.get(permalink)
+        assert response.status_code == 200
+        ns = _noscript(response)
         assert "Target reply" in ns and "Parent" not in ns
-        assert "/r/testsub/comments/abc123/_/c2?sort=confidence&amp;context=1" in ns
+        assert f"{permalink}?sort=confidence&amp;context=1" in ns
+        assert mock_get.call_args.kwargs['params']['comment'] == comment_id
 
     @patch.object(reddit_client.SESSION, "get")
     def test_missing_post(self, mock_get, client):
@@ -421,6 +432,8 @@ class TestPostPage:
 
     def test_invalid_ids_404(self, client):
         assert client.get("/r/testsub/comments/not-an-id!").status_code == 404
+        for cid in ['not-an-id!', 'a' * 14]:
+            assert client.get(f'/r/testsub/comments/abc123/_/{cid}').status_code == 404
 
 
 class TestProfilePage:
@@ -510,6 +523,16 @@ class TestOtherPages:
 
 
 class TestJsonPassthrough:
+    @patch.object(reddit_client.SESSION, "get")
+    def test_long_comment_permalink_is_proxied(self, mock_get, client):
+        upstream = MockResponse({"kind": "Listing"})
+        upstream.content = b'{"kind": "Listing"}'
+        mock_get.return_value = upstream
+        path = '/r/europe/comments/1xwzrn2/_/19soozx3kw49u.json'
+        response = client.get(path)
+        assert response.status_code == 200
+        assert mock_get.call_args.args[0].endswith(path)
+
     @patch.object(reddit_client.SESSION, "get")
     def test_allowed_path_is_proxied(self, mock_get, client):
         upstream = MockResponse({"kind": "Listing"})

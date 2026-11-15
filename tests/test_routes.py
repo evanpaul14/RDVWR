@@ -364,14 +364,15 @@ class TestMoreChildren:
         reply = {"id": f"{comment_id}r", "author": "v", "body": "reply", "replies": []}
         return [{"id": comment_id, "author": "u", "body": "hi", "replies": [reply]}], {"u": "t2_u"}
 
+    @pytest.mark.parametrize('comment_id', ['c1', '19soozx3kw49u'])
     @patch.object(reddit_client.SESSION, "get")
-    def test_loads_each_comment_via_graphql_not_rest(self, mock_get, client, monkeypatch):
+    def test_loads_each_comment_via_graphql_not_rest(self, mock_get, client, monkeypatch, comment_id):
         monkeypatch.setattr(comments_routes, "fetch_gql_comments", self._focused)
-        resp = client.get("/api/r/testsubreddit/morechildren/abc123?children=c1,c2")
+        resp = client.get(f"/api/r/testsubreddit/morechildren/abc123?children={comment_id},c2")
         assert resp.status_code == 200
         comments = resp.get_json()["comments"]
-        assert [c["id"] for c in comments] == ["c1", "c2"]
-        assert comments[0]["replies"][0]["id"] == "c1r"
+        assert [c["id"] for c in comments] == [comment_id, "c2"]
+        assert comments[0]["replies"][0]["id"] == comment_id + 'r'
         # never /api/morechildren or a comment permalink: both are WAF-blocked
         mock_get.assert_not_called()
 

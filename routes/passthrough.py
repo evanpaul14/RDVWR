@@ -15,7 +15,7 @@ _JSON_PASSTHROUGH_RE = re.compile(
     r'^(?:'
     r'r/[A-Za-z0-9_+]{1,100}(?:/(?:hot|new|top|rising|controversial'
     r'|about|about/rules|about/moderators'
-    r'|comments/[A-Za-z0-9]{1,10}(?:/[^/]*(?:/[A-Za-z0-9]{1,10})?)?'
+    r'|comments/[A-Za-z0-9]{1,10}(?:/[^/]*(?:/[A-Za-z0-9]{1,13})?)?'
     r'|duplicates/[A-Za-z0-9]{1,10}'
     r'|wiki(?:/[A-Za-z0-9_\-/]+)?))?'
     r'|u(?:ser)?/[A-Za-z0-9_-]{1,50}(?:/(?:about|submitted|comments|overview|trophies))?'
