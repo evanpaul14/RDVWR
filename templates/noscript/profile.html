@@ -41,7 +41,7 @@
             <span>&middot;</span>
             <a class="ucc-post-link" href="{{ post_url }}">{{ c.link_title }}</a>
           </div>
-          <div class="ucc-body md">{% if c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
+          <div class="ucc-body md">{{ c.body | mdbody(c.body_html) }}</div>
           <div class="ucc-footer">
             <span class="ucc-score">&#9650; {{ c.score | fmtnum }}</span>
             <a class="ucc-permalink" href="{{ post_url }}/_/{{ c.id }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>

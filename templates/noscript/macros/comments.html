@@ -47,7 +47,7 @@
         <a class="comment-time" href="{{ permalink }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>{% if c.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}
         {{ posts.awards(c.awards) }}
       </summary>
-      <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% elif c.body_html %}{{ c.body_html | md }}{% else %}{{ c.body | mdtext }}{% endif %}</div>
+      <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% else %}{{ c.body | mdbody(c.body_html) }}{% endif %}</div>
       {{ posts.vote_form('t1_' ~ c.id, c.likes) }}
       {%- if account_active() and not deleted %}<details class="ns-reply"><summary>reply</summary>{{ comment_form('t1_' ~ c.id, 'reply') }}</details>{% endif %}
       {%- if c.replies -%}

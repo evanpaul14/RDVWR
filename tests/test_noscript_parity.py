@@ -218,7 +218,7 @@ def test_plain_post_text_and_rich_account_comments_are_not_lost(client, logged_i
     monkeypatch.setattr(page_data, 'fetch_comments', Mock(return_value={'post': p, 'comments': []}))
     assert 'Text without an HTML field' in soup(client.get('/r/testsub/comments/abc123')).select_one('.pv-body').get_text()
     monkeypatch.setattr(page_data, 'fetch_user_about', Mock(return_value={}))
-    monkeypatch.setattr(page_data, 'fetch_user_comments', Mock(return_value={'comments': [{'id': 'def123', 'subreddit': 'testsub', 'link_id': 'abc123', 'body': 'raw', 'body_html': '<p><strong>formatted</strong></p>', 'score': 1}], 'after': None}))
+    monkeypatch.setattr(page_data, 'fetch_user_comments', Mock(return_value={'comments': [{'id': 'def123', 'subreddit': 'testsub', 'link_id': 'abc123', 'body': '**formatted**', 'body_html': '<p><strong>formatted</strong></p>', 'score': 1}], 'after': None}))
     assert soup(client.get('/account?tab=comments')).select_one('.ucc-body strong').get_text() == 'formatted'
 
 
@@ -300,7 +300,7 @@ def test_hide_filter_and_award_setting_apply_to_own_profile_posts(client, logged
 @pytest.mark.parametrize('as_html', [False, True])
 def test_comment_images_and_gifs_render_without_javascript(client, monkeypatch, url, as_html):
     from gql.client import _comment
-    raw = {'id': 'image', 'body': 'attached image',
+    raw = {'id': 'image', 'body': f'![attachment]({url})',
            'body_html': f'<p><img src="{url}" alt="attachment" onerror="alert(1)"></p>'}
     if as_html:
         comment = _parse_comment_fields(raw)
@@ -340,3 +340,18 @@ def test_comment_giphy_markdown_renders_and_respects_media_preference(client, mo
     body = soup(client.get('/r/testsub/comments/abc123')).select_one('.comment-body')
     assert body.select_one('img') is None
     assert body.select_one('a')['href'] == 'https://media.giphy.com/media/abc123/giphy.gif'
+
+
+def test_post_and_comment_render_raw_markdown_over_incomplete_html(client, monkeypatch):
+    p = post(is_self=True, selftext='**Post**\n\n>!secret!<\n\n- [x] done',
+             selftext_html='<p>**Post**</p>')
+    comment = _parse_comment_fields({'id': 'formatted', 'author': 'tester',
+                                    'body': '~~Comment~~\n\n```\n<literal>\n```',
+                                    'body_html': '<p>~~Comment~~</p>'})
+    monkeypatch.setattr(page_data, 'fetch_comments', Mock(return_value={'post': p, 'comments': [comment]}))
+    doc = soup(client.get('/r/testsub/comments/abc123'))
+    assert doc.select_one('.pv-body strong').get_text() == 'Post'
+    assert doc.select_one('.pv-body .spoiler').get_text() == 'secret'
+    assert doc.select_one('.pv-body input[disabled][checked]')
+    assert doc.select_one('.comment-body del').get_text() == 'Comment'
+    assert doc.select_one('.comment-body pre code').get_text().strip() == '<literal>'

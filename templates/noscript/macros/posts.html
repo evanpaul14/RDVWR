@@ -172,7 +172,7 @@
     <div class="crosspost-embed-header">&#8618; {{ 'crossposted from' if p.crosspost_from else 'links to a post in' }} <a href="/r/{{ xp.subreddit }}">r/{{ xp.subreddit }}</a></div>
     <a class="crosspost-embed-title" href="{{ post_path(xp) }}">{{ xp.title }}</a>
     {{ veiled(xp, media(xp, full)) }}
-    {%- if full and (xp.selftext_html or xp.selftext) %}{{ veiled(xp, '<div class="xp-excerpt xp-excerpt-full md">' | safe ~ (xp.selftext_html | md if xp.selftext_html else xp.selftext | mdtext) ~ '</div>' | safe, spoiler=False) }}{% endif -%}
+    {%- if full and (xp.selftext_html or xp.selftext) %}{{ veiled(xp, '<div class="xp-excerpt xp-excerpt-full md">' | safe ~ (xp.selftext | mdbody(xp.selftext_html)) ~ '</div>' | safe, spoiler=False) }}{% endif -%}
   </div>
 {%- endmacro %}
 
@@ -273,7 +273,7 @@
         {{ veiled(p, media(p, False)) }}
         {{ poll(p) }}
         {%- if p.is_self and (p.selftext_html or p.selftext) -%}
-          {{ veiled(p, '<div class="post-excerpt"><div class="md">' | safe ~ (p.selftext_html | md if p.selftext_html else p.selftext | mdtext) ~ '</div></div>' | safe) }}
+          {{ veiled(p, '<div class="post-excerpt"><div class="md">' | safe ~ (p.selftext | mdbody(p.selftext_html)) ~ '</div></div>' | safe) }}
         {%- endif -%}
       {%- endif -%}
       {{ footer(p) }}
@@ -319,6 +319,6 @@
   {%- endif -%}
   {{ poll(p) }}
   {%- if p.is_self and (p.selftext_html or p.selftext) -%}
-    {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext_html | md if p.selftext_html else p.selftext | mdtext) ~ '</div>' | safe, spoiler=False) }}
+    {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext | mdbody(p.selftext_html)) ~ '</div>' | safe, spoiler=False) }}
   {%- endif -%}
 {%- endmacro %}

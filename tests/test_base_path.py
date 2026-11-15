@@ -76,3 +76,14 @@ def test_noscript_downloads_unwrap_prefixed_media_proxies():
     assert r['image']['url'] == ['https://preview.redd.it/image.png']
     assert r['image']['filename'] == ['img.png']
     assert r['offsite'] is None
+
+
+def test_noscript_markdown_mentions_use_prefix_once():
+    r = _run('/rdvwr', """
+        import json
+        from parsing.markdown import render_markdown
+        print(json.dumps(render_markdown('r/python/comments/abc123 u/tester')))
+    """)
+    assert 'href="/rdvwr/r/python/comments/abc123"' in r
+    assert 'href="/rdvwr/user/tester"' in r
+    assert 'reddit.com' not in r and '/rdvwr/rdvwr/' not in r

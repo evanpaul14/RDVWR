@@ -64,7 +64,7 @@ plays with sound in browsers that support HLS; other browsers get the MP4 fallba
 
 - **Backend:** [Python](https://www.python.org/) / [Flask](https://flask.palletsprojects.com/) — proxies Reddit's API (spoofed OAuth, public JSON, and the app's GraphQL as a fallback when Reddit blocks REST)
 - **Frontend:** Vanilla JS with client-side routing
-- [marked](https://github.com/markedjs/marked) + [DOMPurify](https://github.com/cure53/DOMPurify) for markdown
+- [marked](https://github.com/markedjs/marked) + [DOMPurify](https://github.com/cure53/DOMPurify) for client-side Markdown; [Mistune](https://mistune.lepture.com/) + an HTML allowlist for no-JS post/comment Markdown (including tables, task lists, spoilers, and superscripts)
 - [hls.js](https://github.com/video-dev/hls.js) for video
 
 ---

@@ -117,7 +117,7 @@ def _inline_img_src(href, explicit=False):
     m = _GIPHY_PAGE_RE.match(href)
     if m:
         return f'https://media.giphy.com/media/{m.group(1)}/giphy.gif', True
-    if explicit or (parsed.hostname in {'i.imgur.com', 'media.giphy.com'} and _INLINE_IMG_EXT_RE.search(parsed.path)):
+    if explicit or _INLINE_IMG_EXT_RE.search(parsed.path):
         return href, True
     return None
 
@@ -146,6 +146,12 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             return
         if self._skip_depth or self._img_link:
             return
+        if tag == 'input':
+            # Only inert GFM task checkboxes survive; never accept form controls.
+            if attrs.get('type') == 'checkbox' and 'disabled' in attrs:
+                checked = ' checked' if 'checked' in attrs else ''
+                self.out.append(f'<input type="checkbox" disabled{checked}>')
+            return
         if tag == 'img':
             href = attrs.get('src') or ''
             src = _inline_img_src(href, explicit=True)
@@ -171,14 +177,19 @@ class _AllowlistHtmlSanitizer(HTMLParser):
                 self._img_link = (href, src, [])
             elif local:
                 self.out.append(f'<a href="{html_lib.escape(local, quote=True)}">')
-            elif href.startswith(('http://', 'https://', '/')) and not href.startswith('//'):
+            elif href.startswith(('http://', 'https://', 'mailto:', '#', '/')) and not href.startswith('//'):
                 if href.startswith('/'):
                     href = 'https://www.reddit.com' + href
                 self.out.append(f'<a href="{html_lib.escape(href, quote=True)}" target="_blank" rel="noopener noreferrer">')
             else:
                 self.out.append('<a>')
         else:
-            self.out.append(f'<{tag}>')
+            extra = ''
+            if tag == 'ol' and re.fullmatch(r'[0-9]{1,9}', attrs.get('start', '')):
+                extra = f' start="{attrs["start"]}"'
+            if tag in ('td', 'th') and attrs.get('style') in ('text-align:left', 'text-align:center', 'text-align:right'):
+                extra = f' style="{attrs["style"]}"'
+            self.out.append(f'<{tag}{extra}>')
 
     def handle_endtag(self, tag):
         if tag in ('script', 'style'):
@@ -199,7 +210,7 @@ class _AllowlistHtmlSanitizer(HTMLParser):
             self.out.append(f'</{tag}>')
 
     def handle_startendtag(self, tag, attrs):
-        if tag == 'img':
+        if tag in ('img', 'input'):
             self.handle_starttag(tag, attrs)
         elif tag in ('br', 'hr') and not self._img_link:
             self.out.append(f'<{tag}>')
