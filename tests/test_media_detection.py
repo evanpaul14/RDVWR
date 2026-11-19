@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pytest
 from parsing.media_detection import (
     clean_url,
+    proxy_hls,
     extract_redgifs_id,
     _parse_awards,
     process_post,
@@ -483,3 +484,8 @@ class TestExtractPosts:
 
     def test_empty_listing(self):
         assert extract_posts({"children": []}) == []
+
+
+def test_proxy_hls_drops_query():
+    url = "https://v.redd.it/abc123/HLSPlaylist.m3u8?a=1&v=1&f=sd"
+    assert proxy_hls(url) == "/api/m/v.redd.it/abc123/HLSPlaylist.m3u8"
