@@ -73,13 +73,15 @@ def proxy_hls(url):
     """Always route v.redd.it HLS playlists through /api/m/, regardless of PROXY_MEDIA:
     hls.js loads segments/playlists via XHR, which the CSP's connect-src 'self' blocks
     for a direct cross-origin v.redd.it URL (unlike a plain <video src>, which only
-    needs media-src). PROXY_MEDIA's own rewrite pass only fires for other hosts here."""
+    needs media-src). PROXY_MEDIA's own rewrite pass only fires for other hosts here.
+
+    The query string is dropped: v.redd.it can 403 playlist URLs carrying Reddit's
+    query (?a=...&v=1&f=sd) for minutes while the bare playlist plays fine."""
     if not url:
         return url
     parsed = urlparse(url)
     if parsed.hostname == 'v.redd.it':
-        qs = f"?{parsed.query}" if parsed.query else ""
-        return app_path(f"/api/m/{parsed.hostname}{parsed.path}{qs}")
+        return app_path(f"/api/m/{parsed.hostname}{parsed.path}")
     return url
 
 
