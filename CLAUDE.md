@@ -36,7 +36,7 @@ Keep each Python file under ~500 lines — add new endpoints to the matching `ro
 - `/search`, `/search/communities`, `/search/users`, `/subreddit-search`
 - `/user/<u>/about`, `/user/<u>/posts`, `/user/<u>/comments`, `/user/<u>/overview`, `/user/<u>/m/<multi>`
 - `/redgifs/<id>`, `/redgifs/batch`, `/redgifs/media/<filename>` (CORS proxy)
-- `/m/<host>/<path>` (media proxy for Reddit/Imgur/Giphy CDNs; with `PROXY_MEDIA=1` an after-request hook rewrites those URLs in JSON/SPA HTML to point here)
+- `/m/<host>/<path>` (media proxy: Reddit/Imgur/Giphy CDNs always; with `PROXY_MEDIA=1` any public https host — image/video/audio only, size-capped, private/LAN addresses refused by `core/safe_fetch.py` — and an after-request hook rewrites media URLs in JSON/SPA/no-JS HTML to point here)
 - `/img` (image proxy), `/resolve` (redirect follower), `/download`, `/download/gallery`, `/download/reddit-video`
 - `/imgur/album/<id>`, `/live/<id>`, `/live/<id>/updates`, `/translate`, `/og-image`
 - `GET /healthz` (not under `/api`): JSON liveness probe, 503 when degraded
