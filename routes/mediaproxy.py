@@ -1,7 +1,5 @@
-"""Opt-in media proxy (PROXY_MEDIA=1): serves media through the server so the browser
-never contacts those hosts directly. Reddit/Imgur/Giphy CDNs are always proxyable; with
-PROXY_MEDIA on, any public https host is (images/video/audio only, size-capped, and
-never a private/LAN address — see core/safe_fetch.py).
+"""Opt-in media proxy (PROXY_MEDIA=1): serves Reddit/Imgur/Giphy media through the
+server so the browser never contacts those CDNs directly.
 
 /api/m/<host>/<path> mirrors the upstream URL path-for-path, so relative URIs in HLS
 playlists (segments, alternate audio) resolve back through the proxy on their own.
@@ -14,7 +12,6 @@ from flask import Blueprint, current_app, request, Response
 from core.base_path import app_path
 from reddit.client import SESSION, HEADERS
 from core.helpers import STREAM_CHUNK_SIZE, log
-from core.safe_fetch import build_session, is_public_hostname
 
 bp = Blueprint("mediaproxy", __name__)
 
@@ -26,9 +23,6 @@ MEDIA_PROXY_HOSTS = frozenset({
     'i.imgur.com', 'media.giphy.com',
 })
 MEDIA_PROXY_MAX_REDIRECTS = 3
-OPEN_MAX_BYTES = 200 * 1024 * 1024
-_OPEN_SESSION = build_session(HEADERS)
-_PLAYLIST_TYPES = ('mpegurl',)
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
 
 _HOST_ALT = '|'.join(re.escape(h) for h in sorted(MEDIA_PROXY_HOSTS))
@@ -39,43 +33,8 @@ _BODY_URL_RE     = re.compile(rb'(?:"(\w+)"\s*:\s*)?"https://(' + _HOST_ALT.enco
 # markdown renderer still autolinks it (it applies the proxy itself when rendering).
 _TEXT_KEYS       = frozenset({b'body', b'selftext', b'description', b'public_description',
                               b'sidebar', b'text', b'title'})
+_PLAYLIST_URL_RE = re.compile(r'https://(' + _HOST_ALT + r')/')
 _REWRITE_TYPES   = ('application/json', 'text/html')
-# Open mode: JSON fields that hold a media URL (never `url`, which may be a plain link),
-# and src/poster of media tags in rendered HTML (also when escaped inside a JSON string).
-_OPEN_MEDIA_KEYS = (b'preview_img', b'thumb_url', b'gif_url', b'video_url', b'hls_url', b'audio_url',
-                    b'redgifs_fallback_url', b'redgifs_fallback_hls')
-_OPEN_KEY_RE = re.compile(rb'("(?:' + b'|'.join(_OPEN_MEDIA_KEYS) + rb')"\s*:\s*")https://([A-Za-z0-9.-]+)/')
-_OPEN_TAG_RE = re.compile(rb'(<(?:img|source|video|audio)\b[^>]*?\s(?:src|poster)=\\?")https://([A-Za-z0-9.-]+)/', re.I)
-_ABS_URL_RE      = re.compile(r'https://([A-Za-z0-9.-]+)/')
-
-
-def is_open_proxy_on():
-    return bool(current_app.config.get('PROXY_MEDIA'))
-
-
-def can_proxy_host(host):
-    """Allowlisted CDN, or — with PROXY_MEDIA on — any public hostname other than this server."""
-    if host in MEDIA_PROXY_HOSTS:
-        return True
-    if not (is_open_proxy_on() and is_public_hostname(host)):
-        return False
-    return not (request and request.host.split(':')[0].lower() == host.lower())
-
-
-def _media_type_ok(content_type):
-    ct = content_type.split(';')[0].strip().lower()
-    if ct == 'image/svg+xml':
-        return False
-    return ct.startswith(('image/', 'video/', 'audio/')) or any(t in ct for t in _PLAYLIST_TYPES)
-
-
-def _capped(chunks, limit):
-    total = 0
-    for chunk in chunks:
-        total += len(chunk)
-        if total > limit:
-            return
-        yield chunk
 
 
 def proxy_path(host, rest):
@@ -84,7 +43,7 @@ def proxy_path(host, rest):
 
 @bp.route("/api/m/<host>/<path:rest>")
 def proxy_media(host, rest):
-    if not can_proxy_host(host):
+    if host not in MEDIA_PROXY_HOSTS:
         return ('', 403)
     url = f"https://{host}/{rest}"
     if request.query_string:
@@ -96,14 +55,13 @@ def proxy_media(host, rest):
     try:
         # Follow redirects by hand so a hop off the allowlist is never fetched server-side.
         for _ in range(MEDIA_PROXY_MAX_REDIRECTS + 1):
-            session = SESSION if urlparse(url).hostname in MEDIA_PROXY_HOSTS else _OPEN_SESSION
-            upstream = session.get(url, headers=headers, stream=True, timeout=20, allow_redirects=False)
+            upstream = SESSION.get(url, headers=headers, stream=True, timeout=20, allow_redirects=False)
             if upstream.status_code not in _REDIRECT_CODES:
                 break
             upstream.close()
             url = urljoin(url, upstream.headers.get('Location', ''))
             parsed = urlparse(url)
-            if parsed.scheme != 'https' or not parsed.hostname or not can_proxy_host(parsed.hostname):
+            if parsed.scheme != 'https' or parsed.hostname not in MEDIA_PROXY_HOSTS:
                 return ('', 502)
         else:
             return ('', 502)
@@ -118,31 +76,17 @@ def proxy_media(host, rest):
         upstream.close()
         return Response(b'', status=upstream.status_code, headers={'Cache-Control': 'no-store'})
 
-    final_host = urlparse(url).hostname
-    is_open = final_host not in MEDIA_PROXY_HOSTS
-    if is_open:
-        if not _media_type_ok(content_type):
-            upstream.close()
-            return ('', 415)
-        if int(upstream.headers.get('Content-Length') or 0) > OPEN_MAX_BYTES:
-            upstream.close()
-            return ('', 413)
-        resp_headers['X-Content-Type-Options'] = 'nosniff'
-
     if rest.endswith('.m3u8') or 'mpegurl' in content_type.lower():
         # Playlists normally use relative URIs; rewrite any absolute ones too.
-        text = _ABS_URL_RE.sub(lambda m: proxy_path(m.group(1), '') if can_proxy_host(m.group(1)) else m.group(0),
-                               upstream.text)
+        text = _PLAYLIST_URL_RE.sub(lambda m: proxy_path(m.group(1), ''), upstream.text)
         resp_headers['Cache-Control'] = 'public, max-age=300'
         return Response(text, status=upstream.status_code, headers=resp_headers)
 
     for h in ('Content-Length', 'Content-Range'):
         if h in upstream.headers:
             resp_headers[h] = upstream.headers[h]
-    chunks = upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE)
-    if is_open:
-        chunks = _capped(chunks, OPEN_MAX_BYTES)
-    return Response(chunks, status=upstream.status_code, headers=resp_headers, direct_passthrough=True)
+    return Response(upstream.iter_content(chunk_size=STREAM_CHUNK_SIZE),
+                    status=upstream.status_code, headers=resp_headers, direct_passthrough=True)
 
 
 def _rewrite_match(m):
@@ -151,13 +95,6 @@ def _rewrite_match(m):
         return m.group(0)
     key_prefix = m.group(0)[:m.start(2) - m.start(0) - len(b'"https://')]
     return key_prefix + b'"' + app_path('/api/m/').encode() + host + b'/'
-
-
-def _rewrite_open(m):
-    host = m.group(2).decode()
-    if not can_proxy_host(host):
-        return m.group(0)
-    return m.group(1) + app_path('/api/m/').encode() + m.group(2) + b'/'
 
 
 @bp.after_app_request
@@ -172,9 +109,6 @@ def rewrite_media_urls(resp):
         return resp
     body = resp.get_data()
     new_body = _BODY_URL_RE.sub(_rewrite_match, body)
-    if is_open_proxy_on():
-        new_body = _OPEN_KEY_RE.sub(_rewrite_open, new_body)
-        new_body = _OPEN_TAG_RE.sub(_rewrite_open, new_body)
     if new_body != body:
         resp.set_data(new_body)
     return resp
