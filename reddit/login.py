@@ -15,6 +15,7 @@ import os
 import re
 import threading
 import time
+from urllib.parse import urlsplit
 
 from curl_cffi import requests as cffi_requests
 from flask import has_request_context, request
@@ -94,16 +95,26 @@ def cookie_header():
 
 
 _FORWARD_HEADERS = ('X-Forwarded-For', 'X-Real-IP', 'Forwarded')
+_LOCAL_HOSTNAMES = frozenset({'localhost', '127.0.0.1', '::1'})
 
 
 def is_local_request():
     """True for a request straight from this machine (not via a reverse proxy), or one from a
-    browser that holds the owner cookie (reddit_owner.py)."""
+    browser that holds the owner cookie (reddit_owner.py).
+
+    A loopback request must also be addressed to a loopback name (Host: localhost etc.):
+    otherwise any web page could DNS-rebind its own domain to 127.0.0.1 and drive the
+    account from the owner's browser, with its requests looking same-origin."""
     if not has_request_context():
         return False
     if reddit_owner.is_owner():
         return True
     if any(h in request.headers for h in _FORWARD_HEADERS):
+        return False
+    try:
+        if (urlsplit(f'//{request.host}').hostname or '').lower() not in _LOCAL_HOSTNAMES:
+            return False
+    except ValueError:
         return False
     try:
         return ipaddress.ip_address(request.remote_addr or '').is_loopback

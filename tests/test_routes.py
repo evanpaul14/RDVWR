@@ -869,6 +869,38 @@ class TestImgProxy:
         resp = client.get("/api/img?url=")
         assert resp.status_code == 403
 
+    @pytest.mark.parametrize("url", [
+        "http://127.0.0.1:9101\\@i.redd.it/x.jpg",      # urlparse: i.redd.it, requests: 127.0.0.1
+        "https://evil.com\\@preview.redd.it/x.jpg",
+        "https://user@i.redd.it/x.jpg",
+        "https://evil.com@i.redd.it/x.jpg",
+        "https://i.redd.it\t/x.jpg",
+    ])
+    @patch.object(reddit_client.SESSION, "get")
+    def test_ambiguous_url_rejected_without_fetch(self, mock_get, client, url):
+        resp = client.get("/api/img", query_string={"url": url})
+        assert resp.status_code == 403
+        mock_get.assert_not_called()
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_redirect_off_allowlist_not_followed(self, mock_get, client):
+        mock_get.return_value = MockResponse(status_code=302, headers={"Location": "http://127.0.0.1:9102/secret"})
+        resp = client.get("/api/img?url=https://i.redd.it/x.jpg")
+        assert resp.status_code == 502
+        assert mock_get.call_count == 1
+        assert mock_get.call_args.kwargs["allow_redirects"] is False
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_redirect_within_allowlist_followed(self, mock_get, client):
+        mock_get.side_effect = [
+            MockResponse(status_code=301, headers={"Location": "https://preview.redd.it/x.jpg"}),
+            MockResponse(status_code=200, headers={"Content-Type": "image/jpeg"}, raw_bytes=b"img"),
+        ]
+        resp = client.get("/api/img?url=https://i.redd.it/x.jpg")
+        assert resp.status_code == 200
+        assert resp.data == b"img"
+        assert mock_get.call_args.args[0] == "https://preview.redd.it/x.jpg"
+
     @patch.object(reddit_client.SESSION, "get")
     def test_external_preview_host_allowed(self, mock_get, client):
         mock_get.return_value = MockResponse(
@@ -985,6 +1017,12 @@ class TestResolve:
     def test_non_reddit_url_rejected(self, client):
         resp = client.get("/api/resolve?url=https://evil.com/redirect")
         assert resp.status_code == 400
+
+    @patch("reddit.client.SESSION.head")
+    def test_backslash_userinfo_rejected(self, mock_head, client):
+        resp = client.get("/api/resolve", query_string={"url": "http://127.0.0.1\\@www.reddit.com/"})
+        assert resp.status_code == 400
+        mock_head.assert_not_called()
 
     def test_empty_url_rejected(self, client):
         resp = client.get("/api/resolve?url=")
@@ -1138,6 +1176,26 @@ class TestOgImage:
     def test_non_http_scheme_returns_400(self, client):
         resp = client.get("/api/og-image?url=javascript:alert(1)")
         assert resp.status_code == 400
+
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
+    @patch.object(reddit_client.SESSION, "get")
+    def test_backslash_userinfo_rejected(self, mock_get, mock_resolve, client):
+        resp = client.get("/api/og-image", query_string={"url": "http://127.0.0.1:9102\\@example.com/"})
+        assert resp.status_code == 400
+        mock_resolve.assert_not_called()
+        mock_get.assert_not_called()
+
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
+    @patch.object(reddit_client.SESSION, "get")
+    def test_http_fetch_pins_resolved_ip(self, mock_get, _resolve, client):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.iter_content.return_value = iter([b""])
+        mock_get.return_value = mock_resp
+        embeds_routes._og_cache.clear()
+        client.get("/api/og-image?url=http://example.com:8080/a?b=1")
+        assert mock_get.call_args.args[0] == "http://93.184.216.34:8080/a?b=1"
+        assert mock_get.call_args.kwargs["headers"]["Host"] == "example.com:8080"
 
     @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
     @patch.object(reddit_client.SESSION, "get")
