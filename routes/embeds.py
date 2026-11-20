@@ -65,7 +65,9 @@ def _og_fetch(url):
             ip_host = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
             safe_netloc = ip_host + (f":{parsed.port}" if parsed.port else "")
             fetch_url = urlunparse(parsed._replace(netloc=safe_netloc))
-            fetch_headers = {**HEADERS, "Accept": "text/html", "Host": parsed.netloc}
+            # The checked ASCII host (punycode for an IDN): a Host header can't carry Unicode.
+            host_hdr = (f"[{hostname}]" if ":" in hostname else hostname) + (f":{parsed.port}" if parsed.port else "")
+            fetch_headers = {**HEADERS, "Accept": "text/html", "Host": host_hdr}
         else:
             fetch_url = url
             fetch_headers = {**HEADERS, "Accept": "text/html"}
