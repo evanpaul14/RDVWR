@@ -39,9 +39,13 @@ const _PROXY_MEDIA = document.querySelector('meta[name="rdvwr-proxy-media"]')?.c
 // Keep in sync with MEDIA_PROXY_HOSTS in routes/mediaproxy.py.
 const _PROXY_HOSTS = new Set([
   'i.redd.it', 'v.redd.it', 'preview.redd.it', 'external-preview.redd.it',
-  'a.thumbs.redditmedia.com', 'b.thumbs.redditmedia.com',
+  'a.thumbs.redditmedia.com', 'b.thumbs.redditmedia.com', 'c.thumbs.redditmedia.com',
+  'd.thumbs.redditmedia.com', 'e.thumbs.redditmedia.com',
   'styles.redditmedia.com', 'emoji.redditmedia.com', 'www.redditstatic.com',
-  'i.imgur.com', 'media.giphy.com',
+  'i.reddituploads.com', 'reddit-uploaded-media.s3-accelerate.amazonaws.com',
+  'i.imgur.com',
+  'media.giphy.com', 'media0.giphy.com', 'media1.giphy.com', 'media2.giphy.com',
+  'media3.giphy.com', 'media4.giphy.com', 'i.giphy.com',
 ]);
 export function proxyMedia(url) {
   if (!_PROXY_MEDIA || !url) return url;

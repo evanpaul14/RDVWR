@@ -18,9 +18,13 @@ bp = Blueprint("mediaproxy", __name__)
 # Keep in sync with _PROXY_HOSTS in static/utils.js.
 MEDIA_PROXY_HOSTS = frozenset({
     'i.redd.it', 'v.redd.it', 'preview.redd.it', 'external-preview.redd.it',
-    'a.thumbs.redditmedia.com', 'b.thumbs.redditmedia.com',
+    'a.thumbs.redditmedia.com', 'b.thumbs.redditmedia.com', 'c.thumbs.redditmedia.com',
+    'd.thumbs.redditmedia.com', 'e.thumbs.redditmedia.com',
     'styles.redditmedia.com', 'emoji.redditmedia.com', 'www.redditstatic.com',
-    'i.imgur.com', 'media.giphy.com',
+    'i.reddituploads.com', 'reddit-uploaded-media.s3-accelerate.amazonaws.com',
+    'i.imgur.com',
+    'media.giphy.com', 'media0.giphy.com', 'media1.giphy.com', 'media2.giphy.com',
+    'media3.giphy.com', 'media4.giphy.com', 'i.giphy.com',
 })
 MEDIA_PROXY_MAX_REDIRECTS = 3
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
