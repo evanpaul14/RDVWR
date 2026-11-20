@@ -74,8 +74,8 @@ def _linkify_mentions(text):
     for m in _MENTION_RE.finditer(text):
         if m.group('href'):
             href = m.group('href')
-            if m.group('image') and re.fullmatch(r'giphy\|[A-Za-z0-9]+', href):
-                href = f'https://media.giphy.com/media/{href[6:]}/giphy.gif'
+            if m.group('image') and re.fullmatch(r'giphy\|[A-Za-z0-9]+(?:\|\w+)?', href):
+                href = f'https://media.giphy.com/media/{href[6:].split("|")[0]}/giphy.gif'
             target = _md_href(href)
             if not target:
                 continue
