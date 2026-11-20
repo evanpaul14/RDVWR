@@ -8,6 +8,12 @@ from core.helpers import checked_url_host
     ("http://Example.COM:8080/a?b=1#c", "example.com"),
     ("https://[2606:4700::1]/", "2606:4700::1"),
     ("https://www.reddit.com/r/x/s/abc", "www.reddit.com"),
+    # Internationalized names come back as the punycode requests actually connects to.
+    ("https://bücher.de/x", "xn--bcher-kva.de"),
+    ("https://BÜCHER.de/x", "xn--bcher-kva.de"),
+    ("https://xn--bcher-kva.de/x", "xn--bcher-kva.de"),
+    ("https://straße.de/", "xn--strae-oqa.de"),
+    ("https://例え.jp/", "xn--r8jz45g.jp"),
 ])
 def test_plain_urls(url, host):
     assert checked_url_host(url) == host
@@ -25,6 +31,9 @@ def test_plain_urls(url, host):
     "https://i.redd.it\n/x",
     "https://i.redd.it:99999/",
     "https://i.redd.it:abc/",
+    "http://127.0.0.1\\@bücher.de/",       # IDN doesn't reopen the differential
+    "https://bücher\\@i.redd.it/",
+    "https://a​\u0000b.de/",            # control char in an IDN
     "ftp://i.redd.it/",
     "file:///etc/passwd",
     "javascript:alert(1)",

@@ -1199,6 +1199,19 @@ class TestOgImage:
 
     @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
     @patch.object(reddit_client.SESSION, "get")
+    def test_idn_link_preview(self, mock_get, mock_resolve, client):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.iter_content.return_value = iter([b'<meta property="og:image" content="https://x.example/i.jpg">'])
+        mock_get.return_value = mock_resp
+        embeds_routes._og_cache.clear()
+        resp = client.get("/api/og-image", query_string={"url": "http://bücher.de/artikel"})
+        assert resp.get_json()["url"] == "https://x.example/i.jpg"
+        mock_resolve.assert_called_with("xn--bcher-kva.de")
+        assert mock_get.call_args.kwargs["headers"]["Host"] == "xn--bcher-kva.de"
+
+    @patch.object(embeds_routes, "_resolve_ssrf_safe", return_value="93.184.216.34")
+    @patch.object(reddit_client.SESSION, "get")
     def test_og_tag_extracted(self, mock_get, _resolve, client):
         html = b'<meta property="og:image" content="https://example.com/thumb.jpg">'
         mock_resp = MagicMock()
