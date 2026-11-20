@@ -167,12 +167,12 @@ def local_media_url(url):
     if url.startswith('/') and not url.startswith('//'):
         return True
     if has_app_context() and current_app.config.get('PROXY_MEDIA'):
-        from routes.mediaproxy import can_proxy_host
+        from routes.mediaproxy import MEDIA_PROXY_HOSTS
         try:
             parsed = urlparse(url)
         except ValueError:
             return False
-        return parsed.scheme == 'https' and not parsed.port and can_proxy_host(parsed.hostname or '')
+        return parsed.scheme == 'https' and parsed.netloc in MEDIA_PROXY_HOSTS
     return False
 
 

@@ -43,20 +43,11 @@ const _PROXY_HOSTS = new Set([
   'styles.redditmedia.com', 'emoji.redditmedia.com', 'www.redditstatic.com',
   'i.imgur.com', 'media.giphy.com',
 ]);
-// With PROXY_MEDIA on, any public https hostname goes through the proxy (the server
-// refuses private/LAN addresses). Mirrors is_public_hostname() in core/safe_fetch.py.
-const _PUBLIC_HOST_RE = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}$/i;
-const _LOCAL_SUFFIXES = ['.local', '.localhost', '.internal', '.lan', '.home', '.localdomain', '.intranet'];
-function _canProxyHost(h) {
-  if (_PROXY_HOSTS.has(h)) return true;
-  h = h.toLowerCase();
-  return _PUBLIC_HOST_RE.test(h) && !_LOCAL_SUFFIXES.some(s => h.endsWith(s)) && h !== location.hostname.toLowerCase();
-}
 export function proxyMedia(url) {
   if (!_PROXY_MEDIA || !url) return url;
   try {
     const u = new URL(url);
-    if (u.protocol === 'https:' && !u.port && _canProxyHost(u.hostname)) return `${BASE}/api/m/${u.hostname}${u.pathname}${u.search}`;
+    if (u.protocol === 'https:' && _PROXY_HOSTS.has(u.hostname)) return `${BASE}/api/m/${u.hostname}${u.pathname}${u.search}`;
   } catch {}
   return url;
 }

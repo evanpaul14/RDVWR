@@ -196,7 +196,7 @@ Set `REDDIT_LOGIN=1` to add a "Reddit account" section to settings. Reddit no lo
 
 ## Media proxying
 
-`PROXY_MEDIA=1` routes images, videos and gifs from every host through the server (`/api/m/`), so the browser never contacts those hosts directly. Only public https image/video/audio is fetched (200 MB cap); the server refuses private, loopback and LAN addresses. Iframe embeds (YouTube etc.) and outbound links still go direct.
+`PROXY_MEDIA=1` routes images, videos and gifs from Reddit, Imgur and Giphy through the server (`/api/m/`), so the browser never contacts those CDNs directly.
 
 > [!WARNING]
 > All media bandwidth then flows through the server.
