@@ -5,6 +5,7 @@ import os
 import re
 import time
 import datetime
+import html as html_lib
 from urllib.parse import urlencode, urlparse, parse_qsl, parse_qs
 from flask import g, request, has_request_context, has_app_context, current_app
 from markupsafe import Markup
@@ -88,7 +89,15 @@ def is_bot(author):
     return bool(author and _BOT_NAME_RE.search(author))
 
 
-_EXT_MEDIA_IMG_RE = re.compile(rf'(<a class="{EXTERNAL_MEDIA_CLASS}"[^>]*>)<img [^>]*></a>')
+_EXT_MEDIA_IMG_RE = re.compile(rf'(<a class="{EXTERNAL_MEDIA_CLASS}"[^>]*>)<img src="([^"]*)"[^>]*></a>')
+
+
+def _ext_media_to_link(m):
+    # With PROXY_MEDIA the image is served locally (the after-request pass rewrites it
+    # later), so it isn't third-party any more — same as the JS _asLink check.
+    if local_media_url(html_lib.unescape(m.group(2))):
+        return m.group(0)
+    return f'{m.group(1)}gif &#8599;</a>'
 
 
 def md(sanitized_html):
@@ -97,7 +106,7 @@ def md(sanitized_html):
     third-party media" on, like the JS markdown renderer's _asLink."""
     html = sanitized_html or ''
     if get_pref('link_external_media'):
-        html = _EXT_MEDIA_IMG_RE.sub(r'\1gif &#8599;</a>', html)
+        html = _EXT_MEDIA_IMG_RE.sub(_ext_media_to_link, html)
     return Markup(html)
 
 
