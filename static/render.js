@@ -39,7 +39,7 @@ function _initMarked() {
     ? `<a class="md-media-link" href="${escHtml(realMediaUrl(url))}" target="_blank" rel="noopener noreferrer">${label} ↗</a>` : null;
   r.image = (href, title, text) => {
     if (href?.startsWith('giphy|')) {
-      const src = proxyMedia(`https://media.giphy.com/media/${href.slice(6)}/giphy.gif`);
+      const src = proxyMedia(`https://media.giphy.com/media/${href.slice(6).split('|')[0]}/giphy.gif`);
       return _asLink(src, 'gif') ?? `<img class="gif-anim-img" src="${src}" alt="${text||'gif'}" loading="lazy">`;
     }
     if (href?.startsWith('redgifs|')) return `<div class="md-gif-embed redgifs-wrap" data-rgid="${href.slice(8)}"><div class="rg-loading"></div></div>`;

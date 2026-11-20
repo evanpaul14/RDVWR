@@ -14,7 +14,7 @@ class _Renderer(mistune.HTMLRenderer):
     def image(self, text, url, title=None):
         url = url.replace('%7C', '|').replace('%7c', '|')
         if url.startswith('giphy|'):
-            url = f'https://media.giphy.com/media/{url[6:]}/giphy.gif'
+            url = f'https://media.giphy.com/media/{url[6:].split('|')[0]}/giphy.gif'
         elif url.startswith('redgifs|'):
             return self.link(text or 'video', 'https://www.redgifs.com/watch/' + url[8:])
         elif url.startswith('redditvid|'):
