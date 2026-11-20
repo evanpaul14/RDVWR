@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor, Future, TimeoutError as Futur
 from inspect import signature
 from reddit.budget import remaining
 import requests
+from urllib3.exceptions import LocationParseError
+from urllib3.util import parse_url
 from flask import jsonify, request, Response, make_response
 from parsing.media_detection import process_post
 from reddit import login as reddit_login
@@ -470,3 +472,30 @@ def safe_next(raw):
     if not raw or not raw.startswith('/') or raw.startswith('//') or '\\' in raw:
         return '/'
     return raw
+
+
+_URL_BAD_CHARS_RE = re.compile(r'[\x00-\x20\x7f\\]')
+
+
+def checked_url_host(url, schemes=('http', 'https')):
+    """The lowercase host an outbound fetch of `url` would actually connect to, or None if
+    the URL is malformed or ambiguous. Use this, not urlparse().hostname, before checking a
+    host against an allowlist: urlparse and requests (urllib3) can disagree about the host,
+    e.g. "http://127.0.0.1\\@i.redd.it/" is i.redd.it to urlparse but 127.0.0.1 to urllib3.
+    Rejects backslashes, whitespace/control chars and userinfo, then requires both parsers
+    to agree on the host."""
+    if not isinstance(url, str) or not url or _URL_BAD_CHARS_RE.search(url):
+        return None
+    try:
+        parsed = urlsplit(url)
+        host = parsed.hostname
+        parsed.port   # raises ValueError on a malformed port
+        u3_host = parse_url(url).host
+    except (ValueError, LocationParseError):
+        return None
+    if parsed.scheme not in schemes or not host or '@' in parsed.netloc \
+            or parsed.username is not None or parsed.password is not None:
+        return None
+    if not u3_host or u3_host.strip('[]').lower() != host.lower():
+        return None
+    return host.lower()

@@ -27,6 +27,23 @@ def test_owner_cookie_grants_local_access(owner_on):
         assert reddit_login.is_local_request()
 
 
+@pytest.mark.parametrize("host,local", [
+    ("localhost:8002", True), ("127.0.0.1:8002", True), ("[::1]:8002", True), ("LOCALHOST", True),
+    ("attacker.example:8002", False),   # DNS rebinding: attacker's name resolving to 127.0.0.1
+    ("rdvwr.example.com", False),
+])
+def test_loopback_requires_loopback_host_header(owner_on, host, local):
+    with app.test_request_context('/', headers={'Host': host}, environ_base={'REMOTE_ADDR': '127.0.0.1'}):
+        assert reddit_login.is_local_request() is local
+
+
+def test_owner_cookie_works_with_any_host(owner_on):
+    cookie = f"{reddit_owner.COOKIE}={reddit_owner.make_token()}"
+    with app.test_request_context('/', headers={'Host': 'rdvwr.example.com', 'Cookie': cookie},
+                                  environ_base={'REMOTE_ADDR': '127.0.0.1'}):
+        assert reddit_login.is_local_request()
+
+
 def test_lockout_after_repeated_failures(owner_on):
     c = app.test_client()
     for _ in range(5):

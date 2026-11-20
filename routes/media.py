@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, request, Response
 from core.base_path import app_path
 from reddit.client import SESSION, HEADERS
 from core.helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
-                     cached_json, error_response, server_cache, log)
+                     cached_json, checked_url_host, error_response, server_cache, log)
 
 bp = Blueprint("media", __name__)
 
@@ -141,18 +141,28 @@ def proxy_redgifs_media(filename):
 
 
 IMG_PROXY_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
+IMG_PROXY_MAX_REDIRECTS = 3
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
 
 @bp.route("/api/img")
 def proxy_img():
     url = request.args.get('url', '').strip()
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return ('', 400)
-    if parsed.scheme not in ('http', 'https') or parsed.hostname not in IMG_PROXY_HOSTS:
+    host = checked_url_host(url)
+    if host not in IMG_PROXY_HOSTS:
         return ('', 403)
     try:
-        upstream = SESSION.get(url, headers={'Referer': 'https://www.reddit.com/'}, stream=True, timeout=20)
+        # Follow redirects by hand so a hop off the allowlist is never fetched server-side.
+        for _ in range(IMG_PROXY_MAX_REDIRECTS + 1):
+            upstream = SESSION.get(url, headers={'Referer': 'https://www.reddit.com/'}, stream=True,
+                                   timeout=20, allow_redirects=False)
+            if upstream.status_code not in _REDIRECT_CODES:
+                break
+            upstream.close()
+            url = urljoin(url, upstream.headers.get('Location', ''))
+            if checked_url_host(url) not in IMG_PROXY_HOSTS:
+                return ('', 502)
+        else:
+            return ('', 502)
         if not upstream.ok:
             return ('', upstream.status_code)
         content_type = upstream.headers.get('Content-Type', 'image/jpeg')
@@ -160,16 +170,16 @@ def proxy_img():
         resp.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return resp
     except Exception as e:
-        log.warning("proxy_img fetch failed host=%s: %s", parsed.hostname, e)
+        log.warning("proxy_img fetch failed host=%s: %s", host, e)
         return ('', 502)
 
 
 RESOLVE_MAX_REDIRECTS = 5
 
 
-def _is_reddit_url(parsed):
-    hostname = parsed.hostname or ''
-    return parsed.scheme in ('http', 'https') and (hostname == 'reddit.com' or hostname.endswith('.reddit.com'))
+def _is_reddit_url(url):
+    hostname = checked_url_host(url) or ''
+    return hostname == 'reddit.com' or hostname.endswith('.reddit.com')
 
 
 def resolve_reddit_url(url):
@@ -177,7 +187,7 @@ def resolve_reddit_url(url):
     it ends up. Redirects are followed by hand so a hop off reddit.com (e.g. an
     outbound-link redirect) is returned instead of being requested server-side.
     Raises ValueError for a non-reddit.com URL."""
-    if not _is_reddit_url(urlparse(url)):
+    if not _is_reddit_url(url):
         raise ValueError("Only reddit.com URLs supported")
     for _ in range(RESOLVE_MAX_REDIRECTS):
         r = SESSION.head(url, allow_redirects=False, timeout=5)
@@ -185,7 +195,7 @@ def resolve_reddit_url(url):
         if not location:
             break
         url = urljoin(url, location)
-        if not _is_reddit_url(urlparse(url)):
+        if not _is_reddit_url(url):
             break
     return url
 

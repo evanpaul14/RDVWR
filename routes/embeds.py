@@ -7,7 +7,7 @@ import html as html_lib
 from urllib.parse import urljoin, urlparse, urlunparse
 from flask import Blueprint, jsonify, request, make_response
 from reddit.client import SESSION, HEADERS, _get_device, recent_user_agent
-from core.helpers import TTLCache, _CACHE_MISS, cached_json, log
+from core.helpers import TTLCache, _CACHE_MISS, cached_json, checked_url_host, log
 
 bp = Blueprint("embeds", __name__)
 
@@ -50,10 +50,12 @@ def _og_fetch(url):
     re-checked against the SSRF allowlist. Returns the final open response, or None
     if a hop is disallowed."""
     for _ in range(OG_MAX_REDIRECTS + 1):
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        if parsed.scheme not in ("http", "https") or not hostname:
+        # checked_url_host, not urlparse().hostname: the host checked must be the one
+        # requests actually connects to (see its docstring).
+        hostname = checked_url_host(url)
+        if not hostname:
             return None
+        parsed = urlparse(url)
         resolved_ip = _resolve_ssrf_safe(hostname)
         if not resolved_ip:
             return None
@@ -61,7 +63,7 @@ def _og_fetch(url):
         # For HTTPS, SSL certificate validation prevents rebinding (cert won't match a spoofed IP).
         if parsed.scheme == "http":
             ip_host = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
-            safe_netloc = parsed.netloc.replace(hostname, ip_host, 1)
+            safe_netloc = ip_host + (f":{parsed.port}" if parsed.port else "")
             fetch_url = urlunparse(parsed._replace(netloc=safe_netloc))
             fetch_headers = {**HEADERS, "Accept": "text/html", "Host": parsed.netloc}
         else:
@@ -84,10 +86,7 @@ def get_og_image():
     url = request.args.get("url", "").strip()
     if not url or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Invalid URL"}), 400
-    try:
-        hostname = urlparse(url).hostname or ""
-    except Exception:
-        return jsonify({"error": "Invalid URL"}), 400
+    hostname = checked_url_host(url)
     if not hostname:
         return jsonify({"error": "Invalid URL"}), 400
     if not _resolve_ssrf_safe(hostname):
