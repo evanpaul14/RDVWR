@@ -80,3 +80,9 @@ def test_live_posts_never_touch_the_archive():
     with patch.object(comments_routes, "fetch_archived_post") as arch:
         assert comments_routes._restore_deleted_author(RAW) is RAW
     arch.assert_not_called()
+
+
+def test_title_only_post_gets_an_empty_body_not_deleted():
+    stub = {**RAW, "author": "[deleted]", "selftext": "[deleted]"}
+    with patch.object(comments_routes, "fetch_archived_post", return_value={**RAW, "selftext": ""}):
+        assert comments_routes._restore_deleted_author(stub)["selftext"] == ""

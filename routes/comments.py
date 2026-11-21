@@ -101,8 +101,8 @@ def _restore_deleted_author(raw):
         return raw
     restored = {**raw, "_archived": True, "author": archived["author"]}
     for key in ("selftext", "selftext_html"):
-        if archived.get(key) and archived[key] not in ("[deleted]", "[removed]"):
-            restored[key] = archived[key]
+        if key in archived and archived[key] not in ("[deleted]", "[removed]"):
+            restored[key] = archived[key] or ""   # an empty body is the original: a title-only post
     return restored
 
 
