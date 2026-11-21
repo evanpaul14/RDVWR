@@ -191,7 +191,7 @@ def _post(body, timeout):
             device.expires_at = 0.0  # force this device to re-auth next use
             continue
         if is_fingerprint_block(resp):
-            # Reddit refused this TLS fingerprint, not the IP: no cooldown, switch and retry once.
+            # Reddit refused this TLS fingerprint, not the IP: no cooldown, switch and retry (up to 3 times).
             fingerprint_blocked(profile)
             fingerprint_retries += 1
             if fingerprint_retries <= 3:

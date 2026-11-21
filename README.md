@@ -219,3 +219,4 @@ It answers `200` normally and `503` with `"status": "degraded"` when the Redis c
 # Credit
 
 - [Redlib](https://github.com/redlib-org/redlib) for the Reddit OAuth spoofing logic and feature inspiration
+- [Nachtalb/redlib](https://github.com/Nachtalb/redlib), a Redlib fork that tracks Reddit's changes closely, for the working TLS fingerprint list, the HTTP/1.1 fix for GraphQL requests, and other fixes found in its commit history
