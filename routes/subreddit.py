@@ -7,12 +7,13 @@ from flask import Blueprint, jsonify, request
 from parsing.media_detection import process_post, extract_posts, clean_url
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
+from reddit.scrape import fetch_listing_ids
 from gql.posts import fetch_gql_feed, fetch_gql_multireddit
 from gql.subreddit import fetch_gql_about, fetch_gql_rules
 from gql.wiki import fetch_gql_wiki
 from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
-                     add_time_param, feed_time, cached_json, error_response, server_cache, validate_params,
+                     add_time_param, feed_time, fetch_posts_by_id, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("subreddit", __name__)
@@ -172,6 +173,18 @@ def _quarantine_fallback_posts(subreddit, after=None, target=FEED_LIMIT):
         return [], None
 
 
+def _scraped_combined_feed(subreddit, sort, after):
+    """{"posts", "after"} for a combined feed's New or Rising: ids from the listing page,
+    the posts themselves from by_id."""
+    ids, next_id = fetch_listing_ids(subreddit, sort, (after or "").removeprefix("t3_"))
+    raw = fetch_posts_by_id(ids)
+    posts = extract_posts({"children": [{"kind": "t3", "data": raw[i]} for i in ids if i in raw]})
+    if not posts:
+        raise UpstreamError("Reddit returned 403", 403)
+    hydrate_linked_posts(posts)
+    return {"posts": posts, "after": f"t3_{next_id}" if next_id else None}
+
+
 @fetch_cache(CACHE_TTL_FEED)
 @budgeted
 def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout=10):
@@ -186,6 +199,12 @@ def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout
         params["after"] = after
     resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=timeout)
     if resp.status_code != 200:
+        if '+' in subreddit and sort in ("new", "rising"):
+            # Reddit's JSON API refuses these sorts of combined feeds; the listing page has them
+            try:
+                return _scraped_combined_feed(subreddit, sort, after)
+            except Exception as e:
+                log.warning("scraped combined feed failed sub=%s sort=%s: %s", subreddit, sort, e)
         if is_waf_block(resp) and '+' not in subreddit:
             # Reddit blocks this IP's REST requests: the app's GraphQL endpoint still answers
             try:
