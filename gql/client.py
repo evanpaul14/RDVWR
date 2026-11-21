@@ -182,7 +182,8 @@ def _post(body, timeout):
                    "X-APOLLO-OPERATION-ID": body["extensions"]["persistedQuery"]["sha256Hash"],
                    "Accept": GQL_ACCEPT}
         resp = budget_request(device.session.post, GQL_URL, headers=headers, json=body,
-                                   impersonate=profile, timeout=timeout)
+                                   impersonate=profile, timeout=timeout,
+                                   http_version="v1")  # Reddit 403s this host over HTTP/2
         _record_ratelimit(device, resp, gql=True)
         if resp.status_code == 401 and not reauthed:
             reauthed = True
