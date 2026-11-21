@@ -172,8 +172,9 @@ def _post(body, timeout):
     if waf_cooling():
         return waf_blocked_response(GQL_URL)
     resp = None
-    reauthed = fingerprint_retried = False
-    for _ in range(3):
+    reauthed = False
+    fingerprint_retries = 0
+    for _ in range(5):
         device = _get_device()
         profile = device.impersonate
         # The app's Apollo client names the persisted query in headers too.
@@ -192,8 +193,8 @@ def _post(body, timeout):
         if is_fingerprint_block(resp):
             # Reddit refused this TLS fingerprint, not the IP: no cooldown, switch and retry once.
             fingerprint_blocked(profile)
-            if not fingerprint_retried:
-                fingerprint_retried = True
+            fingerprint_retries += 1
+            if fingerprint_retries <= 3:
                 continue
             return resp
         break
