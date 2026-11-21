@@ -78,7 +78,7 @@ def _by_id_post(post_id):
     """A post's raw data from by_id, or from the archive when Reddit has dropped it (deleted
     by its author, say); raises UpstreamError when neither has it."""
     try:
-        return _reddit_post(post_id)
+        return _restore_deleted_author(_reddit_post(post_id))
     except UpstreamError as e:
         if e.status != 404:
             raise
@@ -86,6 +86,24 @@ def _by_id_post(post_id):
             return fetch_archived_post(post_id)
         except UpstreamError:
             raise e
+
+
+def _restore_deleted_author(raw):
+    """Reddit keeps a post its author deleted as a stub (author and body "[deleted]"); take
+    the author and original body from the archive when it has them."""
+    if raw.get("author") != "[deleted]":
+        return raw
+    try:
+        archived = fetch_archived_post(raw.get("id", ""))
+    except UpstreamError:
+        return raw
+    if archived.get("author") in (None, "", "[deleted]"):
+        return raw
+    restored = {**raw, "_archived": True, "author": archived["author"]}
+    for key in ("selftext", "selftext_html"):
+        if archived.get(key) and archived[key] not in ("[deleted]", "[removed]"):
+            restored[key] = archived[key]
+    return restored
 
 
 def _reddit_post(post_id):

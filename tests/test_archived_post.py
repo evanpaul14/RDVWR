@@ -59,3 +59,24 @@ def test_other_errors_do_not_reach_the_archive():
         with pytest.raises(UpstreamError):
             comments_routes._by_id_post("abc123")
     arch.assert_not_called()
+
+
+def test_stub_post_gets_author_and_body_from_archive():
+    stub = {**RAW, "author": "[deleted]", "selftext": "[deleted]", "selftext_html": None, "score": 7}
+    with patch.object(comments_routes, "fetch_archived_post", return_value={**RAW, "_archived": True}):
+        out = comments_routes._restore_deleted_author(stub)
+    assert out["author"] == "someone" and out["selftext"] == "orig" and out["_archived"] and out["score"] == 7
+
+
+def test_stub_stays_when_archive_also_lacks_the_author():
+    stub = {**RAW, "author": "[deleted]", "selftext": "[deleted]"}
+    with patch.object(comments_routes, "fetch_archived_post", return_value={**RAW, "author": "[deleted]"}):
+        assert comments_routes._restore_deleted_author(stub) is stub
+    with patch.object(comments_routes, "fetch_archived_post", side_effect=UpstreamError("x", 404)):
+        assert comments_routes._restore_deleted_author(stub) is stub
+
+
+def test_live_posts_never_touch_the_archive():
+    with patch.object(comments_routes, "fetch_archived_post") as arch:
+        assert comments_routes._restore_deleted_author(RAW) is RAW
+    arch.assert_not_called()
