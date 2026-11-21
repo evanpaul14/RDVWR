@@ -12,7 +12,7 @@ from gql.subreddit import fetch_gql_about, fetch_gql_rules
 from gql.wiki import fetch_gql_wiki
 from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
-                     add_time_param, cached_json, error_response, server_cache, validate_params,
+                     add_time_param, feed_time, cached_json, error_response, server_cache, validate_params,
                      hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("subreddit", __name__)
@@ -181,7 +181,7 @@ def fetch_feed(subreddit, sort, t='', after='', quarantine_opt_in=False, timeout
     # HTML front page; the percent-encoded form returns the merged listing.
     url   = f"https://www.reddit.com/r/{subreddit.replace('+', '%2B')}/{sort}.json"
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
+    add_time_param(params, sort, feed_time(sort, t))
     if after:
         params["after"] = after
     resp = reddit_get(url, quarantine=bool(quarantine_opt_in), params=params, timeout=timeout)
@@ -402,7 +402,7 @@ def _multireddit_via_graphql(username, multiname, sort, t, after, title=None):
 def fetch_multireddit(username, multiname, sort, t='', after='', timeout=10):
     """A user multireddit's combined listing: {"posts", "after", "title"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
+    add_time_param(params, sort, feed_time(sort, t))
     if after:
         params["after"] = after
     meta = reddit_get(

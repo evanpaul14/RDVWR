@@ -13,7 +13,7 @@ import re
 from datetime import datetime
 from gql.client import gql_query, _resolve_media
 from gql.richtext import richtext_html
-from core.helpers import FEED_LIMIT, UpstreamError, log
+from core.helpers import FEED_LIMIT, UpstreamError, feed_time, log
 from parsing.media_detection import extract_posts
 
 MAX_FEED_PAGES = 5   # SDUI pages hold ~7-18 posts; stop once a request has FEED_LIMIT of them
@@ -258,6 +258,7 @@ def posts_from_nodes(nodes):
 
 def _sorted(sort, t):
     variables = {"sort": sort.upper()}
+    t = feed_time(sort, t) or t
     if t:
         variables["time"] = t.upper()
     return variables

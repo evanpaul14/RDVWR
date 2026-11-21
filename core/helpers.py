@@ -81,6 +81,15 @@ THEMES        = {'dark', 'light', 'system'}
 LAYOUTS       = {'card', 'compact', 'minimal'}
 
 
+def feed_time(sort, t):
+    """The time window for a subreddit-style feed: `t` when valid, else the default (today
+    unless RDVWR_DEFAULT_SUB_TIME says otherwise), because Reddit reads a missing `t` on
+    top/controversial as all time. "" for sorts without a time window."""
+    if sort not in ("top", "controversial"):
+        return ""
+    return t if t in TIME_FILTERS else DEFAULT_SETTINGS["subTime"]
+
+
 def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
     """Reddit only honors the `t` (time-window) param for certain sorts (top/controversial
     by default; some endpoints only support it for "top")."""

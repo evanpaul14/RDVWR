@@ -2334,3 +2334,17 @@ def test_healthz_degraded_when_every_token_expired():
     assert r.status_code == 503
     assert r.get_json()["status"] == "degraded"
     assert r.get_json()["reasons"] == ["no valid OAuth tokens"]
+
+
+class TestFeedTimeDefault:
+    def test_top_and_controversial_default_to_configured_time(self):
+        assert helpers.feed_time("top", "") == helpers.DEFAULT_SETTINGS["subTime"]
+        assert helpers.feed_time("controversial", "bogus") == helpers.DEFAULT_SETTINGS["subTime"]
+        assert helpers.feed_time("top", "week") == "week"
+        assert helpers.feed_time("hot", "") == ""
+
+    @patch.object(reddit_client.SESSION, "get")
+    def test_missing_t_is_sent_as_default(self, mock_get, client):
+        mock_get.return_value = _session_get({"data": {"children": [], "after": None}})
+        client.get("/api/r/python?sort=top")
+        assert mock_get.call_args.kwargs["params"]["t"] == helpers.DEFAULT_SETTINGS["subTime"]

@@ -12,7 +12,7 @@ from reddit import login as reddit_login
 from reddit.client import reddit_get, PROXIES
 from parsing.shreddit import _parse_shreddit_post
 from gql.posts import fetch_gql_frontpage
-from core.helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param,
+from core.helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param, feed_time,
                      cached_json, error_response, fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
@@ -23,7 +23,7 @@ bp = Blueprint("home", __name__)
 def fetch_frontpage(sort, t='', after='', timeout=10):
     """Reddit's anonymous (logged-out) front page: {"posts", "after"}."""
     params = {"limit": FEED_LIMIT, "raw_json": 1}
-    add_time_param(params, sort, t)
+    add_time_param(params, sort, feed_time(sort, t))
     if after:
         params["after"] = after
     resp = reddit_get(f"https://www.reddit.com/{sort}.json", params=params, timeout=timeout)
@@ -51,7 +51,7 @@ def fetch_personalized_home(cookie, sort, t='', after='', distance=4, timeout=15
     nav_id = str(uuid.uuid4())
     params = {"sort": shreddit_sort, "distance": distance, "adDistance": 2,
               "navigationSessionId": nav_id, "referer": "www.reddit.com"}
-    add_time_param(params, sort, t)
+    add_time_param(params, sort, feed_time(sort, t))
     if after:
         params["after"] = after
         params["cursor"] = after
