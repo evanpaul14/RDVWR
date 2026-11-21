@@ -1,4 +1,4 @@
-import { escHtml, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl, BASE } from './utils.js';
+import { userLink, escHtml, veilWrap, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, renderAuthorFlair, ANIM_DELAY_STEP, ANIM_DELAY_MAX, proxyMedia, proxyHls, realMediaUrl, isLocalUrl, BASE } from './utils.js';
 import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDomain, galleryMini } from './media.js';
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
@@ -299,7 +299,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
       <div class="min-score"><svg width="8" height="6" viewBox="0 0 10 7" fill="none"><path d="M5 1L9 6H1L5 1Z" fill="#ff6b35"/></svg>${fmtNum(p.score)}</div>
       <div class="min-body">
         <div class="min-title-row">${badges}<a class="min-title${titleExtra}" href="${postNav}" data-nav="${postNav}">${escHtml(p.title)}</a>${domainHtml ? ' '+domainHtml : ''}${flairHtml ? ' '+flairHtml : ''}</div>
-        <div class="min-meta">${subLink}<a class="min-author" href="${BASE}/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a> · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button> · ${saveBtnHtml(p, { minimal: true })}</div>
+        <div class="min-meta">${subLink}${userLink(p.author, 'min-author', 'u/')} · <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml}</span>${renderAwards(p.awards)} · <a class="min-comments" href="${postNav}" data-nav="${postNav}">${fmtNum(p.num_comments)} comments</a> · <button class="share-btn" data-share="${postNav}" title="Copy link">share</button> · ${saveBtnHtml(p, { minimal: true })}</div>
       </div>
       ${thumbHtml}
     </div>`;
@@ -341,7 +341,7 @@ export function renderPost(p, idx, showSub=false) {
             <span class="score-num">${fmtNum(p.score)}</span>`}
             <div class="ratio-bar"><div class="ratio-fill" style="width:${p.upvote_ratio}%"></div></div>
           </div>
-          <a class="post-author" href="${BASE}/user/${author}" data-user="${author}" data-nav="/user/${author}">u/${author}</a>
+          ${userLink(p.author, 'post-author', 'u/')}
           <span class="meta-item" title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${editedHtml ? ' '+editedHtml : ''}</span>
           ${renderAwards(p.awards)}
         </div>
@@ -469,7 +469,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
             ? (c.author_icon ? `<img class="comment-avatar" src="${escHtml(c.author_icon)}" alt="" loading="lazy">` : '')
             : `<img class="comment-avatar comment-avatar-lazy" data-author="${escHtml(c.author)}" alt="">`
         ) : ''}
-        <a class="comment-author${isMod?' is-mod':''}" href="${BASE}/user/${escHtml(c.author)}" data-user="${escHtml(c.author)}" data-nav="/user/${escHtml(c.author)}">${escHtml(c.author)}</a>
+        ${userLink(c.author, `comment-author${isMod?' is-mod':''}`)}
         ${isMod      ? '<span class="comment-mod">MOD</span>'        : ''}
         ${isAdmin    ? '<span class="comment-admin">ADMIN</span>'    : ''}
         ${isOP       ? '<span class="comment-op">OP</span>'         : ''}

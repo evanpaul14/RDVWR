@@ -213,7 +213,7 @@
         <div class="ratio-bar"><div class="ratio-fill" style="width:{{ p.upvote_ratio }}%"></div></div>
       </div>
       {{ vote_form('t3_' ~ p.id, p.likes) }}
-      <a class="post-author" href="/user/{{ p.author }}">u/{{ p.author }}</a>
+      {% if p.author == '[deleted]' %}<span class="post-author">u/[deleted]</span>{% else %}<a class="post-author" href="/user/{{ p.author }}">u/{{ p.author }}</a>{% endif %}
       {{ time_ago(p.created_utc, p.edited_utc) }}
       {{ awards(p.awards) }}
     </div>
@@ -242,7 +242,7 @@
       <div class="min-title-row">{{ badges(p, short=True) }}<a class="min-title{{ ' min-title-self' if p.is_self }}" href="{{ post_path(p) }}">{{ p.title }}</a>{% if domain %} <a class="min-domain" href="{{ p.url }}" target="_blank" rel="noopener">({{ domain }})</a>{% endif %}</div>
       <div class="min-meta">
         {%- if show_sub %}<a class="min-sub" href="/r/{{ p.subreddit }}">r/{{ p.subreddit }}</a> &middot; {% endif -%}
-        <a class="min-author" href="/user/{{ p.author }}">u/{{ p.author }}</a> &middot; {{ time_ago(p.created_utc, p.edited_utc) }} &middot; <a class="min-comments" href="{{ post_path(p) }}">{{ p.num_comments | fmtnum }} comments</a>
+        {% if p.author == '[deleted]' %}<span class="min-author">u/[deleted]</span>{% else %}<a class="min-author" href="/user/{{ p.author }}">u/{{ p.author }}</a>{% endif %} &middot; {{ time_ago(p.created_utc, p.edited_utc) }} &middot; <a class="min-comments" href="{{ post_path(p) }}">{{ p.num_comments | fmtnum }} comments</a>
       </div>
     </div>
     {%- if not is_article(p) %}{{ thumb(p, 'min-thumb', post_path(p)) }}{% endif -%}
@@ -301,7 +301,7 @@
   <div class="pv-meta">
     <span class="up">&#9650; {{ p.score | fmtnum }}</span>{{ vote_form('t3_' ~ p.id, p.likes) }}
     {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
-    <a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>
+    {% if p.author == '[deleted]' %}<span class="meta-item link">u/[deleted]</span>{% else %}<a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>{% endif %}
     <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>{% endif %}</span>
     <span>{{ p.num_comments | fmtnum }} comments</span>
     {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}

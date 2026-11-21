@@ -1,7 +1,7 @@
 import { observeMedia, unobserveMedia } from './media-lifecycle.js';
 import { state } from './state.js';
 import { settings } from './settings.js';
-import { escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl, BASE } from './utils.js';
+import { userLink, escHtml, fmtNum, fmtDate, fmtDateTime, timeAgo, setActiveButton, renderFlair, renderAwards, errState, openOnReddit, veilWrap, realMediaUrl, BASE } from './utils.js';
 import { initMedia, initGifVideos, initGifImages, mediaHtmlFull, linksOutMedia, mediaLinkHref, galleryMini } from './media.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { accountActive, voteCtlHtml } from './vote.js';
@@ -372,7 +372,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       ${settings.layout === 'minimal' ? `
       <div class="pv-meta">
         <span class="up">▲ ${fmtNum(p.score)}</span>
-        <a class="meta-item link" href="${BASE}/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
+        ${userLink(p.author, 'meta-item link', 'u/')}
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         <button class="share-btn min-share" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">share</button>
@@ -384,7 +384,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
           ? voteCtlHtml('t3_' + p.id, p.likes, p.score, `<span class="up vote-score">${fmtNum(p.score)}</span>`)
           : `<span class="up">▲ ${fmtNum(p.score)}</span>`}
         <span>${p.upvote_ratio}% upvoted</span>
-        <a class="meta-item link" href="${BASE}/user/${escHtml(p.author)}" data-user="${escHtml(p.author)}" data-nav="/user/${escHtml(p.author)}">u/${escHtml(p.author)}</a>
+        ${userLink(p.author, 'meta-item link', 'u/')}
         <span title="${fmtDateTime(p.created_utc)}">${timeAgo(p.created_utc)}${pvEditedHtml ? ' '+pvEditedHtml : ''}</span>
         <span>${fmtNum(p.num_comments)} comments</span>
         ${!p.is_self && !p.crosspost_from && !p.linked_post ? `<a class="meta-item link" href="${BASE}/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}" data-nav="/r/${escHtml(p.subreddit)}/duplicates/${escHtml(p.id)}">duplicates</a>` : ''}

@@ -96,6 +96,12 @@ export function timeAgo(utc) {
   if (s < 31536000) return `${Math.floor(s/2592000)}mo`;
   return `${Math.floor(s/31536000)}y`;
 }
+// A link to a user's profile; "[deleted]" has none, so it's plain text.
+export function userLink(name, cls, prefix = '') {
+  const n = escHtml(name);
+  if (name === '[deleted]') return `<span class="${cls}">${prefix}${n}</span>`;
+  return `<a class="${cls}" href="${BASE}/user/${n}" data-user="${n}" data-nav="/user/${n}">${prefix}${n}</a>`;
+}
 export function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
