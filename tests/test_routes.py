@@ -77,6 +77,14 @@ def no_gql(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_gql_wiki(monkeypatch):
+    """Wiki pages try GraphQL first; fail it by default so tests don't hit the network."""
+    def boom(*a, **kw):
+        raise RuntimeError("GraphQL SubredditWiki failed")
+    monkeypatch.setattr(subreddit_routes, "fetch_gql_wiki", boom)
+
+
+@pytest.fixture(autouse=True)
 def no_gql_user(monkeypatch):
     """User about tries GraphQL first; fail it by default so tests don't hit the network."""
     def boom(*a, **kw):

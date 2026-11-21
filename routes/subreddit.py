@@ -9,6 +9,7 @@ from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
 from gql.posts import fetch_gql_feed, fetch_gql_multireddit
 from gql.subreddit import fetch_gql_about, fetch_gql_rules
+from gql.wiki import fetch_gql_wiki
 from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
                      SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
                      add_time_param, cached_json, error_response, server_cache, validate_params,
@@ -345,6 +346,14 @@ def fetch_wiki(subreddit, page='index', timeout=10):
     DOMPurify, and the noscript page through media_detection.sanitize_reddit_html."""
     if not WIKI_PAGE_RE.match(page):
         raise UpstreamError("Invalid page name", 400)
+    # Reddit's REST wiki JSON answers 403 to anonymous and device-token clients, so the
+    # app's GraphQL endpoint goes first; REST is the fallback when that fails.
+    try:
+        return fetch_gql_wiki(subreddit, page)
+    except UpstreamError:
+        raise
+    except Exception as e:
+        log.warning("gql wiki failed sub=%s page=%s: %s", subreddit, page, e)
     resp = reddit_get(
         f"https://www.reddit.com/r/{subreddit}/wiki/{page}.json",
         params={"raw_json": 1}, timeout=timeout)
