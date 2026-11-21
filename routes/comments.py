@@ -111,6 +111,9 @@ def _gql_comments(post_id, comment_id, sort):
     return post_raw, comments, author_fullnames
 
 
+BLOCKED_COMMENTS_MSG = "Reddit is blocking comment loading right now (403)"
+
+
 def _blocked_comments_fallback(post_id, comment_id):
     """(post_raw, comments, author_fullnames) when Reddit's WAF blocks the comment endpoint
     and GraphQL failed too: the post from by_id, the tree from the Arctic Shift archive."""
@@ -121,7 +124,10 @@ def _blocked_comments_fallback(post_id, comment_id):
                     for c in fetch_archived_comment_tree(post_id, comment_id)]
     except Exception as e:
         log.warning("archived comment tree failed post=%s: %s", post_id, e)
-        raise UpstreamError("Reddit is blocking comment loading right now", 403)
+        raise UpstreamError(BLOCKED_COMMENTS_MSG, 403)
+    if not comments and not comment_id and post_raw.get("num_comments"):
+        # The archive hasn't caught up with a fresh post; don't present that as "no comments".
+        raise UpstreamError(BLOCKED_COMMENTS_MSG, 403)
     return post_raw, comments, author_fullnames
 
 
@@ -189,7 +195,8 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
         if not posts:
             raise e if isinstance(e, UpstreamError) else UpstreamError("Post not found", 502)
         post_raw, comments, author_fullnames = posts[0], [], {}
-        comments_error = "Couldn't load comments"
+        comments_error = (e.message if isinstance(e, UpstreamError) and e.status == 403
+                          else "Couldn't load comments")
     post     = process_post(post_raw)
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
