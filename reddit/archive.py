@@ -2,7 +2,7 @@
 from parsing.media_detection import process_post, filter_nsfw
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import SESSION
-from core.helpers import FEED_LIMIT, hydrate_linked_posts, log
+from core.helpers import FEED_LIMIT, UpstreamError, hydrate_linked_posts, log
 
 
 ARCTIC_SHIFT_BASE = "https://arctic-shift.photon-reddit.com/api"
@@ -120,3 +120,19 @@ def fetch_archived_comment_tree(post_id, comment_id=None, limit=500):
                 set_depth(replies["data"]["children"], depth + 1)
     set_depth(children, 0)
     return children
+
+
+def fetch_archived_post(post_id):
+    """A post Reddit no longer returns (deleted by its author or otherwise dropped) from the
+    archive, as a raw REST-shaped dict flagged `_archived`. Raises UpstreamError 404 when the
+    archive doesn't have it either."""
+    try:
+        resp = arctic_shift_get("/posts/ids", {"ids": post_id})
+        resp.raise_for_status()
+        data = resp.json().get("data") or []
+    except Exception as e:
+        log.warning("archived post fetch failed post=%s: %s", post_id, e)
+        raise UpstreamError("Post not found", 404)
+    if not data or data[0].get("id") != post_id:
+        raise UpstreamError("Post not found", 404)
+    return {**data[0], "_archived": True}

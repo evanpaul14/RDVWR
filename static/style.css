@@ -1227,6 +1227,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 .badge-oc      { background:rgba(74,158,255,.15); color:var(--ac); }
 .badge-spoiler { background:rgba(255,255,255,.08); color:var(--tx3); }
 .badge-locked  { background:rgba(255,195,60,.15); color:#ffc33c; }
+.badge-archived { background:rgba(150,150,170,.15); color:#aab; }
 .badge-poll    { background:rgba(74,158,255,.12); color:var(--ac); }
 
 /* ── Edited timestamp ────────────────────────────────────────────────────── */

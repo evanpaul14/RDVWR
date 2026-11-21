@@ -5,7 +5,7 @@ from flask import Blueprint, request
 from parsing.media_detection import process_post, _parse_awards, DISABLE_NSFW
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
-from reddit.archive import fetch_archived_comment_tree
+from reddit.archive import fetch_archived_comment_tree, fetch_archived_post
 from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from gql.posts import fetch_gql_post
 from core.helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE, COMMENT_ID_RE,
@@ -75,6 +75,20 @@ BY_ID_ATTEMPTS = 4
 
 
 def _by_id_post(post_id):
+    """A post's raw data from by_id, or from the archive when Reddit has dropped it (deleted
+    by its author, say); raises UpstreamError when neither has it."""
+    try:
+        return _reddit_post(post_id)
+    except UpstreamError as e:
+        if e.status != 404:
+            raise
+        try:
+            return fetch_archived_post(post_id)
+        except UpstreamError:
+            raise e
+
+
+def _reddit_post(post_id):
     """A post's raw data from by_id; raises UpstreamError when Reddit won't give it."""
     for attempt in range(BY_ID_ATTEMPTS):
         resp = reddit_get(f"https://www.reddit.com/by_id/t3_{post_id}.json", params={"raw_json": 1},
@@ -198,6 +212,8 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
         comments_error = (e.message if isinstance(e, UpstreamError) and e.status == 403
                           else "Couldn't load comments")
     post     = process_post(post_raw)
+    if post_raw.get("_archived"):
+        post["archived"] = True   # recovered from the archive: Reddit no longer has it
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view

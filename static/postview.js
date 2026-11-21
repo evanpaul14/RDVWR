@@ -351,6 +351,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       p.over_18     ? '<span class="nsfw-tag">nsfw</span>' : '',
       p.is_spoiler  ? '<span class="badge badge-spoiler">spoiler</span>' : '',
       p.locked      ? '<span class="badge badge-locked">locked</span>' : '',
+      p.archived    ? '<span class="badge badge-archived" title="Reddit no longer has this post; this copy comes from an archive">archived</span>' : '',
       p.is_oc       ? '<span class="badge badge-oc">oc</span>' : '',
       renderFlair(p, true),
     ].filter(Boolean).join('');
