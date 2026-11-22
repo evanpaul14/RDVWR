@@ -447,9 +447,9 @@ export async function loadMoreComments(btn) {
   btn.textContent = 'Loading…';
   try {
     const url = `/api/r/${encodeURIComponent(sub)}/morechildren/${encodeURIComponent(postId)}?children=${encodeURIComponent(ids)}&sort=${state.currentCommentSort}${settings.showAvatars && settings.layout !== 'minimal' ? '&avatars=1' : ''}`;
-    const res  = await fetch(url);
+    const res  = await fetch(url, { signal: AbortSignal.timeout(20000) });
     const data = await res.json();
-    if (!res.ok) { btn.textContent = 'Failed to load'; btn.disabled = false; return; }
+    if (!res.ok) { btn.textContent = 'Failed to load, click to retry'; btn.disabled = false; return; }
     if (!data.comments?.length) { wrap.remove(); return; }
     const html = renderCommentTree(data.comments, depth, sub, postId, state._pvData?.post?.author || '');
     wrap.insertAdjacentHTML('afterend', html);
@@ -458,8 +458,8 @@ export async function loadMoreComments(btn) {
     initGifImages(wrap.parentElement);
     initCommentAvatars(wrap.parentElement, data.avatar_prefetch);
     wrap.remove();
-  } catch {
-    btn.textContent = 'Failed to load';
+  } catch (e) {
+    btn.textContent = e?.name === 'TimeoutError' ? 'Timed out, click to retry' : 'Failed to load, click to retry';
     btn.disabled = false;
   }
 }
