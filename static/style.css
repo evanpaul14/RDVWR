@@ -2228,3 +2228,9 @@ label.settings-action-btn { cursor:pointer; }
 @media (hover:none) and (pointer:coarse) {
   input[type="text"], input[type="search"], input[type="url"], input[type="email"], input[type="password"], input:not([type]), textarea, select { font-size:16px !important; }
 }
+
+/* Translate buttons (post meta row + comment actions) */
+.translate-btn:not(.share-btn) { background:none; border:0; padding:2px 0; font-family:var(--mono); font-size:10px; color:var(--tx3); cursor:pointer; }
+.translate-btn:not(.share-btn):hover { color:var(--tx); }
+.translate-btn[data-busy] { opacity:.6; cursor:progress; }
+.translated { white-space:pre-wrap; }

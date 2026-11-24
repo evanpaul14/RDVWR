@@ -13,7 +13,7 @@ export function commentFormHtml(parent, label = 'comment') {
   </form>`;
 }
 
-export const replyBtnHtml = id =>
+export const commentActionsHtml = id =>
   accountActive() ? `<div class="comment-actions"><button type="button" class="reply-btn" data-reply-to="t1_${id}">reply</button></div>` : '';
 
 function insertComment(form, comment, renderTree) {
