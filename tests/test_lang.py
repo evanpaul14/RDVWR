@@ -2,7 +2,15 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from types import SimpleNamespace as NS
+import pytest
 from core import lang
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    lang._detect.cache_clear()
+    yield
+    lang._detect.cache_clear()
 
 
 def fake(code, prob=0.99):
@@ -19,6 +27,7 @@ def test_detects_and_normalizes(monkeypatch):
     text = 'Det här är en ganska lång kommentar om bröd och andra saker som jag gillar'
     monkeypatch.setattr(lang, 'detect_langs', fake('nb'))
     assert lang.lang_fields(text) == {'lang': 'no'}
+    lang._detect.cache_clear()
     monkeypatch.setattr(lang, 'detect_langs', fake('zh-cn'))
     assert lang.detect_lang(text) == 'zh'
 
@@ -48,3 +57,22 @@ def test_comment_fields_carry_lang(monkeypatch):
     monkeypatch.setattr(lang, 'detect_langs', fake('fr'))
     c = comments._parse_comment_fields({'id': 'a', 'body': 'Compliqué de trouver de la bonne farine pour le pain'})
     assert c['lang'] == 'fr'
+
+
+def test_obvious_english_skips_detector(monkeypatch):
+    def boom(text):
+        raise AssertionError('detector should not run')
+    monkeypatch.setattr(lang, 'detect_langs', boom)
+    text = 'I just think that this is not what they would have wanted for you, honestly'
+    assert lang.lang_fields(text) == {'lang': 'en'}
+
+
+def test_results_are_cached(monkeypatch):
+    calls = []
+    def counting(text):
+        calls.append(text)
+        return [NS(lang='fr', prob=0.99)]
+    monkeypatch.setattr(lang, 'detect_langs', counting)
+    text = 'Bonjour tout le monde, comment ça va aujourd hui mes amis ?'
+    lang.detect_lang(text); lang.detect_lang(text)
+    assert len(calls) == 1

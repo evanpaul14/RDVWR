@@ -7,6 +7,7 @@ from core import template_helpers
 from core import base_path
 from core.helpers import CACHE_TTL_STATIC, is_same_site_request
 from routes import register_all
+from core import lang as _lang
 
 
 app = Flask(__name__)
@@ -107,6 +108,7 @@ logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 
 register_all(app)
+_lang.warm_up()
 
 
 if __name__ == "__main__":
