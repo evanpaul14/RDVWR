@@ -1,25 +1,36 @@
 """Best-effort language detection for post/comment text (drives the translate button).
 
-Needs the optional `langdetect` package; without it detect_lang() raises nothing and
+Needs the optional `py3langid` (or `langdetect`) package; without it detect_lang() raises nothing and
 returns UNAVAILABLE so the frontend falls back to showing the button everywhere."""
 import re
 import threading
 from functools import lru_cache
 
-try:
-    from langdetect import DetectorFactory, detector_factory
-    DetectorFactory.seed = 0   # deterministic results
-    detector_factory.init_factory()
+from types import SimpleNamespace
 
-    def detect_langs(text, n_trial=3):
-        """langdetect.detect_langs with fewer random trials (default 7): ~2x faster, and
-        the same answers on 100+ char text."""
-        d = detector_factory._factory.create()
-        d.n_trial = n_trial
-        d.append(text)
-        return d.get_probabilities()
-except ImportError:            # pragma: no cover - exercised only when the package is absent
-    detect_langs = None
+# Preferred: py3langid (~1ms/call on a Pi, numpy). Fallback: langdetect (~13ms/call, pure
+# Python). Neither installed -> detect_langs is None. Both give [obj(.lang, .prob)].
+try:
+    from py3langid.langid import LanguageIdentifier, MODEL_FILE
+    _identifier = LanguageIdentifier.from_model_file(MODEL_FILE, norm_probs=True)
+
+    def detect_langs(text):
+        lang, prob = _identifier.classify(text)
+        return [SimpleNamespace(lang=lang, prob=float(prob))]
+except ImportError:
+    try:
+        from langdetect import DetectorFactory, detector_factory
+        DetectorFactory.seed = 0   # deterministic results
+        detector_factory.init_factory()
+
+        def detect_langs(text, n_trial=3):
+            """langdetect.detect_langs with fewer random trials (default 7): ~2x faster."""
+            d = detector_factory._factory.create()
+            d.n_trial = n_trial
+            d.append(text)
+            return d.get_probabilities()
+    except ImportError:        # pragma: no cover - exercised only when no detector is installed
+        detect_langs = None
 
 UNAVAILABLE = object()
 MIN_LETTERS = 40      # shorter text is too ambiguous: langdetect calls short English "da"/"cy"/"af" at ~100%
@@ -31,7 +42,7 @@ _ALIASES = {'zh-cn': 'zh', 'zh-tw': 'zh', 'nb': 'no', 'nn': 'no', 'iw': 'he'}
 
 
 # Distinctive English function words (none are common words in other major languages). Most
-# comments are English, and langdetect costs ~17ms a call on a Pi, so obvious English skips it.
+# comments are English, and langdetect costs ~13ms a call on a Pi, so obvious English skips it.
 _EN_WORDS = frozenset('the and that this with have not you they are but for just would what from your was were been their there about which when will'.split())
 _WORD_RE = re.compile(r"[A-Za-z']+")
 
@@ -45,7 +56,7 @@ def _obviously_english(text):
 
 
 def warm_up():
-    """Load langdetect's profiles now (~2s on a Pi) instead of on the first request."""
+    """Load the detector's model now (~2.5s on a Pi) instead of on the first request."""
     if detect_langs is not None:
         threading.Thread(target=lambda: detect_langs('warming up the language detector'), daemon=True).start()
 

@@ -8,3 +8,4 @@ gunicorn>=22.0
 redis>=5.0
 mistune>=3.2,<4
 langdetect>=1.0.9
+py3langid>=0.3
