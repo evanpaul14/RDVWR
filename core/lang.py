@@ -11,10 +11,10 @@ except ImportError:            # pragma: no cover - exercised only when the pack
     detect_langs = None
 
 UNAVAILABLE = object()
-MIN_LETTERS = 20      # shorter text is too ambiguous to call
+MIN_LETTERS = 40      # shorter text is too ambiguous: langdetect calls short English "da"/"cy"/"af" at ~100%
 MAX_CHARS = 400
 MIN_PROB = 0.8
-_STRIP_RE = re.compile(r'https?://\S+|[/\\]?[ru]/\w+|[*_~`>#\[\]()|]')
+_STRIP_RE = re.compile(r'!\[[^\]]*\]\([^)]*\)|https?://\S+|[/\\]?[ru]/\w+|[*_~`>#\[\]()|]')
 # langdetect's codes -> the base codes browsers report in navigator.language
 _ALIASES = {'zh-cn': 'zh', 'zh-tw': 'zh', 'nb': 'no', 'nn': 'no', 'iw': 'he'}
 

@@ -16,7 +16,7 @@ def test_unavailable_without_detector(monkeypatch):
 
 
 def test_detects_and_normalizes(monkeypatch):
-    text = 'Det här är en ganska lång kommentar om bröd'
+    text = 'Det här är en ganska lång kommentar om bröd och andra saker som jag gillar'
     monkeypatch.setattr(lang, 'detect_langs', fake('nb'))
     assert lang.lang_fields(text) == {'lang': 'no'}
     monkeypatch.setattr(lang, 'detect_langs', fake('zh-cn'))
