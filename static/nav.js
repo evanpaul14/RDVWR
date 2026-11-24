@@ -150,7 +150,12 @@ window.addEventListener('popstate', (e) => {
   const savedScroll = e.state?.scrollY || 0;
   const savedPvScroll = e.state?.pvScrollTop || 0;
   const route = parseRoute();
-  if (route.type !== 'post') closePostView();
+  // Stop anything playing in the view being left (the new route re-renders its own media).
+  document.querySelectorAll('video, audio').forEach(m => { if (!m.paused) m.pause(); });
+  if (route.type !== 'post') {
+    document.querySelectorAll('#post-view iframe').forEach(f => f.setAttribute('src', 'about:blank'));
+    closePostView();
+  }
   const hasFeedPosts = !!feed.querySelector('.post');
   if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && !state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
     window.scrollTo({top: savedScroll, behavior: 'instant'});
