@@ -75,6 +75,7 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Default sort</span>${sel('s-comment-sort', csortOpts, settings.commentSort)}</label>
     <label class="settings-row"><span class="settings-label">Show profile pictures</span>${chk('s-show-avatars', settings.showAvatars)}</label>
     <label class="settings-row"><span class="settings-label">Show awards</span>${chk('s-show-awards', settings.showAwards)}</label>
+    <label class="settings-row"><span class="settings-label">Translate button</span>${sel('s-translate-button', [['auto','Only for other languages'],['always','Always'],['never','Never']], settings.translateButton || 'auto')}</label>
   </div>
   <div class="settings-section">
     <div class="settings-section-title">Privacy</div>
@@ -109,6 +110,7 @@ function openSettingsPanel() {
 function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-layout').addEventListener('change', e => { settings.layout = e.target.value; saveSettings(); retryFeedLoad(); });
+  settingsBody.querySelector('#s-translate-button').addEventListener('change', e => { settings.translateButton = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-sort').addEventListener('change', e => { settings.subSort = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-sub-time').addEventListener('change', e => { settings.subTime = e.target.value; saveSettings(); });
   settingsBody.querySelector('#s-reddit-cookies')?.addEventListener('change', e => {

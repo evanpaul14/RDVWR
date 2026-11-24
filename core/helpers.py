@@ -135,6 +135,7 @@ DEFAULT_SETTINGS = {
     'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
     'showAwards':        _bool_env('RDVWR_DEFAULT_SHOW_AWARDS', True),
     'linkExternalMedia': _bool_env('RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA', False),
+    'translateButton':   _enum_env('RDVWR_DEFAULT_TRANSLATE_BUTTON', 'auto', {'auto', 'always', 'never'}),
     'nsfwBlur':          _bool_env('RDVWR_DEFAULT_NSFW_BLUR', False),
     'nsfwHide':          _bool_env('RDVWR_DEFAULT_NSFW_HIDE', False),
     'nsfwSearchHide':    _bool_env('RDVWR_DEFAULT_NSFW_SEARCH_HIDE', False),

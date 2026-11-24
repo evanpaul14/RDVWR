@@ -22,6 +22,7 @@ export const DEFAULTS = {
   showAvatars: false,
   showAwards: true,
   linkExternalMedia: false,
+  translateButton: 'auto',
 };
 
 function _load() {
@@ -63,6 +64,8 @@ export function applySettings() {
   document.body.classList.toggle('pagination-mode', !!settings.pagination);
   document.body.classList.toggle('compact-mode', settings.layout === 'compact');
   document.body.classList.toggle('minimal-mode', settings.layout === 'minimal');
+  document.body.classList.toggle('translate-always', settings.translateButton === 'always');
+  document.body.classList.toggle('translate-never', settings.translateButton === 'never');
   document.body.classList.remove('theme-light', 'theme-dark', 'theme-system');
   document.body.classList.add(`theme-${settings.theme || 'dark'}`);
 }

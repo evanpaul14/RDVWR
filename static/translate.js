@@ -1,9 +1,14 @@
 // Translate buttons on the post (title + body) and on comments. Text goes to POST /api/translate;
 // the result replaces the element's contents as plain text, and a second click restores the original.
-export const translateBtnHtml = (cls = 'translate-btn') =>
-  `<button type="button" class="${cls}" data-translate title="Translate to ${escLang()}">translate</button>`;
-
 const escLang = () => (navigator.language || 'en').split('-')[0];
+const NORM = { nb: 'no', nn: 'no', iw: 'he' };
+const deviceLang = () => NORM[escLang()] || escLang();
+
+/** `lang` is the server-detected language: a code, null (too short/uncertain), or undefined
+ *  (no detector on the server). data-foreign decides whether auto mode shows the button; the
+ *  translateButton setting (body classes, see applySettings) can force it on or off. */
+export const translateBtnHtml = (lang, cls = 'translate-btn') =>
+  `<button type="button" class="${cls}" data-translate data-foreign="${lang === undefined || (lang !== null && lang !== deviceLang()) ? 1 : 0}" title="Translate to ${escLang()}">translate</button>`;
 const originals = new WeakMap();
 
 function targets(btn) {

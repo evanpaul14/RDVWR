@@ -3,6 +3,7 @@ from reddit.budget import budgeted
 import time
 from flask import Blueprint, request
 from parsing.media_detection import process_post, _parse_awards, DISABLE_NSFW
+from core.lang import lang_fields
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
 from reddit.archive import fetch_archived_comment_tree, fetch_archived_post
@@ -45,6 +46,7 @@ def _parse_comment_fields(d):
         "author_flair_bg":       d.get("author_flair_background_color") or "",
         "author_flair_tc":       d.get("author_flair_text_color") or "dark",
         "awards":                _parse_awards(d.get("all_awardings")),
+        **lang_fields(d.get("body", "")),
     }
 
 
@@ -235,6 +237,7 @@ def fetch_comments(subreddit, post_id, comment_id=None, sort='confidence', timeo
     if DISABLE_NSFW and post.get("over_18"):
         raise UpstreamError("Post not found", 404)
     post["selftext"] = post_raw.get("selftext", "")   # full text in post view
+    post.update(lang_fields(f"{post.get('title', '')}\n{post['selftext']}"))
     try:
         hydrate_linked_posts([post])
     except Exception as e:

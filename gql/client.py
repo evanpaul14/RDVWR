@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from parsing.media_detection import clean_url
+from core.lang import lang_fields
 from reddit.client import _get_device, _record_ratelimit, fingerprint_blocked, is_fingerprint_block, SESSION
 from reddit.waf import note_waf_block, waf_blocked_response, waf_cooling
 from core.helpers import log
@@ -142,11 +143,12 @@ def _comment(n, depth):
         icon = clean_url(((a.get("award") or {}).get("static_icon_32") or {}).get("url", ""))
         if icon:
             awards.append({"name": a["award"].get("name", ""), "count": a.get("total", 1), "icon": icon})
+    _body = _resolve_media(n.get("content") or {})
     vote = n.get("voteState")
     return {
         "id":                    n["id"].removeprefix("t1_"),
         "author":                author.get("name") or "[deleted]",
-        "body":                  _resolve_media(n.get("content") or {}),
+        "body":                  _body,
         "body_html":             "",
         "score":                 n.get("score") or 0,
         "score_hidden":          bool(n.get("isScoreHidden")),
@@ -164,6 +166,7 @@ def _comment(n, depth):
         "author_flair_bg":       template.get("backgroundColor") or "",
         "author_flair_tc":       (flair.get("textColor") or "dark").lower(),
         "awards":                awards,
+        **lang_fields(_body),
     }
 
 

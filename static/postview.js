@@ -379,7 +379,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
         <span>${fmtNum(p.num_comments)} comments</span>
         <button class="share-btn min-share" data-share="/r/${escHtml(p.subreddit)}/comments/${escHtml(p.id)}" title="Copy link">share</button>
         ${saveBtnHtml(p, { minimal: true })}
-        ${translateBtnHtml('share-btn min-share translate-btn')}
+        ${translateBtnHtml(p.lang, 'share-btn min-share translate-btn')}
         ${renderAwards(p.awards)}
       </div>` : `
       <div class="pv-meta">
@@ -396,7 +396,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
           share
         </button>
         ${saveBtnHtml(p)}
-        ${translateBtnHtml('share-btn translate-btn')}
+        ${translateBtnHtml(p.lang, 'share-btn translate-btn')}
         ${buildDownloadBtn(p)}
         ${renderAwards(p.awards)}
       </div>`}

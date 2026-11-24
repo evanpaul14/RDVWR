@@ -159,6 +159,7 @@ setting always overrides these — they're only the starting point (stored in th
 | `RDVWR_DEFAULT_SHOW_AVATARS` | `0` | `1` shows profile pictures |
 | `RDVWR_DEFAULT_SHOW_AWARDS` | `1` | `0` hides award icons on posts and comments |
 | `RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA` | `0` | `1` links out to third-party media instead of embedding it |
+| `RDVWR_DEFAULT_TRANSLATE_BUTTON` | `auto` | `auto` shows the translate button only on text that isn't in the visitor's browser language (needs the `langdetect` package; without it the button shows everywhere), `always`, `never` |
 | `RDVWR_DEFAULT_NSFW_BLUR` | `0` | `1` blurs NSFW thumbnails |
 | `RDVWR_DEFAULT_NSFW_HIDE` | `0` | `1` hides NSFW posts |
 | `RDVWR_DEFAULT_NSFW_SEARCH_HIDE` | `0` | `1` hides NSFW content in search |
