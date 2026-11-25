@@ -27,6 +27,8 @@
 
 <div class="ns-settings-wrap">
   <h1 class="ns-settings-title">Settings</h1>
+  {% if page.imported == 'ok' %}<p class="ns-settings-note ns-settings-note--ok" role="status">Settings restored.</p>
+  {% elif page.imported == 'invalid' %}<p class="ns-settings-note ns-settings-note--err" role="status">That settings code is invalid or incomplete. Check that all of it was copied.</p>{% endif %}
   <form class="ns-settings-form" method="post" action="/settings">
     <input type="hidden" name="next" value="{{ page.next }}">
 
@@ -70,6 +72,23 @@
       <button type="submit" name="reset" value="1" formnovalidate>Reset to defaults</button>
       <a class="ns-settings-cancel" href="{{ page.next }}">Cancel</a>
     </div>
+  </form>
+
+  <div class="settings-section-title ns-settings-section">Backup &amp; restore</div>
+  <label class="ns-settings-row ns-settings-row--field">
+    <span class="ns-settings-row-text"><strong>Restore link</strong><small>Open it in another browser to restore these settings and filters there. It doesn't include your Reddit login.</small></span>
+    <input class="settings-input" type="text" readonly value="{{ page.backup_link }}">
+  </label>
+  <label class="ns-settings-row ns-settings-row--field">
+    <span class="ns-settings-row-text"><strong>Settings code</strong><small>The same settings as text, to paste into the import box.</small></span>
+    <textarea class="settings-input settings-textarea" readonly>{{ page.backup_code }}</textarea>
+  </label>
+  <form class="ns-settings-form" method="post" action="/settings/restore">
+    <label class="ns-settings-row ns-settings-row--field">
+      <span class="ns-settings-row-text"><strong>Import</strong><small>Paste a settings code or restore link. Replaces the settings and filters above.</small></span>
+      <textarea class="settings-input settings-textarea" name="data" spellcheck="false" autocomplete="off" required></textarea>
+    </label>
+    <div class="ns-settings-actions"><button type="submit">Import</button></div>
   </form>
 
   {% if page.login %}

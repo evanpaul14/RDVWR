@@ -1,0 +1,19 @@
+{# Confirmation for a settings restore link (/settings/restore?data=…, routes/ns_settings.py).
+   Nothing is applied until the visitor confirms. #}
+<div class="ns-settings-wrap">
+  <h1 class="ns-settings-title">Restore settings</h1>
+  {% if page.valid %}
+  <p class="ns-settings-note">This link restores {{ page.prefs }} setting{{ '' if page.prefs == 1 else 's' }}{% if page.filters %} and {{ page.filters }} filter entr{{ 'y' if page.filters == 1 else 'ies' }}{% endif %}, replacing the ones in this browser.</p>
+  {% if page.subscriptions %}<p class="ns-settings-note">It also has {{ page.subscriptions }} subscription{{ '' if page.subscriptions == 1 else 's' }}, which are only restored with JavaScript on.</p>{% endif %}
+  <form class="ns-settings-form" method="post" action="/settings/restore">
+    <input type="hidden" name="data" value="{{ page.data }}">
+    <div class="ns-settings-actions">
+      <button type="submit">Restore</button>
+      <a class="ns-settings-cancel" href="/settings">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <p class="ns-settings-note">This settings link is invalid or incomplete. Check that the whole link was copied.</p>
+  <div class="ns-settings-actions"><a class="ns-settings-cancel" href="/settings">Back to settings</a></div>
+  {% endif %}
+</div>

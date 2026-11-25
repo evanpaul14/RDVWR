@@ -1676,6 +1676,8 @@ a.comment-time:hover { color:var(--ac); }
 .settings-row--stack .settings-input { width:100%; box-sizing:border-box; }
 .settings-textarea { resize:vertical; height:64px; font-size:10px; line-height:1.4; word-break:break-all; }
 .settings-textarea--list { font-size:12px; word-break:normal; }
+.settings-copy-row { display:flex; align-items:flex-start; gap:8px; width:100%; }
+.settings-copy-row .settings-input { flex:1; min-width:0; }
 .settings-hint { font-size:11px; color:var(--tx3); font-family:var(--mono); }
 .settings-hint code { background:var(--bg3); padding:1px 4px; border-radius:3px; }
 
@@ -2166,6 +2168,10 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-attach:hover { color:var(--tx); }
 .submit-modal [hidden] { display:none !important; }
 .ns-settings-row--field { flex-direction:column; align-items:stretch; cursor:default; }
+.ns-settings-section { margin:28px 4px 4px; }
+.ns-settings-note { font-size:13px; color:var(--tx2); line-height:1.5; margin:0 0 14px; }
+.ns-settings-note--ok { color:var(--ac); }
+.ns-settings-note--err { color:var(--up); }
 
 /* Account page: the logged-in Reddit account's own profile (JS: account.js, no-JS: noscript/account.html) */
 .account-link { display:flex; align-items:center; }

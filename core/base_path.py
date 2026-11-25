@@ -18,6 +18,15 @@ def app_path(path):
     return BASE_PATH + path if BASE_PATH and path.startswith('/') and not path.startswith('//') else path
 
 
+def site_root():
+    """The app's absolute root URL (with BASE_PATH) for the current request, for links
+    that leave the page (feed readers, copied restore links). Behind an HTTPS proxy the
+    scheme comes from X-Forwarded-Proto."""
+    from flask import request
+    scheme = 'https' if request.headers.get('X-Forwarded-Proto', '').lower() == 'https' else request.scheme
+    return f"{scheme}://{request.host}{BASE_PATH}"
+
+
 class _PrefixMiddleware:
     """Tell Flask it's mounted at BASE_PATH so url_for() emits prefixed URLs. PATH_INFO
     is left alone: the proxy already stripped the prefix."""

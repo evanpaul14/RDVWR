@@ -7,7 +7,7 @@ import { initCommenting } from './comment.js';
 import { initSubmit } from './submit.js';
 import { renderCommentTree } from './render.js';
 import { settings, applySettings } from './settings.js';
-import { fmtNum } from './utils.js';
+import { fmtNum, stripBase, appPath } from './utils.js';
 import { parseRoute } from './router.js';
 import { closeLightbox } from './lightbox.js';
 import { initAutocomplete } from './autocomplete.js';
@@ -16,7 +16,7 @@ import { initCardHibernation } from './hibernate.js';
 import { navigate, renderRoute } from './nav.js';
 import { retryFeedLoad } from './refresh.js';
 import { updateFeedsBtn } from './feeds-menu.js';
-import { settingsPanel, closeSettingsPanel } from './settings-panel.js';
+import { settingsPanel, openSettingsPanel, closeSettingsPanel } from './settings-panel.js';
 import './links.js';
 import './interactions.js';
 import './sortbar.js';
@@ -43,4 +43,11 @@ initAutocomplete(subInput, pvSubInput, navigate, mobileSearchInput);
 initCardHibernation(feed);
 initMediaCleanup(document.body);
 initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed: retryFeedLoad });
+// A settings restore link (/settings/restore?data=…, see backup.js): show home with the
+// settings panel open on the import box, prefilled, so nothing changes until confirmed.
+if (/^\/settings\/restore\/?$/.test(stripBase(location.pathname))) {
+  const code = new URLSearchParams(location.search).get('data') || '';
+  history.replaceState(null, '', appPath('/'));
+  openSettingsPanel(code);
+}
 renderRoute(parseRoute());

@@ -12,6 +12,8 @@ from parsing.media_detection import DISABLE_NSFW
 from reddit import login as reddit_login
 from core.ns_prefs import PREFS, all_prefs, set_pref_cookie
 from core.filters import FILTERS, all_filters, set_filter_cookie
+from core import backup
+from core.base_path import site_root
 
 bp = Blueprint("ns_settings", __name__)
 
@@ -38,7 +40,35 @@ def ns_settings():
             set_filter_cookie(resp, name, request.form.get(name, ''))
         return resp
 
-    ctx = {"ns_view": "settings", "page_title": "Settings — RDVWR",
-           "page": {"prefs": all_prefs(), "filters": all_filters(), "login": reddit_login.login_status(), "next": safe_next(request.args.get('next'))}}
-    return render_template("index.html", disable_downloads=DISABLE_DOWNLOADS, **ctx), 200, \
-        {'Cache-Control': 'no-store'}
+    code = backup.encode(backup.export_current())
+    return _render("settings", "Settings", {
+        "prefs": all_prefs(), "filters": all_filters(), "login": reddit_login.login_status(),
+        "next": safe_next(request.args.get('next')), "imported": request.args.get('import'),
+        "backup_code": code, "backup_link": _restore_link(code)})
+
+
+def _restore_link(code):
+    return f"{site_root()}/settings/restore?data={code}"
+
+
+def _render(view, title, page):
+    return render_template("index.html", disable_downloads=DISABLE_DOWNLOADS, ns_view=view,
+                           page_title=f"{title} — RDVWR", page=page), 200, {'Cache-Control': 'no-store'}
+
+
+@bp.route("/settings/restore", methods=["GET", "POST"])
+def ns_settings_restore():
+    """A restore link (GET) asks before applying anything; the import box on the settings
+    page and the confirm button POST here. With JS on, the app handles a restore link
+    itself (static/backup.js) since it has more to restore than these cookies."""
+    data = backup.decode(request.values.get('data'))
+    if request.method == "POST":
+        resp = redirect(f"/settings?import={'ok' if data else 'invalid'}")
+        if data:
+            backup.apply_to_response(resp, data)
+        return resp
+    prefs, filters = backup.restorable(data) if data else ([], [])
+    return _render("restore", "Restore settings", {
+        "valid": data is not None, "data": request.args.get('data', ''),
+        "prefs": len(prefs), "filters": sum(len(data['settings'][FILTERS[n].key]) for n in filters) if data else 0,
+        "subscriptions": len(data['subscriptions']) if data else 0})

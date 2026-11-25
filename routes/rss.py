@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape, quoteattr
 from flask import Blueprint, Response, request
-from core.base_path import BASE_PATH
+from core.base_path import site_root
 from core.helpers import FEED_SORTS, TIME_FILTERS, UpstreamError, log
 from core.template_helpers import mdbody
 from routes.subreddit import fetch_feed
@@ -21,12 +21,6 @@ _SUB_RSS_RE = re.compile(r'^/r/([A-Za-z0-9_+]{1,100})(?:/(best|hot|new|top|risin
 _USER_RSS_RE = re.compile(r'^/u(?:ser)?/([A-Za-z0-9_-]{1,50})(?:/submitted)?/?\.rss$')
 _REL_URL_RE = re.compile(r'(\b(?:href|src)=")/(?!/)')
 CACHE_SECS = 300
-
-
-def _site_root():
-    """The app's absolute root URL (with BASE_PATH), for links a feed reader can follow."""
-    scheme = 'https' if request.headers.get('X-Forwarded-Proto', '').lower() == 'https' else request.scheme
-    return f"{scheme}://{request.host}{BASE_PATH}"
 
 
 def _iso(ts):
@@ -53,7 +47,7 @@ def _entry_html(p, root):
 
 
 def _atom(title, self_url, html_url, posts):
-    root = _site_root()
+    root = site_root()
     updated = max((p.get('created_utc') or 0 for p in posts), default=0)
     out = ['<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">',
            f'<title>{escape(title)}</title>',
@@ -90,7 +84,7 @@ def _rss():
     path = request.path
     if not path.endswith('.rss'):
         return None
-    root = _site_root()
+    root = site_root()
     try:
         if m := _SUB_RSS_RE.match(path):
             sub, sort = m.group(1), m.group(2) or 'hot'

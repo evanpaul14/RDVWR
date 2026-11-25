@@ -9,6 +9,7 @@ import { retryFeedLoad } from './refresh.js';
 import { updateFeedsBtn } from './feeds-menu.js';
 import { changeCommentSort } from './postview.js';
 import { normalizeSubs, normalizeUsers, normalizeKeywords } from './filters.js';
+import { backupSectionHtml, bindBackup, refreshBackupFields } from './backup.js';
 
 const sentinel = document.getElementById('scroll-sentinel');
 const postView = document.getElementById('post-view');
@@ -46,7 +47,7 @@ function _syncHomeRows() {
   if (feedRow) feedRow.style.display = has && settings.personalizedHome ? '' : 'none';
 }
 
-function _settingsHtml() {
+function _settingsHtml(importCode = '') {
   const subSortOpts = [['hot','Hot'],['new','New'],['top','Top'],['rising','Rising'],['controversial','Controversial']];
   const timeOpts    = [['all','All time'],['year','Past year'],['month','Past month'],['week','Past week'],['day','Past day'],['hour','Past hour']];
   const csortOpts   = [['confidence','Best'],['top','Top'],['new','New'],['controversial','Controversial'],['old','Old'],['qa','Q&A']];
@@ -103,18 +104,26 @@ function _settingsHtml() {
     <label class="settings-row"><span class="settings-label">Mark posts as read on scroll</span>${chk('s-mark-read', settings.markRead)}</label>
     <div class="settings-row settings-row-action"><span class="settings-label">Clear read history</span><button class="settings-action-btn" id="s-clear-visited">Clear</button></div>
   </div>
+  ${backupSectionHtml(importCode)}
   <div class="settings-section">
     <button class="settings-reset-btn" id="s-reset">Reset to defaults</button>
   </div>`;
 }
 
-function openSettingsPanel() {
+/** Open the settings panel; `importCode` (from a restore link) prefills the import box. */
+function openSettingsPanel(importCode = '') {
   settingsPanel.classList.add('open');
   settingsOverlay.classList.add('open');
   document.body.style.overflow = 'hidden';
-  settingsBody.innerHTML = _settingsHtml();
+  settingsBody.innerHTML = _settingsHtml(typeof importCode === 'string' ? importCode : '');
   bindSettingEvents();
+  if (typeof importCode === 'string' && importCode) settingsBody.querySelector('#s-backup')?.scrollIntoView({ block: 'start' });
 }
+
+// Keep the backup code/link current as settings change (runs after each control's own handler).
+settingsBody.addEventListener('change', e => {
+  if (!e.target.closest('#s-backup')) refreshBackupFields(settingsBody);
+});
 
 function bindSettingEvents() {
   settingsBody.querySelector('#s-theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); });
@@ -193,6 +202,7 @@ function bindSettingEvents() {
     settingsBody.innerHTML = _settingsHtml();
     bindSettingEvents();
   });
+  bindBackup(settingsBody);
 }
 
 function closeSettingsPanel() {
@@ -229,4 +239,4 @@ document.getElementById('settings-close').addEventListener('click', closeSetting
 settingsOverlay.addEventListener('click', closeSettingsPanel);
 document.getElementById('bn-settings').addEventListener('click', openSettingsPanel);
 
-export { closeSettingsPanel, settingsPanel };
+export { openSettingsPanel, closeSettingsPanel, settingsPanel };

@@ -44,6 +44,7 @@ RDVWR is a single-page Reddit viewer. A Python/Flask backend proxies Reddit's AP
 - User profiles (posts + comments)
 - Subreddit, user and post search
 - Local saved posts and subscriptions, plus read tracking (all stored in your browser)
+- Settings backup: copy a restore link or settings code to move settings, filters and subscriptions to another browser
 - Filters that hide posts from chosen subreddits, users, or with chosen words in the title
 - Atom feeds for subreddits and users at Reddit's own URLs (`/r/pics.rss`, `/r/pics/top.rss?t=week`, `/user/name.rss`)
 - Optional Reddit login for voting, commenting and posting (see [Reddit login](#reddit-login))
