@@ -17,7 +17,7 @@ Do not install or run Playwright (or any other browser-automation tool) to verif
 Single-page Reddit viewer. Python/Flask backend proxies Reddit API; ES module frontend.
 
 **Backend files:** `app.py` (Flask app setup + blueprint registration only) at the root, plus packages:
-- `routes/` — one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `pages`, `ns_settings`, `mediaproxy`, `passthrough`, `account`, `health` (registered in `routes/__init__.py`); plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`.
+- `routes/` — one blueprint per area: `media`, `downloads`, `search`, `subreddit`, `home`, `comments`, `avatars`, `users`, `live`, `embeds`, `pages`, `ns_settings`, `mediaproxy`, `passthrough`, `account`, `health`, `rss` (registered in `routes/__init__.py`); plus `routes/page_data.py`, not a blueprint, which builds the data for `pages`.
 - `core/` — `helpers.py` (shared constants, allowlist regexes, `TTLCache`, `server_cache`/`cached_json`/`validate_params`, `hydrate_linked_posts`, `UpstreamError`), `template_helpers.py` (Jinja filters/globals), `ns_prefs.py` (noscript preference cookies), `filters.py` (visitor post filters by subreddit/user/keyword, mirrored by `static/filters.js`), `base_path.py`, `ratelimit.py` (per-IP request limits, `RATE_LIMIT` / `RATE_LIMIT_DOWNLOADS`).
 - `parsing/` — `media_detection.py` (media helpers), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers).
 - `reddit/` — `client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every ~10 min; disable with `REDDIT_OAUTH=0`), `login.py`, `actions.py`, `media.py`, `owner.py`, `budget.py` (upstream budget), `waf.py` (WAF cooldown: pauses upstream calls after a burst of Reddit block pages; `reddit_get(..., waf_key=...)` skips an outright-blocked endpoint for an hour), `archive.py` (Arctic Shift fallback for user profiles).
@@ -40,6 +40,7 @@ Keep each Python file under ~500 lines — add new endpoints to the matching `ro
 - `/img` (image proxy), `/resolve` (redirect follower), `/download`, `/download/gallery`, `/download/reddit-video`
 - `/imgur/album/<id>`, `/live/<id>`, `/live/<id>/updates`, `/translate`, `/og-image`
 - `GET /healthz` (not under `/api`): JSON liveness probe, 503 when degraded
+- Atom feeds (not under `/api`, `routes/rss.py`): `/r/<sub>.rss`, `/r/<sub>/<sort>.rss`, `/user/<u>.rss`
 - Page routes (`routes/pages.py`) render `index.html` for every SPA URL; `/r/...json`-style Reddit URLs are proxied by `routes/passthrough.py`
 
 **Shared fetchers:** each `routes/` module exposes `fetch_*` functions (e.g. `subreddit.fetch_feed`, `users.fetch_user_overview`) that return plain data and raise `helpers.UpstreamError` on failure. Both the `/api/*` endpoints and the page routes call them — add new Reddit calls as a `fetch_*` function rather than inline in an endpoint, so the no-JS page can reuse it.

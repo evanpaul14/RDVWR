@@ -39,7 +39,9 @@ export function buildSubSortHtml(sort='top', time='all', sub='') {
   const isPop = sub.toLowerCase() === 'popular';
   const sidebarBtn = isPop ? '' : `<button class="sidebar-toggle" id="sidebar-toggle-btn" aria-expanded="false">sidebar</button>`;
   const wikiBtn = isPop ? '' : `<a class="sort-btn sort-btn-wiki" href="${BASE}/r/${escHtml(sub)}/wiki" data-nav="/r/${escHtml(sub)}/wiki">wiki</a>`;
-  return btns + (sort==='top'||sort==='controversial' ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn;
+  const timed = sort==='top'||sort==='controversial';
+  const rssBtn = sub ? `<a class="sort-btn sort-btn-wiki" href="${BASE}/r/${escHtml(sub)}/${escHtml(sort)}.rss${timed && time ? `?t=${escHtml(time)}` : ''}" title="Atom feed for this listing" target="_blank" rel="noopener">rss</a>` : '';
+  return btns + (timed ? buildTimeFilterHtml(time) : '') + sidebarBtn + wikiBtn + rssBtn;
 }
 
 // ── Feed utilities ────────────────────────────────────────────────────────────

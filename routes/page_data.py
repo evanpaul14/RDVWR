@@ -169,6 +169,7 @@ def build_subreddit(sub, sort, t, after, quarantine_opt_in=False):
         "continue_url": page_url(f"/r/{sub}/{sort}", t=t if sort in TIMED_SORTS else '', quarantine_opt_in=1)
                         if err and err.state == 'quarantined' else None,
         "show_wiki": real_sub,
+        "rss_url": page_url(f"/r/{sub}/{sort}.rss", t=t if sort in TIMED_SORTS else '', quarantine_opt_in=opt_in),
     }, scope_sub=sub if real_sub else None, **hydration)
 
 

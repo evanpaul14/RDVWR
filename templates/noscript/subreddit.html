@@ -40,7 +40,7 @@
   </div>
 {% endif %}
 
-{% set wiki_link %}{% if page.show_wiki %}<a class="sort-btn sort-btn-wiki" href="/r/{{ page.sub }}/wiki">wiki</a>{% endif %}{% endset %}
+{% set wiki_link %}{% if page.show_wiki %}<a class="sort-btn sort-btn-wiki" href="/r/{{ page.sub }}/wiki">wiki</a>{% endif %}<a class="sort-btn sort-btn-wiki" href="{{ page.rss_url }}" title="Atom feed for this listing" target="_blank" rel="noopener">rss</a>{% endset %}
 {% if page.error and page.error.state == 'quarantined' %}
   <div class="feed-list">
     <div class="state state-quarantine">
