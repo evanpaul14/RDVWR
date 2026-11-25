@@ -320,9 +320,6 @@ class TTLCache:
 # of Referrer-Policy, so it's the primary signal; Origin/Referer are the fallback for the
 # rare browser that omits it. A request with none of the three is either a very old browser
 # or a non-browser client (curl, a script) — treated as disallowed either way.
-#
-# Rate limiting is handled at the edge (Vercel Firewall rate-limiting rules on the
-# deployed project), not here — see README "Rate limiting".
 SAME_SITE_VALUES = {'same-origin', 'same-site'}
 
 

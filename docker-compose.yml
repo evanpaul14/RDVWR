@@ -19,6 +19,9 @@ services:
       # response cache), otherwise each worker's cache is independent.
       - WEB_CONCURRENCY=${WEB_CONCURRENCY:-1}
       - REDIS_URL=${REDIS_URL:-}
+      # Requests per client IP per minute; 0 turns a limit off.
+      - RATE_LIMIT=${RATE_LIMIT:-600}
+      - RATE_LIMIT_DOWNLOADS=${RATE_LIMIT_DOWNLOADS:-20}
       # Outbound proxy for Reddit/media requests (e.g. socks5h://127.0.0.1:9050).
       - ALL_PROXY=${ALL_PROXY:-}
       - HTTP_PROXY=${HTTP_PROXY:-}
@@ -51,9 +54,6 @@ services:
   # redis:
   #   image: redis:7-alpine
   #   restart: unless-stopped
-
-# No client-facing rate limiting happens in the app — put it in front, e.g. with
-# nginx's limit_req_zone. See README "Rate limiting".
 
 volumes:
   rdvwr-data:

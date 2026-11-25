@@ -5,6 +5,7 @@ from flask import Flask, g, jsonify, request
 from flask_compress import Compress
 from core import template_helpers
 from core import base_path
+from core import ratelimit
 from core.helpers import CACHE_TTL_STATIC, is_same_site_request
 from routes import register_all
 from core import lang as _lang
@@ -19,6 +20,9 @@ Compress(app)
 
 template_helpers.register(app)
 base_path.register(app)
+
+
+ratelimit.register(app)
 
 
 @app.before_request
@@ -38,7 +42,7 @@ _GATE_EXEMPT_PREFIXES = ('/api/img', '/api/m/', '/api/redgifs/media/', '/api/dow
 
 # Keep /api/* as the site's own backend, not a public JSON API anyone can hit directly
 # (curl, another app, a bot). See helpers.is_same_site_request for what this looks at
-# and why. Rate limiting is handled separately at the edge (Vercel Firewall).
+# and why.
 @app.before_request
 def _gate_api():
     if (request.path.startswith('/api/') and not request.path.startswith(_GATE_EXEMPT_PREFIXES)

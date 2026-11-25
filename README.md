@@ -136,6 +136,8 @@ python3 -m pytest tests/
 | `REDDIT_LOGIN_FILE` | `.reddit_login.json` next to the app | Where the stored Reddit login cookies are saved. The Docker image sets `/data/.reddit_login.json`. |
 | `REDDIT_LOGIN_OWNER_KEY` | _(unset)_ | With `REDDIT_LOGIN=1`, a long random passphrase that lets you use the logged-in account from other devices behind a reverse proxy: enter it once per browser at `/auth/owner`. Serve over HTTPS. |
 | `REDIS_URL` | _(unset)_ | Backs the response cache with Redis instead of in-process state, so it stays correct across multiple `WEB_CONCURRENCY` workers or horizontally-scaled instances. Leave unset for a single-instance deployment. |
+| `RATE_LIMIT` | `600` | Requests per minute allowed from one client IP, across the whole app (static files and `/healthz` aren't counted). Over it, requests get a 429. `0` turns it off. Behind a reverse proxy on the same machine, the client IP is read from `CF-Connecting-IP`, `X-Real-IP` or `X-Forwarded-For`. Counted per worker unless `REDIS_URL` is set. |
+| `RATE_LIMIT_DOWNLOADS` | `20` | A separate, tighter per-minute limit for the `/api/download*` endpoints. `0` turns it off. |
 | `WEB_CONCURRENCY` | `1` | gunicorn worker count. Only raise this once `REDIS_URL` is set — otherwise each worker has its own cache. |
 | `ALL_PROXY` | _(unset)_ | Forward proxy for all outbound Reddit/media requests, e.g. `socks5h://127.0.0.1:9050` or `http://user:pass@host:port`. Sets both `HTTP_PROXY` and `HTTPS_PROXY` at once (same convention as [Redlib](https://github.com/redlib-org/redlib)). |
 | `HTTP_PROXY` / `HTTPS_PROXY` | _(unset)_ | Same as `ALL_PROXY` but scoped to one scheme. `http://`, `https://`, `socks4://`, `socks4a://`, `socks5://`, and `socks5h://` proxy URLs are all supported. |
