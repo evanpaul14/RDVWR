@@ -17,9 +17,18 @@ jobs:
         with:
           python-version: '3.x'
 
-      - run: pip install requests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: pip install -r requirements.txt
 
       - run: python3 scripts/update_vendor.py
+
+      - name: Tests
+        run: |
+          python3 -m pytest tests/ -q
+          node --test tests/*.mjs
 
       - name: Commit if changed
         run: |

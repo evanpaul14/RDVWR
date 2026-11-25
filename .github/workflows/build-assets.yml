@@ -1,0 +1,49 @@
+name: Build JS and CSS
+
+# templates/index.html loads the committed static/app.bundle.js and static/style.min.css,
+# so rebuild them whenever their sources change on main and commit the result.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'static/**.js'
+      - '!static/app.bundle.js'
+      - '!static/*.min.js'
+      - 'static/style.css'
+  workflow_dispatch:
+
+concurrency:
+  group: build-assets
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Pinned so the output matches local builds byte for byte.
+      - name: Build
+        run: |
+          npx --yes esbuild@0.28.2 static/app.js --bundle --minify --outfile=static/app.bundle.js
+          npx --yes esbuild@0.28.2 static/style.css --minify --outfile=static/style.min.css
+
+      - name: Frontend module tests
+        run: node --test tests/*.mjs
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/app.bundle.js static/style.min.css
+          git diff --cached --quiet && exit 0
+          git commit -m "Rebuild JS bundle and minified CSS"
+          git pull --rebase
+          git push

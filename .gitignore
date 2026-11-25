@@ -10,3 +10,6 @@ benchmark.py
 .vercel
 .env*
 .reddit_login.json*
+benchmarks/
+promo/
+.DS_Store
