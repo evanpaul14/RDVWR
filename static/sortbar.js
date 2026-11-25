@@ -40,7 +40,7 @@ sortBar.addEventListener('click', e => {
     const newSort = ssortBtn.dataset.ssort;
     if (newSort === state.searchSort) return;
     state.searchSort = newSort; state.searchTime = 'all';
-    navigate(buildSearchUrl(), { replace:true });
+    navigate(buildSearchUrl());
     return;
   }
   const ptabBtn = e.target.closest('.sort-btn[data-ptab]');
@@ -67,15 +67,14 @@ sortBar.addEventListener('click', e => {
   if (newSort === state.currentSort) return;
   state.currentSort = newSort; state.currentTime = newSort === 'controversial' ? 'day' : 'all';
   state.afterToken = null;
-  window.scrollTo({top:0, behavior:'instant'});
   if (state.subsMode) {
-    navigate(`${state.subsBase}/${state.currentSort}`, { replace:true });
+    navigate(`${state.subsBase}/${state.currentSort}`);
   } else if (state.homeMode) {
-    navigate(`/home/${state.currentSort}`, { replace:true });
+    navigate(`/home/${state.currentSort}`);
   } else if (state.multiMode) {
-    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`, { replace:true });
+    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}`);
   } else {
-    navigate(`/r/${state.currentSub}/${state.currentSort}`, { replace:true });
+    navigate(`/r/${state.currentSub}/${state.currentSort}`);
   }
 });
 
@@ -84,20 +83,20 @@ sortBar.addEventListener('change', e => {
   const nsfwOnlyCheck = e.target.closest('#nsfw-only-check');
   if (nsfwOnlyCheck && state.searchMode) {
     state.searchNsfwOnly = nsfwOnlyCheck.checked;
-    navigate(buildSearchUrl(), { replace:true });
+    navigate(buildSearchUrl());
     return;
   }
   const scopeCheck = e.target.closest('#scope-check');
   if (scopeCheck && state.searchMode) {
     state.searchSub = scopeCheck.checked ? state.searchSubStored : '';
-    navigate(buildSearchUrl(), { replace:true });
+    navigate(buildSearchUrl());
     return;
   }
   const sel = e.target.closest('#time-filter');
   if (!sel) return;
   if (state.searchMode) {
     state.searchTime = sel.value;
-    navigate(buildSearchUrl(), { replace:true });
+    navigate(buildSearchUrl());
   } else if (state.profileMode) {
     state.profileTime = sel.value;
     sortBar.innerHTML = buildProfileSortHtml(state.profileTab, state.profileSort, state.profileTime);
@@ -105,22 +104,18 @@ sortBar.addEventListener('change', e => {
   } else if (state.subsMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`${state.subsBase}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
+    navigate(`${state.subsBase}/${state.currentSort}?t=${state.currentTime}`);
   } else if (state.homeMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/home/${state.currentSort}?t=${state.currentTime}`, { replace:true });
+    navigate(`/home/${state.currentSort}?t=${state.currentTime}`);
   } else if (state.multiMode) {
     state.currentTime = sel.value;
     state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
+    navigate(`/user/${state.multiUsername}/m/${state.multiName}/${state.currentSort}?t=${state.currentTime}`);
   } else {
     state.currentTime = sel.value;
     state.afterToken = null;
-    window.scrollTo({top:0, behavior:'instant'});
-    navigate(`/r/${state.currentSub}/${state.currentSort}?t=${state.currentTime}`, { replace:true });
+    navigate(`/r/${state.currentSub}/${state.currentSort}?t=${state.currentTime}`);
   }
 });
