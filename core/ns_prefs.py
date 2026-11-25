@@ -8,7 +8,7 @@ DEFAULT_SETTINGS value, same as settings.js does.
 """
 from collections import namedtuple
 from flask import request
-from core.helpers import DEFAULT_SETTINGS, SUB_SORTS, TIME_FILTERS, COMMENT_SORTS, THEMES, LAYOUTS
+from core.config import DEFAULT_SETTINGS, SUB_SORTS, TIME_FILTERS, COMMENT_SORTS, THEMES, LAYOUTS
 
 COOKIE_MAX_AGE = 31536000  # 1 year
 

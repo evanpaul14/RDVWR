@@ -7,7 +7,9 @@ import html as html_lib
 from urllib.parse import urljoin, urlparse, urlunparse
 from flask import Blueprint, jsonify, request, make_response
 from reddit.client import SESSION, HEADERS, _get_device, recent_user_agent
-from core.helpers import TTLCache, _CACHE_MISS, cached_json, checked_url_host, log
+from core.cache import TTLCache, CACHE_MISS, cached_json
+from core.urls import checked_url_host
+from core.helpers import log
 
 bp = Blueprint("embeds", __name__)
 
@@ -94,7 +96,7 @@ def get_og_image():
     if not _resolve_ssrf_safe(hostname):
         return jsonify({"error": "URL not allowed"}), 403
     cached = _og_cache.get(url)
-    if cached is not _CACHE_MISS:
+    if cached is not CACHE_MISS:
         return cached_json(cached, 3600)
     try:
         r = _og_fetch(url)
@@ -129,7 +131,7 @@ def get_devvit_embed():
     if not permalink or not _DEVVIT_URL_RE.match(permalink):
         return jsonify({'error': 'Invalid URL'}), 400
     cached = _devvit_cache.get(permalink)
-    if cached is not _CACHE_MISS:
+    if cached is not CACHE_MISS:
         resp = make_response(jsonify(cached))
         resp.headers['Cache-Control'] = 'private, no-store'
         return resp

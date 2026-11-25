@@ -5,7 +5,8 @@ The anonymous device identity the app uses never sees NSFW results, whatever the
 this fallback searches SFW content only."""
 from gql.client import gql_query
 from gql.posts import POSTS_FLAGS, posts_from_nodes
-from core.helpers import FEED_LIMIT, TIME_FILTERS
+from core.helpers import FEED_LIMIT
+from core.config import TIME_FILTERS
 from parsing.media_detection import clean_url
 from datetime import datetime
 

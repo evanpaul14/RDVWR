@@ -6,7 +6,7 @@ import sys
 import time
 from flask import Blueprint, jsonify
 from gql import client as gql_client
-from core import helpers
+from core import cache
 from reddit import client as reddit_client
 from reddit import waf
 
@@ -54,10 +54,10 @@ def _gql_state():
 
 
 def _cache_state():
-    if helpers._redis_client is None:
+    if cache.redis_client is None:
         return {"backend": "memory", "ok": True}
     try:
-        helpers._redis_client.ping()
+        cache.redis_client.ping()
         return {"backend": "redis", "ok": True}
     except Exception:
         return {"backend": "redis", "ok": False}

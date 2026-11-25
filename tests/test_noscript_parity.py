@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit, urlencode
 import pytest
 from bs4 import BeautifulSoup
 from app import app
-from core import helpers, template_helpers
+from core import template_helpers, cache, config
 from core.ns_prefs import PREFS
 from parsing.media_detection import process_post
 from routes import page_data, pages, ns_settings
@@ -16,8 +16,8 @@ from routes.comments import _parse_comment_fields
 
 @pytest.fixture
 def client(monkeypatch):
-    helpers._fetch_cache.clear()
-    helpers._view_cache.clear()
+    cache._fetch_cache.clear()
+    cache._view_cache.clear()
     monkeypatch.setattr(login, 'request_account_active', lambda: False)
     monkeypatch.setattr(login, 'login_status', lambda: None)
     monkeypatch.setattr(login, 'request_cookie_header', lambda: None)
@@ -65,9 +65,9 @@ def test_all_offered_settings_round_trip_and_reset_to_deployment_defaults(client
     # An unchecked checkbox must override a deployment default that is on.
     client.post('/settings', data={'theme': 'dark', 'layout': 'card', 'personalized_home_shown': '1'})
     assert not soup(client.get('/settings')).find(attrs={'name': 'show_awards'}).has_attr('checked')
-    monkeypatch.setitem(helpers.DEFAULT_SETTINGS, 'showAvatars', True)
-    monkeypatch.setitem(helpers.DEFAULT_SETTINGS, 'layout', 'minimal')
-    monkeypatch.setitem(helpers.DEFAULT_SETTINGS, 'homeFeed', 'popular')
+    monkeypatch.setitem(config.DEFAULT_SETTINGS, 'showAvatars', True)
+    monkeypatch.setitem(config.DEFAULT_SETTINGS, 'layout', 'minimal')
+    monkeypatch.setitem(config.DEFAULT_SETTINGS, 'homeFeed', 'popular')
     response = client.post('/settings', data={'reset': '1', 'next': '/settings'})
     assert response.status_code == 302
     assert all(f'{pref.cookie}=;' in '\n'.join(response.headers.getlist('Set-Cookie')) for pref in PREFS.values())
@@ -107,7 +107,7 @@ def test_invalid_setting_values_revert_to_configured_defaults(client, logged_in,
     pref = PREFS[name]
     client.set_cookie(pref.cookie, 'bogus')
     control = soup(client.get('/settings')).find(attrs={'name': name})
-    assert control.select_one('option[selected]')['value'] == helpers.DEFAULT_SETTINGS[pref.default]
+    assert control.select_one('option[selected]')['value'] == config.DEFAULT_SETTINGS[pref.default]
     result = client.post('/settings', data={name: 'bogus', 'personalized_home_shown': '1'})
     assert pref.cookie + '=;' in '\n'.join(result.headers.getlist('Set-Cookie'))
 

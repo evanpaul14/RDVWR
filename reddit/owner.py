@@ -7,12 +7,11 @@ request from the server's own machine. Unset, none of this exists. Changing the 
 invalidates every owner cookie. Serve over HTTPS so the key and cookie aren't sent in clear."""
 import hashlib
 import hmac
-import os
 import time
 
 from flask import request
+from core.config import REDDIT_LOGIN_OWNER_KEY as KEY
 
-KEY = os.environ.get('REDDIT_LOGIN_OWNER_KEY', '').strip()
 COOKIE = 'rdvwr_owner'
 MAX_AGE = 90 * 86400
 _FAIL_LIMIT, _FAIL_WINDOW = 5, 600

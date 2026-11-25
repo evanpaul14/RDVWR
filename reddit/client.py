@@ -6,6 +6,7 @@ import uuid as _uuid_mod
 import base64
 import logging
 import requests
+from core.config import REDDIT_OAUTH
 from reddit.budget import budgeted, request as budget_request, remaining, backoff
 from curl_cffi import requests as cffi_requests
 from reddit.waf import note_waf_block, waf_blocked_response, waf_cooling, waf_endpoint_blocked
@@ -44,8 +45,6 @@ SESSION.mount("http://", _ADAPTER)
 # Set by reddit_login: returns a bearer token when the current request should read as the
 # logged-in Reddit account (a local request while logged in), else None.
 USER_TOKEN_PROVIDER = None
-
-REDDIT_OAUTH = os.environ.get('REDDIT_OAUTH', '1').strip().lower() not in ('0', 'false', 'no', 'off')
 
 # ── Reddit OAuth spoofing ─────────────────────────────────────────────────────
 

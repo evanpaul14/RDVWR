@@ -11,7 +11,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from core import helpers
+from core import helpers, cache, config
 from reddit import client as reddit_client
 from app import app
 from routes import media as media_routes, embeds as embeds_routes, comments as comments_routes, users as users_routes, subreddit as subreddit_routes
@@ -64,8 +64,8 @@ def _session_get(data=None, status_code=200, **kw):
 def no_oauth(monkeypatch):
     """Force reddit_get to use SESSION (not cffi) so SESSION.get mocks work."""
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
-    helpers._view_cache.clear()
-    helpers._fetch_cache.clear()
+    cache._view_cache.clear()
+    cache._fetch_cache.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -1429,32 +1429,32 @@ class TestParseLiveUpdates:
 
 class TestTTLCache:
     def test_expired_entries_swept_before_live_ones_evicted(self):
-        cache = helpers.TTLCache(3)
-        with patch("core.helpers.time.time", return_value=1000.0):
-            cache.set("live", 1, 5000)
-            cache.set("old1", 2, 10)
-            cache.set("old2", 3, 10)
-        with patch("core.helpers.time.time", return_value=2000.0):
-            cache.set("new", 4, 600)
-            assert cache.get("live") == 1
-            assert cache.get("new") == 4
-            assert len(cache) == 2
+        c = cache.TTLCache(3)
+        with patch("core.cache.time.time", return_value=1000.0):
+            c.set("live", 1, 5000)
+            c.set("old1", 2, 10)
+            c.set("old2", 3, 10)
+        with patch("core.cache.time.time", return_value=2000.0):
+            c.set("new", 4, 600)
+            assert c.get("live") == 1
+            assert c.get("new") == 4
+            assert len(c) == 2
 
     def test_expired_get_is_miss_and_removed(self):
-        cache = helpers.TTLCache(10)
-        with patch("core.helpers.time.time", return_value=1000.0):
-            cache.set("k", "v", 5)
-        with patch("core.helpers.time.time", return_value=1010.0):
-            assert cache.get("k") is helpers._CACHE_MISS
-        assert len(cache) == 0
+        c = cache.TTLCache(10)
+        with patch("core.cache.time.time", return_value=1000.0):
+            c.set("k", "v", 5)
+        with patch("core.cache.time.time", return_value=1010.0):
+            assert c.get("k") is cache.CACHE_MISS
+        assert len(c) == 0
 
     def test_oldest_evicted_when_nothing_expired(self):
-        cache = helpers.TTLCache(2)
-        cache.set("a", 1, 600)
-        cache.set("b", 2, 600)
-        cache.set("c", 3, 600)
-        assert cache.get("a") is helpers._CACHE_MISS
-        assert cache.get("c") == 3
+        c = cache.TTLCache(2)
+        c.set("a", 1, 600)
+        c.set("b", 2, 600)
+        c.set("c", 3, 600)
+        assert c.get("a") is cache.CACHE_MISS
+        assert c.get("c") == 3
 
 
 # ── server_cache ──────────────────────────────────────────────────────────────
@@ -1466,7 +1466,7 @@ class TestServerCache:
         mini = Flask("server_cache_test")
 
         @mini.route("/x")
-        @helpers.server_cache(60)
+        @cache.server_cache(60)
         def view():
             calls.append(1)
             return jsonify({"n": len(calls), "s": "é"})
@@ -2338,8 +2338,8 @@ def test_healthz_degraded_when_every_token_expired():
 
 class TestFeedTimeDefault:
     def test_top_and_controversial_default_to_configured_time(self):
-        assert helpers.feed_time("top", "") == helpers.DEFAULT_SETTINGS["subTime"]
-        assert helpers.feed_time("controversial", "bogus") == helpers.DEFAULT_SETTINGS["subTime"]
+        assert helpers.feed_time("top", "") == config.DEFAULT_SETTINGS["subTime"]
+        assert helpers.feed_time("controversial", "bogus") == config.DEFAULT_SETTINGS["subTime"]
         assert helpers.feed_time("top", "week") == "week"
         assert helpers.feed_time("hot", "") == ""
 
@@ -2347,4 +2347,4 @@ class TestFeedTimeDefault:
     def test_missing_t_is_sent_as_default(self, mock_get, client):
         mock_get.return_value = _session_get({"data": {"children": [], "after": None}})
         client.get("/api/r/python?sort=top")
-        assert mock_get.call_args.kwargs["params"]["t"] == helpers.DEFAULT_SETTINGS["subTime"]
+        assert mock_get.call_args.kwargs["params"]["t"] == config.DEFAULT_SETTINGS["subTime"]

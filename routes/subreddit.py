@@ -11,10 +11,11 @@ from reddit.scrape import fetch_listing_ids
 from gql.posts import fetch_gql_feed, fetch_gql_multireddit
 from gql.subreddit import fetch_gql_about, fetch_gql_rules
 from gql.wiki import fetch_gql_wiki
-from core.helpers import (fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, FEED_LIMIT, FEED_SORTS,
-                     SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
-                     add_time_param, feed_time, fetch_posts_by_id, cached_json, error_response, server_cache, validate_params,
-                     hydrate_linked_posts, is_waf_block, log, UpstreamError)
+from core.cache import fetch_cache, CACHE_TTL_FEED, CACHE_TTL_SUBREDDIT, cached_json, server_cache
+from core.helpers import (FEED_LIMIT, SUBREDDIT_RE, USERNAME_RE, POST_ID_RE, MULTINAME_RE,
+    add_time_param, feed_time, fetch_posts_by_id, error_response, validate_params,
+    hydrate_linked_posts, is_waf_block, log, UpstreamError)
+from core.config import FEED_SORTS
 
 bp = Blueprint("subreddit", __name__)
 

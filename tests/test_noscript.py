@@ -11,7 +11,7 @@ import re
 import pytest
 from unittest.mock import patch
 
-from core import helpers
+from core import cache, config
 from reddit import client as reddit_client
 from app import app
 from parsing.reddit_html import sanitize_reddit_html
@@ -21,8 +21,8 @@ from tests.test_routes import MockResponse, _make_listing, _make_post
 @pytest.fixture(autouse=True)
 def no_oauth(monkeypatch):
     monkeypatch.setattr(reddit_client, "REDDIT_OAUTH", False)
-    helpers._view_cache.clear()
-    helpers._fetch_cache.clear()
+    cache._view_cache.clear()
+    cache._fetch_cache.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -80,16 +80,16 @@ class TestPrefs:
         from core.ns_prefs import all_prefs
         with app.test_request_context("/"):
             prefs = all_prefs()
-        assert prefs["theme"] == helpers.DEFAULT_SETTINGS["theme"]
+        assert prefs["theme"] == config.DEFAULT_SETTINGS["theme"]
 
     def test_invalid_enum_cookie_falls_back_to_default(self):
         from core.ns_prefs import get_pref
         with app.test_request_context("/", headers={"Cookie": "ns_layout=bogus"}):
-            assert get_pref("layout") == helpers.DEFAULT_SETTINGS["layout"]
+            assert get_pref("layout") == config.DEFAULT_SETTINGS["layout"]
 
     def test_off_cookie_overrides_an_on_default(self, monkeypatch):
         from core.ns_prefs import get_pref
-        monkeypatch.setitem(helpers.DEFAULT_SETTINGS, "nsfwBlur", True)
+        monkeypatch.setitem(config.DEFAULT_SETTINGS, "nsfwBlur", True)
         with app.test_request_context("/", headers={"Cookie": "ns_nsfw_blur=0"}):
             assert get_pref("nsfw_blur") is False
 

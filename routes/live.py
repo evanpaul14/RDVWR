@@ -4,7 +4,8 @@ import re
 from flask import Blueprint, jsonify, request
 from reddit.client import reddit_get
 from parsing.reddit_html import clean_reddit_html
-from core.helpers import cached_json, error_response, parallel, log, UpstreamError
+from core.cache import cached_json
+from core.helpers import error_response, parallel, log, UpstreamError
 
 bp = Blueprint("live", __name__)
 

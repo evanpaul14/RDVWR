@@ -2,16 +2,18 @@
 from reddit.budget import budgeted
 import time
 from flask import Blueprint, request
-from parsing.media_detection import process_post, _parse_awards, DISABLE_NSFW
+from parsing.media_detection import process_post, _parse_awards
+from core.config import DISABLE_NSFW
 from core.lang import lang_fields
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
 from reddit.archive import fetch_archived_comment_tree, fetch_archived_post
 from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from gql.posts import fetch_gql_post
-from core.helpers import (fetch_cache, CACHE_TTL_FEED, COMMENTS_LIMIT, COMMENT_SORTS, SUBREDDIT_RE, POST_ID_RE, COMMENT_ID_RE,
-                     cached_json, error_response, server_cache, validate_params, hydrate_linked_posts,
-                     is_waf_block, parallel, UpstreamError, log)
+from core.cache import fetch_cache, CACHE_TTL_FEED, cached_json, server_cache
+from core.helpers import (COMMENTS_LIMIT, SUBREDDIT_RE, POST_ID_RE, COMMENT_ID_RE, error_response,
+    validate_params, hydrate_linked_posts, is_waf_block, parallel, UpstreamError, log)
+from core.config import COMMENT_SORTS
 from routes.subreddit import _subreddit_error_state
 from routes.avatars import _embed_comment_avatars
 

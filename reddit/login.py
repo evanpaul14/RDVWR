@@ -19,14 +19,12 @@ from urllib.parse import urlsplit
 
 from curl_cffi import requests as cffi_requests
 from flask import has_request_context, request
+from core.config import REDDIT_LOGIN as ENABLED, REDDIT_LOGIN_FILE as STORE_PATH
 from reddit import client as reddit_client
 from reddit import owner as reddit_owner
 from reddit.client import PROXIES
 
 log = logging.getLogger(__name__)
-
-ENABLED = os.environ.get('REDDIT_LOGIN', '0').strip().lower() in ('1', 'true', 'yes', 'on')
-STORE_PATH = os.environ.get('REDDIT_LOGIN_FILE') or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.reddit_login.json')
 
 _lock = threading.Lock()
 _token_lock = threading.Lock()

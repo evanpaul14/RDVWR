@@ -5,7 +5,8 @@ from flask import Blueprint, jsonify, request
 from parsing.media_detection import clean_url
 from reddit.client import reddit_get
 from gql.client import fetch_gql_user_about
-from core.helpers import USERNAME_RE, TTLCache, _CACHE_MISS, cached_json, is_waf_block, log
+from core.helpers import USERNAME_RE, is_waf_block, log
+from core.cache import TTLCache, CACHE_MISS, cached_json
 
 bp = Blueprint("avatars", __name__)
 
@@ -29,7 +30,7 @@ AVATAR_CACHE_TTL = 6 * 3600
 
 def _fetch_user_icon(username):
     hit = _avatar_cache.get(username)
-    if hit is not _CACHE_MISS:
+    if hit is not CACHE_MISS:
         return hit
     icon = None
     try:
@@ -88,7 +89,7 @@ def _fetch_user_icons_batch(pairs):
     to_fetch = {}  # fullname -> author
     for author, fullname in pairs:
         hit = _avatar_cache.get(author)
-        if hit is not _CACHE_MISS:
+        if hit is not CACHE_MISS:
             result[author] = hit
         elif fullname:
             to_fetch[fullname] = author

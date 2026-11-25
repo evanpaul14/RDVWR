@@ -7,8 +7,8 @@ marking posts read on scroll and clearing read history (both use
 localStorage + scroll tracking), and disabling infinite scroll (there's no infinite
 scroll here to disable — noscript already paginates via plain "next page" links)."""
 from flask import Blueprint, request, render_template, redirect
-from core.helpers import DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, NSFW_ONLY_SEARCH, safe_next
-from parsing.media_detection import DISABLE_NSFW
+from core.config import DISABLE_DOWNLOADS, DISABLE_NSFW, DISABLE_PERSONALIZED_HOME, NSFW_ONLY_SEARCH
+from core.urls import safe_next
 from reddit import login as reddit_login
 from core.ns_prefs import PREFS, all_prefs, set_pref_cookie
 from core.filters import FILTERS, all_filters, set_filter_cookie

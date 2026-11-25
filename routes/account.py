@@ -4,7 +4,8 @@ rules as routes/actions.py; /api/* is for the JS app, /actions/account/* are the
 from reddit.budget import budgeted
 import re
 from flask import Blueprint, jsonify, redirect, request
-from core.helpers import UpstreamError, safe_next
+from core.helpers import UpstreamError
+from core.urls import safe_next
 from reddit.client import reddit_get
 from reddit import actions as reddit_actions
 from reddit import login as reddit_login

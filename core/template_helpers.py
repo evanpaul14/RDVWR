@@ -10,8 +10,8 @@ from urllib.parse import urlencode, urlparse, parse_qsl, parse_qs
 from flask import g, request, has_request_context, has_app_context, current_app
 from markupsafe import Markup
 from reddit import login as reddit_login
-from parsing.media_detection import DISABLE_NSFW
-from core.helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, NSFW_ONLY_SEARCH
+from core.config import (DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_NSFW, DISABLE_PERSONALIZED_HOME,
+                         NSFW_ONLY_SEARCH)
 from parsing.reddit_html import EXTERNAL_MEDIA_CLASS
 from parsing.markdown import render_markdown
 from core.ns_prefs import all_prefs, get_pref

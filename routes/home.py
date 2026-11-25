@@ -12,8 +12,10 @@ from reddit import login as reddit_login
 from reddit.client import reddit_get, PROXIES
 from parsing.shreddit import _parse_shreddit_post
 from gql.posts import fetch_gql_frontpage
-from core.helpers import (fetch_cache, CACHE_TTL_FEED, DISABLE_PERSONALIZED_HOME, FEED_LIMIT, FEED_SORTS, add_time_param, feed_time,
-                     cached_json, error_response, fetch_posts_by_id, hydrate_linked_posts, is_waf_block, log, UpstreamError)
+from core.cache import fetch_cache, CACHE_TTL_FEED, cached_json
+from core.config import DISABLE_PERSONALIZED_HOME, FEED_SORTS
+from core.helpers import (FEED_LIMIT, add_time_param, feed_time, error_response, fetch_posts_by_id,
+    hydrate_linked_posts, is_waf_block, log, UpstreamError)
 
 bp = Blueprint("home", __name__)
 

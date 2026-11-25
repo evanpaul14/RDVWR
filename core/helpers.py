@@ -1,70 +1,28 @@
-"""Shared constants, caching, and request helpers used across route modules."""
-import os
+"""Shared request helpers for the route modules: allowlist regexes, upstream errors,
+param validation, the same-site gate, and batch post fetching.
+
+Settings and allowed sort/time values live in core/config.py, caching in core/cache.py,
+URL checks in core/urls.py."""
 import re
-import copy
-import json
-import time
 import secrets
 import logging
-import threading
+import contextvars
+from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from urllib.parse import urlsplit
-import contextvars
-from concurrent.futures import ThreadPoolExecutor, Future, TimeoutError as FutureTimeout
-from inspect import signature
-from reddit.budget import remaining
-import idna
-import requests
-from urllib3.exceptions import LocationParseError
-from urllib3.util import parse_url
-from flask import jsonify, request, Response, make_response
+from flask import jsonify, request
+from core.config import DEFAULT_SETTINGS, TIME_FILTERS
 from parsing.media_detection import process_post
-from reddit import login as reddit_login
 from reddit.client import reddit_get
 
 
-CACHE_TTL_STATIC     = 604800   # 1 week
-CACHE_TTL_FEED       = 300
-CACHE_TTL_SUBREDDIT  = 600
-REDGIFS_TOKEN_TTL    = 23 * 3600
 FEED_LIMIT           = 25
 COMMENTS_LIMIT       = 200
 STREAM_CHUNK_SIZE    = 65536
-
-DISABLE_DOWNLOADS = os.environ.get('DISABLE_DOWNLOADS', '0').strip().lower() in ('1', 'true', 'yes', 'on')
-# Personalized (cookie-backed) home feed is on by default; set to disable it entirely —
-# the frontend hides the Reddit-cookies settings UI and /api/home ignores any cookie sent.
-DISABLE_PERSONALIZED_HOME = os.environ.get('RDVWR_DISABLE_PERSONALIZED_HOME', '0').strip().lower() in ('1', 'true', 'yes', 'on')
-
+REDGIFS_TOKEN_TTL    = 23 * 3600
 
 log = logging.getLogger(__name__)
 
-# Sharing cache/rate-limit state across processes (e.g. multiple gunicorn workers or
-# horizontally-scaled instances) requires an external store. Set REDIS_URL to opt in;
-# with it unset (the default, single-Pi deployment), everything stays in-process as
-# before. The OAuth device pool in reddit_client is NOT shared this way — each process
-# keeps its own, which is harmless (just more rotating identities).
-REDIS_URL = os.environ.get('REDIS_URL', '').strip()
-
-_redis_client = None
-if REDIS_URL:
-    import redis as _redis_mod
-    _redis_client = _redis_mod.Redis.from_url(REDIS_URL, decode_responses=False)
-
-
-def _redis_cache_encode(value):
-    """Cached values are either raw JSON bytes (server_cache) or plain JSON-able
-    Python objects (dict/str/None from the smaller route-level caches); tag which so
-    decode knows whether to json.loads it back."""
-    if isinstance(value, bytes):
-        return b'B' + value
-    return b'J' + json.dumps(value).encode()
-
-
-def _redis_cache_decode(raw):
-    if raw[:1] == b'B':
-        return raw[1:]
-    return json.loads(raw[1:])
 
 SUBREDDIT_RE = re.compile(r'^[A-Za-z0-9_]{1,50}(?:\+[A-Za-z0-9_]{1,50}){0,49}$')
 USERNAME_RE  = re.compile(r'^[A-Za-z0-9_-]{1,50}$')
@@ -72,13 +30,6 @@ POST_ID_RE   = re.compile(r'^[A-Za-z0-9]{1,10}$')
 # Comment permalinks can carry 13-character IDs; posts use the shorter limit.
 COMMENT_ID_RE = re.compile(r'^[A-Za-z0-9]{1,13}$')
 MULTINAME_RE = re.compile(r'^[A-Za-z0-9_]{1,50}$')
-FEED_SORTS   = {'best', 'hot', 'new', 'top', 'rising', 'controversial'}
-SUB_SORTS    = FEED_SORTS - {'best'}   # sorts offered as a per-visitor default
-TIME_FILTERS = {"hour", "day", "week", "month", "year", "all"}
-COMMENT_SORTS = {'confidence', 'top', 'new', 'controversial', 'old', 'qa'}
-SEARCH_SORTS  = {'relevance', 'hot', 'top', 'new'}
-THEMES        = {'dark', 'light', 'system'}
-LAYOUTS       = {'card', 'compact', 'minimal'}
 
 
 def feed_time(sort, t):
@@ -95,55 +46,6 @@ def add_time_param(params, sort, t, sorts_with_time=("top", "controversial")):
     by default; some endpoints only support it for "top")."""
     if sort in sorts_with_time and t in TIME_FILTERS:
         params["t"] = t
-
-
-def _bool_env(name, default):
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
-
-
-def _enum_env(name, default, allowed):
-    raw = os.environ.get(name, '').strip()
-    if not raw:
-        return default
-    if raw in allowed:
-        return raw
-    log.warning("Ignoring invalid %s=%r (expected one of %s)", name, raw, ', '.join(sorted(allowed)))
-    return default
-
-
-# Deployer-configurable defaults for the client-side settings a visitor would otherwise
-# only get from settings.js's own DEFAULTS. Each maps to the matching key in that file's
-# DEFAULTS object; anything a visitor changes in the settings panel is saved to their own
-# localStorage and always wins over these (see settings.js _load()). `redditCookies` isn't
-# here since it's a per-visitor credential, not a deployment-wide default.
-# Deployer opt-in for the search "only NSFW" checkbox: off by default, and while it's off the
-# settings panel doesn't offer the toggle either. When on, the toggle appears and defaults on.
-NSFW_ONLY_SEARCH = _bool_env('RDVWR_ENABLE_NSFW_ONLY_SEARCH', False)
-
-DEFAULT_SETTINGS = {
-    'theme':             _enum_env('RDVWR_DEFAULT_THEME', 'dark', THEMES),
-    'layout':            _enum_env('RDVWR_DEFAULT_LAYOUT', 'card', LAYOUTS),
-    'subSort':           _enum_env('RDVWR_DEFAULT_SUB_SORT', 'hot', SUB_SORTS),
-    'subTime':           _enum_env('RDVWR_DEFAULT_SUB_TIME', 'day', TIME_FILTERS),
-    'commentSort':       _enum_env('RDVWR_DEFAULT_COMMENT_SORT', 'confidence', COMMENT_SORTS),
-    'homeFeed':          _enum_env('RDVWR_DEFAULT_HOME_FEED', 'personalized', {'personalized', 'subscribed', 'popular'}),
-    'personalizedHome':  _bool_env('RDVWR_DEFAULT_PERSONALIZED_HOME', True),
-    'pagination':        _bool_env('RDVWR_DEFAULT_PAGINATION', False),
-    'showAvatars':       _bool_env('RDVWR_DEFAULT_SHOW_AVATARS', False),
-    'showAwards':        _bool_env('RDVWR_DEFAULT_SHOW_AWARDS', True),
-    'linkExternalMedia': _bool_env('RDVWR_DEFAULT_LINK_EXTERNAL_MEDIA', False),
-    'translateButton':   _enum_env('RDVWR_DEFAULT_TRANSLATE_BUTTON', 'auto', {'auto', 'always', 'never'}),
-    'nsfwBlur':          _bool_env('RDVWR_DEFAULT_NSFW_BLUR', False),
-    'nsfwHide':          _bool_env('RDVWR_DEFAULT_NSFW_HIDE', False),
-    'nsfwSearchHide':    _bool_env('RDVWR_DEFAULT_NSFW_SEARCH_HIDE', False),
-    'nsfwOnlySearch':    NSFW_ONLY_SEARCH,
-    'markRead':          _bool_env('RDVWR_DEFAULT_MARK_READ', True),
-    'hideReadHome':      _bool_env('RDVWR_DEFAULT_HIDE_READ_HOME', False),
-    'hideReadSub':       _bool_env('RDVWR_DEFAULT_HIDE_READ_SUB', False),
-}
 
 
 class UpstreamError(Exception):
@@ -246,72 +148,6 @@ def validate_params(**patterns):
             return f(*args, **kwargs)
         return wrapper
     return decorator
-_CACHE_MISS = object()
-
-
-class TTLCache:
-    """Thread-safe cache with a per-entry TTL and a size cap. When full, expired
-    entries are swept first; only if none have expired is the oldest-inserted entry
-    evicted (not true LRU, but keeps memory bounded predictably).
-
-    In-process by default (one dict per worker). Pass `name=` to make an instance
-    share state via Redis instead, when REDIS_URL is set — needed for a cache to stay
-    coherent across multiple gunicorn workers or horizontally-scaled instances. Two
-    TTLCache instances with the same `name` share the same Redis-backed keyspace, so
-    `name` must be unique per logical cache (e.g. 'view', 'og', 'avatar')."""
-    SWEEP_INTERVAL = 30  # seconds; bounds the O(n) sweep cost when the cache stays full
-
-    def __init__(self, max_size, name=None):
-        self._max_size = max_size
-        self._lock = threading.Lock()
-        self._data = {}
-        self._last_sweep = 0.0
-        self._redis = _redis_client if (_redis_client and name) else None
-        self._prefix = f'ttlc:{name}:' if self._redis else None
-
-    def get(self, key):
-        """Returns the cached value, or the _CACHE_MISS sentinel if absent/expired
-        (a cached value can itself legitimately be None, so plain None can't mean "miss")."""
-        if self._redis:
-            try:
-                raw = self._redis.get(self._prefix + str(key))
-            except Exception as e:
-                log.warning("redis cache get failed, treating as miss: %s", e)
-                return _CACHE_MISS
-            return _redis_cache_decode(raw) if raw is not None else _CACHE_MISS
-        now = time.time()
-        with self._lock:
-            hit = self._data.get(key)
-            if hit and hit[0] <= now:
-                del self._data[key]
-                return _CACHE_MISS
-        return hit[1] if hit else _CACHE_MISS
-
-    def set(self, key, value, ttl):
-        if self._redis:
-            try:
-                self._redis.set(self._prefix + str(key), _redis_cache_encode(value), ex=ttl)
-            except Exception as e:
-                log.warning("redis cache set failed, dropping entry: %s", e)
-            return
-        now = time.time()
-        with self._lock:
-            self._data.pop(key, None)
-            if len(self._data) >= self._max_size and now - self._last_sweep >= self.SWEEP_INTERVAL:
-                self._last_sweep = now
-                self._data = {k: v for k, v in self._data.items() if v[0] > now}
-            if len(self._data) >= self._max_size:
-                self._data.pop(next(iter(self._data)))
-            self._data[key] = (now + ttl, value)
-
-    def __len__(self):
-        return len(self._data)
-
-    def clear(self):
-        with self._lock:
-            self._data.clear()
-
-
 # --- Same-site gate for /api/* ----------------------------------------------------
 # The frontend serves `<meta name="referrer" content="no-referrer">` (templates/index.html),
 # so browser-issued requests never carry a Referer, and plain <img>/<video src>/top-level-
@@ -352,171 +188,3 @@ def is_same_site_request():
     if referer is not None:
         return urlsplit(referer).hostname == host
     return False
-
-
-def cached_json(data, seconds):
-    resp = make_response(jsonify(data))
-    # Data fetched as the logged-in account (vote state etc.) must never reach a shared cache.
-    resp.headers['Cache-Control'] = ('private, no-store' if reddit_login.request_account_active() or not seconds
-                                     else f'public, max-age={seconds}')
-    return resp
-
-_view_cache = TTLCache(500, name='view')
-_inflight = {}
-_inflight_lock = threading.Lock()
-INFLIGHT_WAIT = 30  # seconds a follower waits on the request already fetching its key
-
-def server_cache(ttl):
-    """Cache a view's JSON payload in-process for `ttl` seconds, keyed by full
-    request path+query, so identical requests (repeat visits, multiple tabs)
-    don't re-hit Reddit within the window. Concurrent misses for one key are
-    coalesced: one request fetches, the rest wait for it and read the cache."""
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if reddit_login.request_account_active():
-                # Reading as the account: bypass the shared cache in both directions.
-                resp = f(*args, **kwargs)
-                if isinstance(resp, Response):
-                    resp.headers['Cache-Control'] = 'private, no-store'
-                return resp
-            key = request.full_path
-            hit = _view_cache.get(key)
-            if hit is not _CACHE_MISS:
-                # Serve the stored JSON bytes as-is rather than re-serializing the payload.
-                return Response(hit, mimetype='application/json',
-                                headers={'Cache-Control': f'public, max-age={ttl}'})
-            with _inflight_lock:
-                leader = _inflight.get(key)
-                if leader is None:
-                    _inflight[key] = leader = threading.Event()
-                    is_leader = True
-                else:
-                    is_leader = False
-            if not is_leader:
-                leader.wait(INFLIGHT_WAIT)
-                hit = _view_cache.get(key)
-                if hit is not _CACHE_MISS:
-                    return Response(hit, mimetype='application/json',
-                                    headers={'Cache-Control': f'public, max-age={ttl}'})
-                # The leader failed or its response wasn't cacheable: fetch for ourselves.
-                return f(*args, **kwargs)
-            try:
-                resp = f(*args, **kwargs)
-                cache_control = resp.headers.get('Cache-Control', '') if isinstance(resp, Response) else ''
-                if (isinstance(resp, Response) and resp.status_code == 200 and resp.is_json
-                        and not resp.direct_passthrough and not resp.is_streamed
-                        and 'no-store' not in cache_control and 'private' not in cache_control):
-                    _view_cache.set(key, resp.get_data(), ttl)
-                return resp
-            finally:
-                with _inflight_lock:
-                    _inflight.pop(key, None)
-                leader.set()
-        return wrapper
-    return decorator
-
-
-_fetch_cache = TTLCache(500)
-_fetch_inflight = {}
-_fetch_inflight_lock = threading.Lock()
-
-def fetch_cache(ttl, empty_ttl=None, skip=None):
-    """Memoize a shared fetch_* helper's return value in-process for `ttl` seconds, so the
-    server-rendered pages get the same caching the /api/* endpoints have. `timeout` is left
-    out of the key; calls made as the logged-in account bypass the cache. Exceptions are
-    never cached. A falsy result is held for `empty_ttl` instead when given (for best-effort
-    fetchers that return [] on failure), and `skip(result)` can veto caching. Callers get a
-    private copy, so they can mutate what they receive."""
-    def decorator(f):
-        sig = signature(f)
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if reddit_login.request_account_active():
-                return f(*args, **kwargs)
-            bound = sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-            key = (f.__module__, f.__qualname__, tuple((k, v) for k, v in bound.arguments.items() if k != 'timeout'))
-            # Coordinate the cache lookup and leader election to avoid a miss racing
-            # with another leader publishing its completed result.
-            with _fetch_inflight_lock:
-                hit = _fetch_cache.get(key)
-                if hit is not _CACHE_MISS:
-                    future = None
-                else:
-                    future = _fetch_inflight.get(key)
-                    leader = future is None
-                    if leader:
-                        _fetch_inflight[key] = future = Future()
-            if hit is not _CACHE_MISS:
-                return copy.deepcopy(hit)
-            if not leader:
-                try:
-                    result = future.result(timeout=remaining(min(INFLIGHT_WAIT, bound.arguments.get('timeout', INFLIGHT_WAIT))))
-                except FutureTimeout as exc:
-                    raise requests.exceptions.Timeout('Timed out waiting for shared upstream fetch') from exc
-                return copy.deepcopy(result)
-            try:
-                result = f(*args, **kwargs)
-                snapshot = copy.deepcopy(result)
-                if not (skip and skip(result)):
-                    hold = empty_ttl if (empty_ttl is not None and not result) else ttl
-                    if hold:
-                        _fetch_cache.set(key, snapshot, hold)
-                future.set_result(snapshot)
-                return result
-            except BaseException as exc:
-                future.set_exception(exc)
-                raise
-            finally:
-                with _fetch_inflight_lock:
-                    _fetch_inflight.pop(key, None)
-        return wrapper
-    return decorator
-
-
-def safe_next(raw):
-    """Only ever redirect back to a same-site path."""
-    if not raw or not raw.startswith('/') or raw.startswith('//') or '\\' in raw:
-        return '/'
-    return raw
-
-
-_URL_BAD_CHARS_RE = re.compile(r'[\x00-\x20\x7f\\]')
-
-
-def _idna_host(host):
-    """`host` as urllib3 sends it: lowercase, non-ASCII names punycoded (same call as urllib3's
-    _idna_encode). Raises ValueError for a name IDNA can't encode."""
-    host = host.lower()
-    if host.isascii():
-        return host
-    try:
-        return idna.encode(host, strict=True, std3_rules=True).decode('ascii')
-    except idna.IDNAError as e:
-        raise ValueError(str(e)) from e
-
-
-def checked_url_host(url, schemes=('http', 'https')):
-    """The lowercase ASCII host an outbound fetch of `url` would actually connect to
-    (punycode for an internationalized name), or None if the URL is malformed or ambiguous.
-    Use this, not urlparse().hostname, before checking a host against an allowlist: urlparse
-    and requests (urllib3) can disagree about the host, e.g. "http://127.0.0.1\\@i.redd.it/"
-    is i.redd.it to urlparse but 127.0.0.1 to urllib3. Rejects backslashes, whitespace/control
-    chars and userinfo, then requires both parsers to agree on the host."""
-    if not isinstance(url, str) or not url or _URL_BAD_CHARS_RE.search(url):
-        return None
-    try:
-        parsed = urlsplit(url)
-        host = parsed.hostname
-        parsed.port   # raises ValueError on a malformed port
-        u3_host = parse_url(url).host
-        host = host and _idna_host(host)
-    except (ValueError, LocationParseError):
-        return None
-    if parsed.scheme not in schemes or not host or '@' in parsed.netloc \
-            or parsed.username is not None or parsed.password is not None:
-        return None
-    if not u3_host or u3_host.strip('[]').lower() != host:
-        return None
-    return host

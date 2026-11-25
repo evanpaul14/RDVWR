@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from xml.sax.saxutils import escape, quoteattr
 from flask import Blueprint, Response, request
 from core.base_path import site_root
-from core.helpers import FEED_SORTS, TIME_FILTERS, UpstreamError, log
+from core.config import FEED_SORTS, TIME_FILTERS
+from core.helpers import UpstreamError, log
 from core.template_helpers import mdbody
 from routes.subreddit import fetch_feed
 from routes.users import fetch_user_posts

@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from types import SimpleNamespace as NS
 import pytest
-from core import lang
+from core import lang, config
 
 
 @pytest.fixture(autouse=True)
@@ -48,8 +48,7 @@ def test_detector_error_is_none(monkeypatch):
 
 
 def test_translate_button_default_setting():
-    from core import helpers
-    assert helpers.DEFAULT_SETTINGS['translateButton'] in ('auto', 'always', 'never')
+    assert config.DEFAULT_SETTINGS['translateButton'] in ('auto', 'always', 'never')
 
 
 def test_comment_fields_carry_lang(monkeypatch):

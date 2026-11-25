@@ -1,10 +1,10 @@
 """Serving the app under a URL prefix (BASE_PATH=/rdvwr) behind a proxy that strips it
 (Caddy's handle_path). Routes stay root-relative; this only prefixes the URLs we emit.
 Unset (the default), every helper here is a no-op."""
-import os
 import re
 
-_raw = os.environ.get('BASE_PATH', '').strip().strip('/')
+from core.config import BASE_PATH as _raw
+
 BASE_PATH = f'/{_raw}' if _raw else ''
 
 # Root-absolute URL attributes in HTML. Skips '//host' and anything already prefixed, so

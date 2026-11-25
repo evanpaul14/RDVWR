@@ -14,10 +14,9 @@ Each build_* function returns that template context as a dict (see _page), or
 """
 from reddit.budget import budget
 from urllib.parse import urlencode
-from core.helpers import TIME_FILTERS, UpstreamError, parallel, log
+from core.config import DISABLE_NSFW, NSFW_ONLY_SEARCH, TIME_FILTERS
+from core.helpers import UpstreamError, parallel, log
 from core.ns_prefs import get_pref
-from core.helpers import NSFW_ONLY_SEARCH
-from parsing.media_detection import DISABLE_NSFW
 from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)

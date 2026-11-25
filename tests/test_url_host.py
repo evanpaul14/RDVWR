@@ -1,6 +1,6 @@
 import pytest
 
-from core.helpers import checked_url_host
+from core.urls import checked_url_host
 
 
 @pytest.mark.parametrize("url,host", [

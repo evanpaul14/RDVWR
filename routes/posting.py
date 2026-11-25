@@ -5,7 +5,8 @@ from reddit.budget import budgeted
 import re
 from urllib.parse import urlsplit
 from flask import Blueprint, jsonify, redirect, render_template, request
-from core.helpers import DISABLE_DOWNLOADS, SUBREDDIT_RE, UpstreamError, validate_params
+from core.config import DISABLE_DOWNLOADS
+from core.helpers import SUBREDDIT_RE, UpstreamError, validate_params
 from reddit.client import reddit_get
 from reddit import actions as reddit_actions
 from reddit import media as reddit_media

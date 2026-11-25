@@ -1,4 +1,3 @@
-import os
 import secrets
 import logging
 from flask import Flask, g, jsonify, request
@@ -6,7 +5,9 @@ from flask_compress import Compress
 from core import template_helpers
 from core import base_path
 from core import ratelimit
-from core.helpers import CACHE_TTL_STATIC, is_same_site_request
+from core.cache import CACHE_TTL_STATIC
+from core.config import PROXY_MEDIA
+from core.helpers import is_same_site_request
 from routes import register_all
 from core import lang as _lang
 
@@ -14,7 +15,7 @@ from core import lang as _lang
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 # Route Reddit/Imgur media through /api/m/ instead of letting the browser hit the CDNs.
-app.config['PROXY_MEDIA'] = os.environ.get('PROXY_MEDIA', '0') == '1'
+app.config['PROXY_MEDIA'] = PROXY_MEDIA
 Compress(app)
 
 

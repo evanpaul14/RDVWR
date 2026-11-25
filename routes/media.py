@@ -1,6 +1,5 @@
 """RedGifs, Reddit image, and Imgur album proxies, plus the reddit.com redirect resolver."""
 import re
-import os
 import json
 import time
 import threading
@@ -8,15 +7,16 @@ from urllib.parse import urljoin, urlparse
 from flask import Blueprint, jsonify, request, Response
 from core.base_path import app_path
 from reddit.client import SESSION, HEADERS
-from core.helpers import (CACHE_TTL_SUBREDDIT, REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE,
-                     cached_json, checked_url_host, error_response, server_cache, log)
+from core.cache import CACHE_TTL_SUBREDDIT, cached_json, server_cache
+from core.helpers import REDGIFS_TOKEN_TTL, STREAM_CHUNK_SIZE, error_response, log
+from core.urls import checked_url_host
+from core.config import IMGUR_CLIENT_ID
 
 bp = Blueprint("media", __name__)
 
 
 REDGIFS_ID_VALID_RE = re.compile(r'^[a-zA-Z0-9]+$')
 IMGUR_ALBUM_ID_RE   = re.compile(r'^[a-zA-Z0-9]+$')
-IMGUR_CLIENT_ID     = os.environ.get('IMGUR_CLIENT_ID', '')
 IMGUR_IMG_URL_RE    = re.compile(r'https://i\.imgur\.com/([A-Za-z0-9]{5,9})\.(jpe?g|png|gif|webp)', re.I)
 _IMGUR_THUMB_CHARS  = frozenset('smbtlr')
 

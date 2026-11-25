@@ -5,7 +5,8 @@ proxy) can't sign in or out. The exception is a browser holding the owner cookie
 (reddit_owner.py, REDDIT_LOGIN_OWNER_KEY)."""
 from flask import Blueprint, abort, redirect, request
 from markupsafe import escape
-from core.helpers import is_same_site_request, safe_next
+from core.helpers import is_same_site_request
+from core.urls import safe_next
 from reddit import login as reddit_login
 from reddit import owner as reddit_owner
 

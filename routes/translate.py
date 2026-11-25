@@ -3,7 +3,8 @@ import re
 import hashlib
 from flask import Blueprint, jsonify, request, abort
 from curl_cffi import requests as cffi_requests
-from core.helpers import TTLCache, _CACHE_MISS, is_same_site_request, log
+from core.cache import TTLCache, CACHE_MISS
+from core.helpers import is_same_site_request, log
 
 bp = Blueprint("translate", __name__)
 
@@ -48,7 +49,7 @@ def _translate_chunk(chunk, target):
 def translate_text(text, target):
     key = hashlib.sha1(f'{target}\0{text}'.encode()).hexdigest()
     hit = _cache.get(key)
-    if hit is not _CACHE_MISS:
+    if hit is not CACHE_MISS:
         return hit
     parts, src = [], ''
     for chunk in _chunks(text):

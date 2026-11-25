@@ -10,27 +10,16 @@ case they're shared through Redis like the response cache.
 """
 import ipaddress
 import logging
-import os
 import threading
 import time
 
 from flask import jsonify, make_response, request
 
-from core.helpers import _redis_client
+from core.cache import redis_client
+from core.config import RATE_LIMIT, RATE_LIMIT_DOWNLOADS
 
 log = logging.getLogger(__name__)
 
-
-def _int_env(name, default):
-    try:
-        return max(0, int(os.environ.get(name, default)))
-    except ValueError:
-        log.warning("Ignoring invalid %s=%r (expected a whole number)", name, os.environ.get(name))
-        return default
-
-
-RATE_LIMIT = _int_env('RATE_LIMIT', 600)
-RATE_LIMIT_DOWNLOADS = _int_env('RATE_LIMIT_DOWNLOADS', 20)
 WINDOW = 60  # seconds
 
 _EXEMPT_PREFIXES = ('/static/', '/healthz', '/favicon')
@@ -75,10 +64,10 @@ def client_ip():
 
 def _hit(bucket, ip, window):
     """Count one request and return the window's total so far."""
-    if _redis_client:
+    if redis_client:
         key = f'rl:{bucket}:{ip}:{window}'
         try:
-            pipe = _redis_client.pipeline()
+            pipe = redis_client.pipeline()
             pipe.incr(key)
             pipe.expire(key, WINDOW + 5)
             return pipe.execute()[0]

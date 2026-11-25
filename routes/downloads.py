@@ -10,7 +10,8 @@ from urllib.parse import urljoin, urlparse
 import requests
 from flask import Blueprint, jsonify, request, Response
 from reddit.client import SESSION, HEADERS
-from core.helpers import STREAM_CHUNK_SIZE, DISABLE_DOWNLOADS, error_response, log
+from core.helpers import STREAM_CHUNK_SIZE, error_response, log
+from core.config import DISABLE_DOWNLOADS
 
 bp = Blueprint("downloads", __name__)
 
