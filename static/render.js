@@ -3,6 +3,7 @@ import { mediaHtmlCard, mediaHtmlFull, linksOutMedia, mediaLinkHref, mediaLinkDo
 import { isVisited } from './visited.js';
 import { rememberPost, saveBtnHtml } from './saved.js';
 import { settings } from './settings.js';
+import { isFiltered } from './filters.js';
 import { votingEnabled, voteCtlHtml } from './vote.js';
 import { commentActionsHtml } from './comment.js';
 import { translateBtnHtml } from './translate.js';
@@ -308,6 +309,7 @@ function renderMinimalRow(p, { sub, id, visitedClass, nsfwAttr, showSub }) {
 
 // ── Post card ─────────────────────────────────────────────────────────────────
 export function renderPost(p, idx, showSub=false) {
+  if (isFiltered(p)) return '';
   rememberPost(p);
   const sub    = escHtml(p.subreddit);
   const author = escHtml(p.author);

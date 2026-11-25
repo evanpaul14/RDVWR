@@ -8,6 +8,7 @@ import { renderRoute } from './nav.js';
 import { retryFeedLoad } from './refresh.js';
 import { updateFeedsBtn } from './feeds-menu.js';
 import { changeCommentSort } from './postview.js';
+import { normalizeSubs, normalizeUsers, normalizeKeywords } from './filters.js';
 
 const sentinel = document.getElementById('scroll-sentinel');
 const postView = document.getElementById('post-view');
@@ -54,6 +55,8 @@ function _settingsHtml() {
   const chk = (id, checked) =>
     `<input type="checkbox" class="settings-toggle" id="${id}"${checked?' checked':''}>`;
   const themeOpts = [['dark','Dark'],['light','Light'],['system','System default']];
+  const listRow = (id, label, hint, placeholder, items) =>
+    `<label class="settings-row settings-row--stack"><span class="settings-label">${label} <span class="settings-hint">(${hint})</span></span><textarea class="settings-input settings-textarea settings-textarea--list" id="${id}" spellcheck="false" autocomplete="off" placeholder="${placeholder}">${escHtml((Array.isArray(items) ? items : []).join('\n'))}</textarea></label>`;
   return `
   <div class="settings-section">
     <div class="settings-section-title">Appearance</div>
@@ -80,6 +83,12 @@ function _settingsHtml() {
   <div class="settings-section">
     <div class="settings-section-title">Privacy</div>
     <label class="settings-row"><span class="settings-label">Don't embed third-party media</span>${chk('s-link-external-media', settings.linkExternalMedia)}</label>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">Filters</div>
+    ${listRow('s-filter-subs', 'Hidden subreddits', 'separate with spaces, commas or new lines; still shown on the subreddit itself', 'funny, pics', settings.filterSubs)}
+    ${listRow('s-filter-users', 'Hidden users', 'still shown on their own profile', 'spez', settings.filterUsers)}
+    ${listRow('s-filter-keywords', 'Hidden keywords', 'one word or phrase per line; hides posts whose title contains it', 'spoilers', settings.filterKeywords)}
   </div>
   <div class="settings-section">
     <div class="settings-section-title">NSFW</div>
@@ -163,6 +172,14 @@ function bindSettingEvents() {
   settingsBody.querySelector('#s-nsfw-hide').addEventListener('change', e => { settings.nsfwHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-search-hide').addEventListener('change', e => { settings.nsfwSearchHide = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-nsfw-only-search')?.addEventListener('change', e => { settings.nsfwOnlySearch = e.target.checked; saveSettings(); });
+  for (const [id, key, normalize] of [['s-filter-subs', 'filterSubs', normalizeSubs], ['s-filter-users', 'filterUsers', normalizeUsers], ['s-filter-keywords', 'filterKeywords', normalizeKeywords]]) {
+    settingsBody.querySelector('#' + id).addEventListener('change', e => {
+      settings[key] = normalize(e.target.value);
+      e.target.value = settings[key].join('\n');
+      saveSettings();
+      retryFeedLoad();
+    });
+  }
   settingsBody.querySelector('#s-mark-read').addEventListener('change', e => { settings.markRead = e.target.checked; saveSettings(); });
   settingsBody.querySelector('#s-clear-visited').addEventListener('click', () => {
     clearVisited();

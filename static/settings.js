@@ -23,6 +23,9 @@ export const DEFAULTS = {
   showAwards: true,
   linkExternalMedia: false,
   translateButton: 'auto',
+  filterSubs: [],
+  filterUsers: [],
+  filterKeywords: [],
 };
 
 function _load() {

@@ -18,6 +18,13 @@
   </label>
 {% endmacro %}
 
+{% macro list_row(name, label, hint, placeholder) %}
+  <label class="ns-settings-row ns-settings-row--field">
+    <span class="ns-settings-row-text"><strong>{{ label }}</strong>{% if hint %}<small>{{ hint }}</small>{% endif %}</span>
+    <textarea class="settings-input settings-textarea settings-textarea--list" name="{{ name }}" spellcheck="false" autocomplete="off" placeholder="{{ placeholder }}">{{ page.filters[name] | join('\n') }}</textarea>
+  </label>
+{% endmacro %}
+
 <div class="ns-settings-wrap">
   <h1 class="ns-settings-title">Settings</h1>
   <form class="ns-settings-form" method="post" action="/settings">
@@ -52,6 +59,11 @@
     {{ check_row('nsfw_search_hide', 'Hide NSFW content in search', 'Leave NSFW posts out of search results.') }}
     {% if nsfw_only_search %}{{ check_row('nsfw_only_search', 'Offer "NSFW only" in search', 'Show a checkbox next to the search sort options that limits results to NSFW posts.') }}{% endif %}
     {% endif %}
+
+    <div class="settings-section-title">Filters</div>
+    {{ list_row('filter_subs', 'Hidden subreddits', 'Separate with spaces, commas or new lines. Their posts stay visible on the subreddit itself.', 'funny, pics') }}
+    {{ list_row('filter_users', 'Hidden users', 'Their posts stay visible on their own profile.', 'spez') }}
+    {{ list_row('filter_keywords', 'Hidden keywords', 'One word or phrase per line. Hides posts whose title contains it as a whole word.', 'spoilers') }}
 
     <div class="ns-settings-actions">
       <button type="submit">Save</button>

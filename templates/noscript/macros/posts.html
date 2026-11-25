@@ -285,7 +285,7 @@
 {% macro feed(posts, show_sub=True, hide_nsfw=None, empty='No posts found') -%}
   {%- set hide = ns.nsfw_hide if hide_nsfw is none else hide_nsfw -%}
   <div class="feed-list">
-    {%- for p in posts if not (p.over_18 and hide) %}{{ card(p, show_sub) }}{% else %}{{ ui.empty_state(empty) }}{% endfor -%}
+    {%- for p in posts if not (p.over_18 and hide) and not post_hidden(p) %}{{ card(p, show_sub) }}{% else %}{{ ui.empty_state(empty) }}{% endfor -%}
   </div>
 {%- endmacro %}
 

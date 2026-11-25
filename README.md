@@ -44,6 +44,7 @@ RDVWR is a single-page Reddit viewer. A Python/Flask backend proxies Reddit's AP
 - User profiles (posts + comments)
 - Subreddit, user and post search
 - Local saved posts and subscriptions, plus read tracking (all stored in your browser)
+- Filters that hide posts from chosen subreddits, users, or with chosen words in the title
 - Optional Reddit login for voting, commenting and posting (see [Reddit login](#reddit-login))
 - Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - Dark theme, mobile-friendly

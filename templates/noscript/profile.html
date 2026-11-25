@@ -29,7 +29,7 @@
 {% else %}
   <div class="feed-list">
     {% if page.archived %}<div class="thread-banner">u/{{ page.username }}'s post history is not available. Data is from Arctic Shift</div>{% endif %}
-    {% for item in page['items'] if not (item.type == 'post' and item.data.over_18 and ns.nsfw_hide) %}
+    {% for item in page['items'] if not (item.type == 'post' and ((item.data.over_18 and ns.nsfw_hide) or post_hidden(item.data))) %}
       {% if item.type == 'post' %}
         {{ posts.card(item.data) }}
       {% else %}

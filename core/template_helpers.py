@@ -15,6 +15,7 @@ from core.helpers import DEFAULT_SETTINGS, DISABLE_DOWNLOADS, DISABLE_PERSONALIZ
 from parsing.reddit_html import EXTERNAL_MEDIA_CLASS
 from parsing.markdown import render_markdown
 from core.ns_prefs import all_prefs, get_pref
+from core.filters import post_hidden
 from core.base_path import BASE_PATH
 
 
@@ -325,6 +326,7 @@ def register(app):
     app.add_template_global(current_url)
     app.add_template_global(lambda: reddit_login.request_account_active() and bool(reddit_login.username()), 'account_active')
     app.add_template_global(pager_urls)
+    app.add_template_global(post_hidden)
 
     def asset_v(filename):
         try:

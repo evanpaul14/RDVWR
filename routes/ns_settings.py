@@ -11,6 +11,7 @@ from core.helpers import DISABLE_DOWNLOADS, DISABLE_PERSONALIZED_HOME, NSFW_ONLY
 from parsing.media_detection import DISABLE_NSFW
 from reddit import login as reddit_login
 from core.ns_prefs import PREFS, all_prefs, set_pref_cookie
+from core.filters import FILTERS, all_filters, set_filter_cookie
 
 bp = Blueprint("ns_settings", __name__)
 
@@ -20,7 +21,7 @@ def ns_settings():
     if request.method == "POST":
         resp = redirect(safe_next(request.form.get('next')))
         if request.form.get('reset') == '1':
-            for pref in PREFS.values():
+            for pref in (*PREFS.values(), *FILTERS.values()):
                 resp.delete_cookie(pref.cookie)
             return resp
         home_available = (not DISABLE_PERSONALIZED_HOME and reddit_login.request_account_active())
@@ -33,9 +34,11 @@ def ns_settings():
                 continue  # the checkbox is only offered when the deployment opts in
             value = request.form.get(name, '')
             set_pref_cookie(resp, name, value == '1' if pref.allowed is None else value)
+        for name in FILTERS:
+            set_filter_cookie(resp, name, request.form.get(name, ''))
         return resp
 
     ctx = {"ns_view": "settings", "page_title": "Settings — RDVWR",
-           "page": {"prefs": all_prefs(), "login": reddit_login.login_status(), "next": safe_next(request.args.get('next'))}}
+           "page": {"prefs": all_prefs(), "filters": all_filters(), "login": reddit_login.login_status(), "next": safe_next(request.args.get('next'))}}
     return render_template("index.html", disable_downloads=DISABLE_DOWNLOADS, **ctx), 200, \
         {'Cache-Control': 'no-store'}
