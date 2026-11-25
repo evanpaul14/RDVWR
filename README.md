@@ -6,7 +6,7 @@
 
 **10-second pitch:** RDVWR is a lightweight front-end for Reddit. Browse subreddits, posts, comments, user profiles, and search — no Reddit account required.
 
-- 🚀 Lightweight: 67–79% fewer requests than reddit.com in the [Pi benchmark](#speed)
+- 🚀 Lightweight: 67–79% fewer requests than reddit.com
 - 🔓 No Reddit account required
 - 🖼️ Media support: galleries, Reddit video (HLS + audio sync), YouTube, GIFs etc.
 - 🌙 Dark theme, mobile-friendly
