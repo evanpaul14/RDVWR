@@ -25,6 +25,9 @@ class _Renderer(mistune.HTMLRenderer):
 
 
 def _reddit_syntax(md):
+    # mistune < 3.4 sets state.in_link while parsing link text; 3.4+ parses link text
+    # first and turns '_autolink' tokens back into their literal text when they end up
+    # inside a link. Both are handled so a mention or bare URL never nests a link.
     def parse_mention(inline, match, state):
         label = match.group('mention_text').lstrip('/')
         path = '/user/' + label[2:] if label.startswith('u/') else '/' + label
@@ -32,7 +35,7 @@ def _reddit_syntax(md):
             state.append_token({'type': 'text', 'raw': match.group(0)})
         else:
             state.append_token({'type': 'link', 'children': [{'type': 'text', 'raw': label}],
-                                'attrs': {'url': path}})
+                                'attrs': {'url': path}, '_autolink': match.group(0)})
         return match.end()
 
     def parse_autolink(inline, match, state):
@@ -42,7 +45,7 @@ def _reddit_syntax(md):
         else:
             url = 'http://' + text if text.startswith('www.') else 'mailto:' + text
             state.append_token({'type': 'link', 'children': [{'type': 'text', 'raw': text}],
-                                'attrs': {'url': url}})
+                                'attrs': {'url': url}, '_autolink': text})
         return match.start() + len(text)
 
     md.inline.register('reddit_mention',
