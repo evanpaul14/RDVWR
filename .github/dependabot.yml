@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Python packages pinned in requirements.txt. Minor/patch bumps arrive as one
+  # grouped PR; a major bump gets its own PR so it can be reviewed separately.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+
+  # actions/checkout, setup-python, setup-node, ...
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ['*']
+
+  # The Docker base image (python:3.12-slim).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

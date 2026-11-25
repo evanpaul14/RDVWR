@@ -3,7 +3,7 @@
 ## Running
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt   # exact pins; Dependabot bumps them via weekly PRs
 python app.py          # http://localhost:8002
 python3 -m pytest tests/
 node --test tests/*.mjs   # frontend module tests
@@ -23,7 +23,7 @@ Single-page Reddit viewer. Python/Flask backend proxies Reddit API; ES module fr
 - `parsing/` — `media_detection.py` (`process_post` and media helpers), `reddit_html.py` (sanitizer for Reddit's `*_html` fields), `shreddit.py` (shreddit HTML post parsers), `markdown.py` (server-side counterpart of `renderMd`).
 - `reddit/` — `client.py` (OAuth via Android device-token spoofing — rotating pool of 3 identities, tokens refresh every ~10 min; disable with `REDDIT_OAUTH=0`), `login.py`, `actions.py`, `media.py`, `owner.py`, `budget.py` (upstream budget), `waf.py` (WAF cooldown: pauses upstream calls after a burst of Reddit block pages; `reddit_get(..., waf_key=...)` skips an outright-blocked endpoint for an hour), `archive.py` (Arctic Shift fallback for user profiles), `scrape.py` (post ids of combined-feed New/Rising sorts from Reddit's HTML listing).
 - `gql/` — GraphQL fallback (`client.py`, `posts.py`, `search.py`, `subreddit.py`, `user.py`, `wiki.py`, `richtext.py`) and `gql_hashes.json`.
-- `scripts/` — `update_vendor.py` (update vendored JS — run manually), `update_gql_hash.py`, `benchmark.py`, `benchmark_pages.py`.
+- `scripts/` — `update_vendor.py` (updates vendored JS within pinned majors, versions recorded in `static/vendor.json`; run weekly by `.github/workflows/update-vendor.yml`, which opens a PR), `update_gql_hash.py`, `benchmark.py`, `benchmark_pages.py`.
 Import names from the module that defines them (`from core.config import DISABLE_DOWNLOADS`, `from core.cache import fetch_cache`, `from reddit import client as reddit_client`); new Python files go in the matching package. A new environment variable goes in `core/config.py`, not in an `os.environ` read in the module that uses it.
 
 `process_post()` normalizes post dicts; `_media()` picks the media fields, with one small helper per kind (`_gallery`, `_reddit_video`, `_embed`, `_gif`, …). Media detection priority: galleries → redgifs → reddit HLS video → reddit_video_preview → YouTube → Streamable → TikTok → Streamin → iframe → Imgur album → GIF/GIFV/Imgur image.
