@@ -15,6 +15,7 @@ import time
 
 from flask import jsonify, make_response, request
 
+from core import stats
 from core.cache import redis_client
 from core.config import RATE_LIMIT, RATE_LIMIT_DOWNLOADS
 
@@ -87,6 +88,7 @@ def _hit(bucket, ip, window):
 
 
 def _limited(retry_after):
+    stats.incr('rate_limited')
     if request.path.startswith('/api/'):
         resp = jsonify({"error": "Too many requests, slow down."})
     else:

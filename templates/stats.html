@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+{% if refresh %}<meta http-equiv="refresh" content="{{ refresh }}">{% endif %}
+<title>rdvwr stats</title>
+<style>
+  :root {
+    --bg: #0c0c0c; --bg2: #141414; --bg3: #1c1c1c; --b: #242424;
+    --tx: #e2e2e2; --tx2: #b0b0b0; --tx3: #878787;
+    --ac: #4a9eff; --bad: #ff6464; --warn: #e8b041; --good: #4cc38a;
+    --mono: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f2f2f2; --bg2: #fff; --bg3: #e6e6e6; --b: #d4d4d4;
+            --tx: #111; --tx2: #3a3a3a; --tx3: #5e5e5e;
+            --ac: #1260c0; --bad: #c62828; --warn: #9a6700; --good: #1a7f4b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--tx); font: 14px/1.45 system-ui, sans-serif; }
+  main { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1.25rem; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.15rem; margin: 0; letter-spacing: .02em; }
+  h1 a { color: inherit; text-decoration: none; }
+  h2 { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--tx3); margin: 2rem 0 .6rem; }
+  .meta { color: var(--tx3); font-size: .85rem; }
+  .meta a { color: var(--tx2); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .6rem; }
+  .tile { background: var(--bg2); border: 1px solid var(--b); border-radius: 8px; padding: .7rem .8rem; }
+  .tile .label { color: var(--tx3); font-size: .78rem; }
+  .tile .value { font: 600 1.35rem/1.2 var(--mono); margin-top: .15rem; font-variant-numeric: tabular-nums; }
+  .tile .sub { color: var(--tx3); font-size: .75rem; margin-top: .1rem; }
+  .status { display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; }
+  .status::before { content: ""; width: .55rem; height: .55rem; border-radius: 50%; background: currentColor; }
+  .ok { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: .8rem; }
+  figure { margin: 0; background: var(--bg2); border: 1px solid var(--b); border-radius: 8px; padding: .8rem; }
+  figcaption { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .5rem; }
+  figcaption b { font-weight: 600; }
+  .legend { display: flex; gap: .9rem; color: var(--tx3); font-size: .78rem; }
+  .legend span::before { content: ""; display: inline-block; width: .6rem; height: .6rem; border-radius: 2px;
+                         margin-right: .3rem; vertical-align: -1px; background: var(--c); }
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  svg.chart .grid { stroke: var(--b); stroke-width: 1; }
+  svg.chart .ok-bar { fill: var(--ac); }
+  svg.chart .err-bar { fill: var(--bad); }
+  svg.chart .slot { fill: transparent; }
+  svg.chart .slot:hover { fill: var(--tx); fill-opacity: .07; }
+  .axis { display: flex; justify-content: space-between; color: var(--tx3); font-size: .72rem; margin-top: .3rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--b);
+          border-radius: 8px; overflow: hidden; }
+  th, td { padding: .4rem .7rem; text-align: left; border-bottom: 1px solid var(--b); }
+  th { color: var(--tx3); font-weight: 500; font-size: .78rem; background: var(--bg3); }
+  td.r, th.r { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  td code { font-family: var(--mono); font-size: .85rem; word-break: break-all; }
+  .empty { color: var(--tx3); padding: .8rem; background: var(--bg2); border: 1px solid var(--b); border-radius: 8px; }
+  details { margin-top: .6rem; color: var(--tx2); }
+  summary { cursor: pointer; font-size: .85rem; }
+  .scroll { overflow-x: auto; }
+  .note { color: var(--tx3); font-size: .8rem; margin-top: .5rem; }
+</style>
+</head>
+<body>
+<main>
+{% set h = s.health %}
+{% set c = s.counters %}
+<header>
+  <h1><a href="/">rdvwr</a> stats</h1>
+  <span class="meta">up {{ fmt_duration(h.uptime_secs) }} · since {{ since }}{% if h.commit %} · <span class="num">{{ h.commit }}</span>{% endif %}</span>
+  <span class="meta">{% if refresh %}reloads every {{ refresh }}s · <a href="?refresh=0">stop</a>{% else %}<a href="?refresh=30">auto-reload</a>{% endif %} · <a href="?format=json">json</a></span>
+</header>
+
+{% set tokens_ok = (not h.oauth.enabled) or h.oauth.tokens_valid > 0 or not h.oauth.ever_acquired %}
+<div class="tiles">
+  <div class="tile"><div class="label">Status</div>
+    <div class="value" style="font-size:1rem;margin-top:.35rem">
+      {% if not h.cache.ok or not tokens_ok %}<span class="status bad">Degraded</span>
+      {% elif h.waf.cooling or h.waf.blocked_endpoints %}<span class="status warn">Reddit blocking</span>
+      {% else %}<span class="status ok">OK</span>{% endif %}
+    </div>
+    <div class="sub">{{ h.cache.backend }} cache{% if not h.cache.ok %}, unreachable{% endif %}</div></div>
+  <div class="tile"><div class="label">Requests, last hour</div>
+    <div class="value">{{ '{:,}'.format(req_chart.total) }}</div>
+    <div class="sub">{{ req_chart.errors }} server errors</div></div>
+  <div class="tile"><div class="label">Upstream calls, last hour</div>
+    <div class="value">{{ '{:,}'.format(up_chart.total) }}</div>
+    <div class="sub">{{ up_chart.errors }} failed or 4xx/5xx</div></div>
+  {% for row in s.caches %}
+  <div class="tile"><div class="label">{{ row.name }} cache</div>
+    <div class="value">{{ row.rate ~ '%' if row.rate is not none else '—' }}</div>
+    <div class="sub">{{ row.hits }} hits · {{ row.misses }} misses</div></div>
+  {% endfor %}
+  <div class="tile"><div class="label">OAuth tokens</div>
+    <div class="value">{% if h.oauth.enabled %}{{ h.oauth.tokens_valid }}/{{ h.oauth.pool_size }}{% else %}off{% endif %}</div>
+    <div class="sub">{{ c.get('oauth_refresh', 0) }} refreshed · {{ c.get('oauth_refresh_failed', 0) }} failed</div></div>
+</div>
+
+<h2>Last 60 minutes</h2>
+<div class="charts">
+{% for title, chart, err_label in [('Requests served', req_chart, '5xx'), ('Upstream calls', up_chart, 'failed')] %}
+  <figure>
+    <figcaption><b>{{ title }}</b>
+      <span class="legend"><span style="--c:var(--ac)">ok</span><span style="--c:var(--bad)">{{ err_label }}</span></span>
+    </figcaption>
+    <svg class="chart" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="{{ title }} per minute, peak {{ chart.peak }}">
+      <line class="grid" x1="0" x2="{{ chart.w }}" y1="{{ chart.h }}" y2="{{ chart.h }}"/>
+      <line class="grid" x1="0" x2="{{ chart.w }}" y1="4" y2="4" stroke-dasharray="2 4"/>
+      {% for b in chart.bars %}
+      {% if b.ok_h > 0 %}<rect class="ok-bar" x="{{ b.x }}" y="{{ b.ok_y }}" width="{{ b.w }}" height="{{ [b.ok_h, 1] | max }}" rx="2"/>{% endif %}
+      {% if b.err_h > 0 %}<rect class="err-bar" x="{{ b.x }}" y="{{ b.err_y }}" width="{{ b.w }}" height="{{ [b.err_h, 1] | max }}" rx="2"/>{% endif %}
+      <rect class="slot" x="{{ b.slot_x }}" y="0" width="{{ b.step }}" height="{{ chart.h }}"><title>{{ b.title }}</title></rect>
+      {% endfor %}
+    </svg>
+    <div class="axis"><span>60 min ago</span><span>peak {{ chart.peak }}/min</span><span>now</span></div>
+  </figure>
+{% endfor %}
+</div>
+<details><summary>Per-minute table</summary>
+  <div class="scroll"><table>
+    <tr><th>Minute (UTC)</th><th class="r">Requests</th><th class="r">5xx</th><th class="r">Upstream</th><th class="r">Failed</th></tr>
+    {% for m in s.history | reverse if m.requests or m.upstream %}
+    <tr><td class="num">{{ m.label }}</td>
+      <td class="r num">{{ m.requests }}</td><td class="r num">{{ m.errors }}</td>
+      <td class="r num">{{ m.upstream }}</td><td class="r num">{{ m.upstream_errors }}</td></tr>
+    {% else %}<tr><td colspan="5">Nothing yet.</td></tr>{% endfor %}
+  </table></div>
+</details>
+
+<h2>Reddit blocking</h2>
+<div class="tiles">
+  <div class="tile"><div class="label">WAF cooldown</div>
+    <div class="value">{% if h.waf.cooling %}<span class="bad">{{ h.waf.cooldown_secs_left }}s</span>{% else %}off{% endif %}</div>
+    <div class="sub">{{ c.get('waf_cooldown', 0) }} started since boot</div></div>
+  <div class="tile"><div class="label">WAF block pages</div>
+    <div class="value">{{ c.get('waf_block', 0) }}</div>
+    <div class="sub">{{ c.get('waf_skipped', 0) }} calls skipped while blocked</div></div>
+  <div class="tile"><div class="label">TLS fingerprint blocks</div>
+    <div class="value">{{ c.get('fingerprint_block', 0) }}</div></div>
+  <div class="tile"><div class="label">Visitor rate limit</div>
+    <div class="value">{{ c.get('rate_limited', 0) }}</div>
+    <div class="sub">429s · limit {{ h.rate_limit.per_minute or 'off' }}/min</div></div>
+  <div class="tile"><div class="label">API gate refusals</div>
+    <div class="value">{{ c.get('api_gate_403', 0) }}</div>
+    <div class="sub">cross-site /api calls</div></div>
+</div>
+{% if h.waf.blocked_endpoints %}<p class="note">Endpoints skipped after outright blocks: {{ h.waf.blocked_endpoints | join(', ') }}</p>{% endif %}
+
+<h2>Upstream hosts</h2>
+{% if s.upstream %}
+<div class="scroll"><table>
+  <tr><th>Host</th><th class="r">Calls</th><th class="r">Failed</th><th>Statuses</th><th class="r">p50</th><th class="r">p95</th></tr>
+  {% for r in s.upstream %}
+  <tr><td><code>{{ r.name }}</code></td><td class="r num">{{ r.count }}</td>
+    <td class="r num{% if r.errors %} bad{% endif %}">{{ r.errors }}</td>
+    <td class="num">{% for k, v in r.statuses.items() %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+    <td class="r num">{{ r.p50_ms ~ ' ms' if r.p50_ms is not none else '—' }}</td>
+    <td class="r num">{{ r.p95_ms ~ ' ms' if r.p95_ms is not none else '—' }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}<div class="empty">No upstream calls yet.</div>{% endif %}
+
+{% if h.oauth.enabled and h.oauth.tokens %}
+<h2>OAuth token pool</h2>
+<div class="scroll"><table>
+  <tr><th>#</th><th>State</th><th class="r">Age</th><th class="r">Expires in</th><th class="r">Rate limit left</th><th class="r">GraphQL left</th></tr>
+  {% for t in h.oauth.tokens %}
+  <tr><td class="num">{{ loop.index }}</td>
+    <td>{% if t.valid %}<span class="status ok">valid</span>{% elif t.age_secs is none %}<span class="meta">not minted yet</span>{% else %}<span class="status bad">expired</span>{% endif %}</td>
+    <td class="r num">{{ fmt_duration(t.age_secs) }}</td><td class="r num">{{ fmt_duration(t.expires_in_secs) }}</td>
+    <td class="r num">{{ t.ratelimit_remaining | int if t.ratelimit_remaining is not none else '—' }}</td>
+    <td class="r num">{{ t.gql_ratelimit_remaining | int if t.gql_ratelimit_remaining is not none else '—' }}</td></tr>
+  {% endfor %}
+</table></div>
+<p class="note">GraphQL persisted-query hashes loaded: {{ h.gql.hashes }}{% if h.gql.last_github_check_secs_ago is not none %} · last checked {{ fmt_duration(h.gql.last_github_check_secs_ago) }} ago{% endif %}</p>
+{% endif %}
+
+<h2>Routes</h2>
+{% if s.routes %}
+<div class="scroll"><table>
+  <tr><th>Route</th><th class="r">Requests</th><th class="r">5xx</th><th>Statuses</th><th class="r">p50</th><th class="r">p95</th></tr>
+  {% for r in s.routes %}
+  <tr><td><code>{{ r.name }}</code></td><td class="r num">{{ r.count }}</td>
+    <td class="r num{% if r.errors %} bad{% endif %}">{{ r.errors }}</td>
+    <td class="num">{% for k, v in r.statuses.items() %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+    <td class="r num">{{ r.p50_ms ~ ' ms' if r.p50_ms is not none else '—' }}</td>
+    <td class="r num">{{ r.p95_ms ~ ' ms' if r.p95_ms is not none else '—' }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}<div class="empty">No requests yet.</div>{% endif %}
+
+<p class="note">Counted in this process since it started; with several workers each shows its own numbers. Latencies cover each series' last 500 calls. Cache sizes: {% for row in s.caches %}{{ row.name | lower }} {{ row.size }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+</main>
+</body>
+</html>

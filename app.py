@@ -5,10 +5,12 @@ from flask_compress import Compress
 from core import template_helpers
 from core import base_path
 from core import ratelimit
+from core import stats
 from core.cache import CACHE_TTL_STATIC
 from core.config import PROXY_MEDIA
 from core.helpers import is_same_site_request
 from routes import register_all
+from routes import stats as stats_routes
 from core import lang as _lang
 
 
@@ -23,6 +25,8 @@ template_helpers.register(app)
 base_path.register(app)
 
 
+# Before ratelimit, so a rate-limited request still gets timed on /stats.
+stats_routes.register(app)
 ratelimit.register(app)
 
 
@@ -52,6 +56,7 @@ def _gate_api():
             "api gate 403 path=%s sec-fetch-site=%r origin=%r referer=%r host=%r ua=%r",
             request.path, request.headers.get('Sec-Fetch-Site'), request.headers.get('Origin'),
             request.headers.get('Referer'), request.host, request.headers.get('User-Agent'))
+        stats.incr('api_gate_403')
         return jsonify({"error": "Forbidden"}), 403
     return None
 

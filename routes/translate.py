@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, abort
 from curl_cffi import requests as cffi_requests
 from core.cache import TTLCache, CACHE_MISS
 from core.helpers import is_same_site_request, log
+from reddit.budget import timed
 
 bp = Blueprint("translate", __name__)
 
@@ -39,7 +40,7 @@ def _chunks(text):
 
 def _translate_chunk(chunk, target):
     """Returns (translated, detected_source_lang). Raises curl_cffi RequestException on failure."""
-    r = cffi_requests.post(TRANSLATE_URL, params={'client': 'gtx', 'sl': 'auto', 'tl': target, 'dt': 't', 'dj': '1'},
+    r = timed(cffi_requests.post, TRANSLATE_URL, params={'client': 'gtx', 'sl': 'auto', 'tl': target, 'dt': 't', 'dj': '1'},
                       data={'q': chunk}, impersonate='chrome131', timeout=10)
     r.raise_for_status()
     data = r.json()

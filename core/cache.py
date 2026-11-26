@@ -15,6 +15,7 @@ from inspect import signature
 import requests
 from flask import Response, jsonify, make_response, request
 
+from core import stats
 from core.config import REDIS_URL
 from reddit import login as reddit_login
 from reddit.budget import remaining
@@ -142,6 +143,7 @@ def server_cache(ttl):
                 return resp
             key = request.full_path
             hit = _view_cache.get(key)
+            stats.incr('view_cache_hit' if hit is not CACHE_MISS else 'view_cache_miss')
             if hit is not CACHE_MISS:
                 # Serve the stored JSON bytes as-is rather than re-serializing the payload.
                 return Response(hit, mimetype='application/json',
@@ -209,6 +211,8 @@ def fetch_cache(ttl, empty_ttl=None, skip=None):
                     leader = future is None
                     if leader:
                         _fetch_inflight[key] = future = Future()
+            stats.incr('fetch_cache_hit' if hit is not CACHE_MISS else
+                       'fetch_cache_miss' if leader else 'fetch_cache_coalesced')
             if hit is not CACHE_MISS:
                 return copy.deepcopy(hit)
             if not leader:

@@ -220,6 +220,12 @@ Set `REDDIT_LOGIN=1` to add a "Reddit account" section to settings. Reddit no lo
 
 It answers `200` normally and `503` with `"status": "degraded"` when the Redis cache is unreachable, or when OAuth has issued tokens before but none are currently valid. Tokens are minted on demand, so a freshly started server with none yet is still `ok`.
 
+## Stats page
+
+`/stats` shows the instance's operating numbers. It covers requests per route, upstream calls per host (Reddit, GraphQL, Arctic Shift, translate), and hit rates for the page and fetch caches. It also shows Reddit WAF and TLS-fingerprint blocks, rate-limit refusals and the OAuth token pool, with per-minute charts for the last hour. It records route templates and hostnames only, never visitor IPs or URLs. Add `?format=json` for the same data as JSON, or `?refresh=0` to stop the 30-second auto-reload.
+
+Only the server's own machine (`http://localhost:8002/stats`) and browsers signed in as owner (`/auth/owner`, see `REDDIT_LOGIN_OWNER_KEY`) can open it. Everyone else gets a 404. Counters live in memory, reset on restart and are kept separately by each worker.
+
 ---
 
 # Credit

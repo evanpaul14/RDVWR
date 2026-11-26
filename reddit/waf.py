@@ -3,6 +3,7 @@ import logging
 import threading
 import time
 import requests
+from core import stats
 
 log = logging.getLogger("reddit.client")
 
@@ -30,6 +31,7 @@ def note_waf_block(waf_key=None):
     """Record a WAF-blocked call; starts the cooldown once they come in a burst."""
     global _waf_until
     now = time.monotonic()
+    stats.incr('waf_block')
     with _waf_lock:
         if waf_key:
             _waf_endpoints[waf_key] = now + _WAF_ENDPOINT_TTL
@@ -37,6 +39,7 @@ def note_waf_block(waf_key=None):
         if len(_waf_hits) >= _WAF_BURST_COUNT and now >= _waf_until:
             _waf_until = now + _WAF_COOLDOWN
             _waf_hits.clear()
+            stats.incr('waf_cooldown')
             log.warning("reddit WAF blocking this IP: pausing upstream calls for %ds", _WAF_COOLDOWN)
 
 
@@ -55,6 +58,7 @@ def waf_status():
 
 def waf_blocked_response(url=""):
     """A stand-in for Reddit's block page, returned without touching the network."""
+    stats.incr('waf_skipped')
     resp = requests.Response()
     resp.status_code = 403
     resp.headers["content-type"] = "text/html"

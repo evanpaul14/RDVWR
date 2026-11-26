@@ -6,6 +6,7 @@ import uuid as _uuid_mod
 import base64
 import logging
 import requests
+from core import stats
 from core.config import REDDIT_OAUTH
 from reddit.budget import budgeted, request as budget_request, remaining, backoff
 from curl_cffi import requests as cffi_requests
@@ -239,7 +240,9 @@ def _refresh_device(device: _OAuthDevice):
         device.ratelimit_remaining = None  # fresh token, fresh budget
         device.gql_ratelimit_remaining = None
         log.info("token refresh ok: method=_fetch_android_token expires_in=%s", expires_in)
+        stats.incr('oauth_refresh')
     except Exception as e:
+        stats.incr('oauth_refresh_failed')
         log.warning("token refresh failed: method=_fetch_android_token error=%s", e)
 
 
@@ -343,6 +346,7 @@ def fingerprint_blocked(profile):
     """Reddit refused TLS profile `profile`: leave it out for _FINGERPRINT_BLOCK_SECS and
     move every device using it onto another one (tokens are kept)."""
     now = time.time()
+    stats.incr('fingerprint_block')
     with _pool_lock:
         if _blocked_profiles.get(profile, 0) <= now:
             log.warning("reddit blocks TLS fingerprint %s; leaving it out for %dh",

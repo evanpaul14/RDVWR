@@ -1,6 +1,7 @@
 """Arctic Shift archive fetches — fallback for suspended/deleted/private user profiles."""
 from parsing.media_detection import process_post, filter_nsfw
 from parsing.reddit_html import clean_reddit_html
+from reddit.budget import timed
 from reddit.client import SESSION
 from core.helpers import FEED_LIMIT, UpstreamError, hydrate_linked_posts, log
 
@@ -9,7 +10,7 @@ ARCTIC_SHIFT_BASE = "https://arctic-shift.photon-reddit.com/api"
 
 
 def arctic_shift_get(path, params, timeout=10):
-    return SESSION.get(f"{ARCTIC_SHIFT_BASE}{path}", params=params, timeout=timeout)
+    return timed(SESSION.get, f"{ARCTIC_SHIFT_BASE}{path}", params=params, timeout=timeout)
 
 
 def _normalize_comment(d):

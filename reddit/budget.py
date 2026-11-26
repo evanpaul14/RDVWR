@@ -4,7 +4,9 @@ from contextvars import ContextVar
 from functools import wraps
 from inspect import signature
 import time
+from urllib.parse import urlsplit
 import requests
+from core import stats
 
 _deadline = ContextVar('upstream_deadline', default=None)
 
@@ -44,7 +46,22 @@ def budgeted(fn):
 
 def request(call, *args, **kwargs):
     kwargs['timeout'] = remaining(kwargs.get('timeout', 10))
-    return call(*args, **kwargs)
+    return timed(call, *args, **kwargs)
+
+
+def timed(call, url, *args, **kwargs):
+    """call(url, ...), recording its host, status and duration on the /stats page."""
+    host = urlsplit(url).hostname or '?'
+    start = time.monotonic()
+    try:
+        resp = call(url, *args, **kwargs)
+    except BaseException:
+        stats.record_upstream(host, None, time.monotonic() - start)
+        raise
+    status = getattr(resp, 'status_code', None)
+    if isinstance(status, int):  # anything else (a test double) isn't worth recording
+        stats.record_upstream(host, status, time.monotonic() - start)
+    return resp
 
 
 def backoff(seconds):
