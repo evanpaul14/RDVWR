@@ -7,7 +7,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="RDVWR">
 <title>{{ page_title or 'RDVWR' }}</title>
-<meta name="referrer" content="no-referrer">
+{# same-origin, not no-referrer: other sites (media hosts) still learn nothing, but the
+   browser keeps the real Origin on this site's own form POSTs (log out, owner sign-in).
+   no-referrer makes it send "Origin: null", and over plain http (a .local address) there's
+   no Sec-Fetch-Site either, so is_same_site_request() had nothing to go on and 403'd. #}
+<meta name="referrer" content="same-origin">
 <meta name="rdvwr-base" content="{{ base_path }}">
 {% if proxy_media %}<meta name="rdvwr-proxy-media" content="1">{% endif %}
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">

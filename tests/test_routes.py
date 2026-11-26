@@ -1005,7 +1005,7 @@ class TestMediaProxy:
     def test_spa_meta_flag(self, client, proxy_media_on):
         html = client.get("/search").get_data(as_text=True)
         assert 'name="rdvwr-proxy-media"' in html
-        assert 'name="referrer" content="no-referrer"' in html
+        assert 'name="referrer" content="same-origin"' in html
         assert "fonts.googleapis.com" not in html
 
 
