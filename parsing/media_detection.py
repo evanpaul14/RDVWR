@@ -53,7 +53,7 @@ def clean_url(url):
     return url.replace("&amp;", "&") if url else None
 
 
-REDDIT_PREVIEW_HOSTS = ('preview.redd.it', 'external-preview.redd.it')
+REDDIT_PREVIEW_HOSTS = ('preview.redd.it', 'cf.preview.redd.it', 'external-preview.redd.it')
 
 
 def proxy_if_reddit_preview(url):

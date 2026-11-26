@@ -140,7 +140,8 @@ def proxy_redgifs_media(filename):
         return error_response(502)
 
 
-IMG_PROXY_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
+# cf.preview.redd.it: Reddit's newer CDN alias for preview.redd.it, seen in comment image links.
+IMG_PROXY_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'cf.preview.redd.it', 'external-preview.redd.it'})
 IMG_PROXY_MAX_REDIRECTS = 3
 _REDIRECT_CODES = (301, 302, 303, 307, 308)
 

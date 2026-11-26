@@ -55,7 +55,7 @@ function _initMarked() {
     }
     try {
       const h = new URL(href).hostname;
-      if (h === 'preview.redd.it' || h === 'external-preview.redd.it')
+      if (h === 'preview.redd.it' || h === 'cf.preview.redd.it' || h === 'external-preview.redd.it')
         href = `${BASE}/api/img?url=${encodeURIComponent(href)}`;
       else
         href = proxyMedia(href);

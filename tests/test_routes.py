@@ -919,6 +919,16 @@ class TestImgProxy:
         resp = client.get("/api/img?url=https://external-preview.redd.it/img.jpg")
         assert resp.status_code == 200
 
+    @patch.object(reddit_client.SESSION, "get")
+    def test_cf_preview_host_allowed(self, mock_get, client):
+        mock_get.return_value = MockResponse(
+            status_code=200,
+            headers={"Content-Type": "image/jpeg"},
+            raw_bytes=b"data",
+        )
+        resp = client.get("/api/img?url=https://cf.preview.redd.it/img.jpeg?width=3072")
+        assert resp.status_code == 200
+
 
 # ── /api/m/<host>/<path> (opt-in media proxy) ─────────────────────────────────
 

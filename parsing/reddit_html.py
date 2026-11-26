@@ -28,7 +28,7 @@ _REDDIT_LINK_RE = re.compile(rf'^(?:https?://(?:www\.|old\.|new\.|np\.)?reddit\.
 _SUB_SEARCH_RE = re.compile(r'^/r/([A-Za-z0-9_]+)/search/?$', re.I)
 # Bare image links in comments/posts (e.g. a pasted preview.redd.it URL) render inline,
 # same as the JS markdown renderer: Reddit's own image hosts via the /api/img proxy.
-_INLINE_IMG_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'external-preview.redd.it'})
+_INLINE_IMG_HOSTS = frozenset({'i.redd.it', 'preview.redd.it', 'cf.preview.redd.it', 'external-preview.redd.it'})
 _INLINE_IMG_EXT_RE = re.compile(r'\.(?:jpe?g|gif|png|webp|avif)(?:\?|$)', re.I)
 # Reddit renders a comment's giphy embed as a link to the giphy page.
 _GIPHY_PAGE_RE = re.compile(r'^https://giphy\.com/gifs/(?:[\w-]*-)?([A-Za-z0-9]+)/?$')
