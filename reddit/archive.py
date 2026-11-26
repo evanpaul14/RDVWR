@@ -145,8 +145,8 @@ _GONE = ("", "[deleted]", "[removed]")
 
 def fetch_archived_comment_bodies(comment_ids, timeout=15):
     """{id: {"author", "body"}} for the given comment ids, from the archive's copy taken
-    before they were deleted or removed. Ids the archive lacks, or only has after the
-    deletion, are left out; an author that was already gone stays "[deleted]"."""
+    before their author or text was deleted. "author" is "[deleted]" and "body" is "" when
+    the archive only has that part after the deletion; ids with neither are left out."""
     ids = list(dict.fromkeys(comment_ids))[:ARCHIVED_IDS_MAX]
     if not ids:
         return {}
@@ -155,8 +155,11 @@ def fetch_archived_comment_bodies(comment_ids, timeout=15):
     wanted = set(ids)
     found = {}
     for d in resp.json().get("data") or []:
-        cid, body = d.get("id"), d.get("body") or ""
-        if cid in wanted and body.strip() not in _GONE:
-            author = d.get("author") or "[deleted]"
-            found[cid] = {"author": author if author not in _GONE else "[deleted]", "body": body}
+        cid = d.get("id")
+        body = d.get("body") or ""
+        author = d.get("author") or ""
+        body = "" if body.strip() in _GONE else body
+        author = "[deleted]" if author in _GONE else author
+        if cid in wanted and (body or author != "[deleted]"):
+            found[cid] = {"author": author, "body": body}
     return found

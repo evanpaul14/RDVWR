@@ -1,22 +1,35 @@
-// "restore" buttons on deleted/removed comments: fetch the comment's original author and text
-// from the Arctic Shift archive (GET /api/archive/comments) and put them in place of "[deleted]".
-// The archive only has text it captured before the deletion, so some comments can't come back.
+// "restore" buttons on comments whose text or author was deleted: fetch the original author and
+// text from the Arctic Shift archive (GET /api/archive/comments) and put them in place of
+// "[deleted]". The archive only has what it captured before the deletion, so some can't come back.
 import { escHtml, userLink } from './utils.js';
 import { renderMd } from './render.js';
 import { translateBtnHtml } from './translate.js';
 
 export const restoreBtnHtml = id =>
-  `<button type="button" class="restore-btn" data-restore="${escHtml(id)}" title="Load the original text from the Arctic Shift archive">restore</button>`;
-export const ARCHIVED_MARK = '<span class="restored-mark" title="Deleted on Reddit; text from the Arctic Shift archive">archived</span>';
+  `<button type="button" class="restore-btn" data-restore="${escHtml(id)}" title="Load the original author and text from the Arctic Shift archive">restore</button>`;
+export const ARCHIVED_MARK = '<span class="restored-mark" title="Deleted on Reddit; restored from the Arctic Shift archive">archived</span>';
 
+/** Fills in whatever the archive has; false when it had nothing this comment is missing. */
 function apply(comment, c) {
   const header = comment.querySelector(':scope > .comment-header');
   const author = header.querySelector('.comment-author');
-  if (author && c.author !== '[deleted]') author.outerHTML = userLink(c.author, author.className);
-  comment.querySelector(':scope > .comment-body').innerHTML = renderMd(c.body);
-  header.querySelector('.restore-btn').outerHTML = translateBtnHtml(c.lang) + ARCHIVED_MARK;
-  comment.classList.remove('comment-deleted');
+  const btn = header.querySelector('.restore-btn');
+  let extra = '';
+  let changed = false;
+  if (author?.textContent === '[deleted]' && c.author !== '[deleted]') {
+    author.outerHTML = userLink(c.author, author.className);
+    changed = true;
+  }
+  if (comment.classList.contains('comment-deleted') && c.body) {
+    comment.querySelector(':scope > .comment-body').innerHTML = renderMd(c.body);
+    comment.classList.remove('comment-deleted');
+    extra = translateBtnHtml(c.lang);
+    changed = true;
+  }
+  if (!changed) return false;
+  btn.outerHTML = extra + ARCHIVED_MARK;
   comment.classList.add('comment-restored');
+  return true;
 }
 
 async function restore(btn) {
@@ -31,7 +44,7 @@ async function restore(btn) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const c = data.comments?.[btn.dataset.restore];
-    if (c) { apply(comment, c); return; }
+    if (c && apply(comment, c)) return;
     btn.textContent = 'not archived';
     btn.disabled = true;
   } catch {

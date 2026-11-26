@@ -373,7 +373,8 @@ CACHE_TTL_RESTORED = 3600
 
 @fetch_cache(CACHE_TTL_RESTORED)
 def fetch_restored_comments(ids, timeout=15):
-    """{id: {"author", "body", lang fields}} for deleted/removed comments, from the archive.
+    """{id: {"author", "body", lang fields}} for comments whose author or text was deleted,
+    from the archive (see fetch_archived_comment_bodies for what's left blank).
     `ids` is a comma-separated string (the cache key). Raises UpstreamError when the archive
     can't be reached."""
     wanted = [i for i in ids.split(",") if COMMENT_ID_RE.fullmatch(i)]
@@ -382,12 +383,15 @@ def fetch_restored_comments(ids, timeout=15):
     except Exception as e:
         log.warning("archived comment restore failed ids=%s: %s", ids[:100], e)
         raise UpstreamError("Couldn't reach the archive", 502)
-    return {cid: {**c, **lang_fields(c["body"])} for cid, c in found.items()}
+    return {cid: {**c, **(lang_fields(c["body"]) if c["body"] else {})} for cid, c in found.items()}
+
+
+_GONE_BODIES = ("", "[deleted]", "[removed]")
 
 
 def restore_deleted(comments, restored):
-    """A copy of a comment tree with deleted comments swapped for their `restored` versions
-    (flagged "restored"); the cached tree itself is left alone."""
+    """A copy of a comment tree with each deleted author and text swapped for its `restored`
+    version (flagged "restored" when anything changed); the cached tree is left alone."""
     out = []
     for c in comments:
         if c.get("kind") == "more":
@@ -395,15 +399,17 @@ def restore_deleted(comments, restored):
             continue
         c = {**c, "replies": restore_deleted(c.get("replies") or [], restored)}
         r = restored.get(c["id"])
-        if r and c.get("body", "") in ("", "[deleted]", "[removed]"):
-            c.update(r, restored=True, body_html="")
+        if r and c.get("author") == "[deleted]" and r["author"] != "[deleted]":
+            c.update(author=r["author"], restored=True)
+        if r and r["body"] and c.get("body", "") in _GONE_BODIES:
+            c.update(r, author=c["author"], restored=True, body_html="")
         out.append(c)
     return out
 
 
 @bp.route("/api/archive/comments")
 def get_restored_comments():
-    """Original text of deleted comments: ?ids=a,b,c (up to 100)."""
+    """Original author and text of deleted comments: ?ids=a,b,c (up to 100)."""
     ids = ",".join(i for i in request.args.get("ids", "").split(",")[:100] if COMMENT_ID_RE.fullmatch(i))
     if not ids:
         return jsonify({"error": "No comment ids"}), 400
