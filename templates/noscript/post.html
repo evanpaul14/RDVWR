@@ -17,6 +17,7 @@
       {% if page.comments %}
         <div class="pv-comments">
           {% if page.thread_link %}<div class="thread-banner"><a href="{{ page.thread_link }}">&larr; View full thread</a></div>{% endif %}
+          {% if page.restore_error %}<div class="thread-banner">Couldn't reach the archive to restore this comment</div>{% endif %}
           {% for c in page.comments %}{{ comments.comment(c, page.post, page.comment_sort) }}{% endfor %}
         </div>
       {% elif page.comments_error %}

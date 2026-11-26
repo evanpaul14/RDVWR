@@ -1,13 +1,13 @@
 """Post comment trees and 'load more' children."""
 from reddit.budget import budgeted
 import time
-from flask import Blueprint, request
+from flask import Blueprint, jsonify, request
 from parsing.media_detection import process_post, _parse_awards
 from core.config import DISABLE_NSFW
 from core.lang import lang_fields
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
-from reddit.archive import fetch_archived_comment_tree, fetch_archived_post
+from reddit.archive import fetch_archived_comment_tree, fetch_archived_post, fetch_archived_comment_bodies
 from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from gql.posts import fetch_gql_post
 from core.cache import fetch_cache, CACHE_TTL_FEED, cached_json, server_cache
@@ -361,6 +361,54 @@ def get_morechildren(subreddit, post_id):
                                               request.args.get("sort", "confidence"),
                                               with_avatars=request.args.get("avatars") == "1"),
                            CACHE_TTL_FEED)
+    except UpstreamError as e:
+        return e.response()
+    except Exception:
+        return error_response(500)
+
+
+# The archive's copy of a comment doesn't change, so restores are kept for an hour.
+CACHE_TTL_RESTORED = 3600
+
+
+@fetch_cache(CACHE_TTL_RESTORED)
+def fetch_restored_comments(ids, timeout=15):
+    """{id: {"author", "body", lang fields}} for deleted/removed comments, from the archive.
+    `ids` is a comma-separated string (the cache key). Raises UpstreamError when the archive
+    can't be reached."""
+    wanted = [i for i in ids.split(",") if COMMENT_ID_RE.fullmatch(i)]
+    try:
+        found = fetch_archived_comment_bodies(wanted, timeout=timeout)
+    except Exception as e:
+        log.warning("archived comment restore failed ids=%s: %s", ids[:100], e)
+        raise UpstreamError("Couldn't reach the archive", 502)
+    return {cid: {**c, **lang_fields(c["body"])} for cid, c in found.items()}
+
+
+def restore_deleted(comments, restored):
+    """A copy of a comment tree with deleted comments swapped for their `restored` versions
+    (flagged "restored"); the cached tree itself is left alone."""
+    out = []
+    for c in comments:
+        if c.get("kind") == "more":
+            out.append(c)
+            continue
+        c = {**c, "replies": restore_deleted(c.get("replies") or [], restored)}
+        r = restored.get(c["id"])
+        if r and c.get("body", "") in ("", "[deleted]", "[removed]"):
+            c.update(r, restored=True, body_html="")
+        out.append(c)
+    return out
+
+
+@bp.route("/api/archive/comments")
+def get_restored_comments():
+    """Original text of deleted comments: ?ids=a,b,c (up to 100)."""
+    ids = ",".join(i for i in request.args.get("ids", "").split(",")[:100] if COMMENT_ID_RE.fullmatch(i))
+    if not ids:
+        return jsonify({"error": "No comment ids"}), 400
+    try:
+        return cached_json({"comments": fetch_restored_comments(ids)}, CACHE_TTL_RESTORED)
     except UpstreamError as e:
         return e.response()
     except Exception:

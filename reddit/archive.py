@@ -136,3 +136,27 @@ def fetch_archived_post(post_id):
     if not data or data[0].get("id") != post_id:
         raise UpstreamError("Post not found", 404)
     return {**data[0], "_archived": True}
+
+
+# Ids per Arctic Shift /comments/ids request, and per restore request overall.
+ARCHIVED_IDS_MAX = 100
+_GONE = ("", "[deleted]", "[removed]")
+
+
+def fetch_archived_comment_bodies(comment_ids, timeout=15):
+    """{id: {"author", "body"}} for the given comment ids, from the archive's copy taken
+    before they were deleted or removed. Ids the archive lacks, or only has after the
+    deletion, are left out; an author that was already gone stays "[deleted]"."""
+    ids = list(dict.fromkeys(comment_ids))[:ARCHIVED_IDS_MAX]
+    if not ids:
+        return {}
+    resp = arctic_shift_get("/comments/ids", {"ids": ",".join(ids)}, timeout=timeout)
+    resp.raise_for_status()
+    wanted = set(ids)
+    found = {}
+    for d in resp.json().get("data") or []:
+        cid, body = d.get("id"), d.get("body") or ""
+        if cid in wanted and body.strip() not in _GONE:
+            author = d.get("author") or "[deleted]"
+            found[cid] = {"author": author if author not in _GONE else "[deleted]", "body": body}
+    return found

@@ -2243,4 +2243,9 @@ label.settings-action-btn { cursor:pointer; }
 body.translate-always .translate-btn[data-foreign="0"] { display:inline-flex; }
 body.translate-never .translate-btn { display:none; }
 .translate-btn[data-busy] { opacity:.6; cursor:progress; }
+.restore-btn { background:none; border:0; padding:2px 0; font-family:var(--mono); font-size:10px; color:var(--tx3); cursor:pointer; text-decoration:none; }
+.restore-btn:hover { color:var(--tx); }
+.restore-btn[data-busy] { opacity:.6; cursor:progress; }
+.restore-btn:disabled { cursor:default; opacity:.6; }
+.restored-mark { font-family:var(--mono); font-size:10px; color:var(--tx3); border:1px solid var(--b2); border-radius:3px; padding:0 4px; }
 .translated { white-space:pre-wrap; }

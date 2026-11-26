@@ -20,7 +20,7 @@ from core.ns_prefs import get_pref
 from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscriptions
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
-from routes.comments import fetch_comments, fetch_morechildren
+from routes.comments import fetch_comments, fetch_morechildren, fetch_restored_comments, restore_deleted
 from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments, fetch_user_trophies
 from routes.search import fetch_search_posts, fetch_search_communities, fetch_search_users
 from routes.live import fetch_live_thread
@@ -215,11 +215,14 @@ def _find_comment(comments, comment_id):
     return None
 
 
-def build_post(sub, post_id, comment_id='', sort='confidence', show_context=False, more_ids=''):
+def build_post(sub, post_id, comment_id='', sort='confidence', show_context=False, more_ids='', restore=False):
     """A post and its comments. Mirrors the JS post view's thread modes:
     - comment_id: just that comment's thread (show_context adds its parent comments);
     - more_ids: the comments behind a "load more comments" stub (the JS app splices
-      these into the page; without JS they get a page of their own)."""
+      these into the page; without JS they get a page of their own).
+    - restore (with comment_id): that comment, if deleted, swapped for its Arctic Shift
+      archive copy (the JS app's "restore" button fills it in place; without JS each
+      deleted comment's link opens its own thread page restored)."""
     with_avatars = get_pref('show_avatars') and get_pref('layout') != 'minimal'
     if more_ids:
         (data, err), (more, more_err) = parallel(
@@ -247,14 +250,21 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
             target = _find_comment(comments, comment_id)
             comments = [target] if target else comments
 
+    restore = restore and bool(comment_id)
+    restore_error = None
+    if restore:
+        restored, restore_error = _attempt(fetch_restored_comments, comment_id)
+        comments = restore_deleted(comments, {k: v for k, v in (restored or {}).items() if k == comment_id})
+
     thread_path = f"{base}/_/{comment_id}" if comment_id else base
     hydration = {}
-    if sort == 'confidence':
+    if sort == 'confidence' and not restore:
         hydration["initial_post"] = {**data, "_sub": sub.lower(), "_post_id": post_id,
                                      "_comment_id": comment_id or ''}
     return _page("post", post["title"], {
         "post": post, "comments": comments, "comment_sort": sort, "thread_link": thread_link,
         "comments_error": data.get("comments_error"),
+        "restore_id": comment_id if restore else '', "restore_error": restore_error,
         "sort_links": {s: page_url(thread_path, sort=s, context=1 if show_context else '', more=more_ids)
                        for s in ('confidence', 'top', 'new', 'controversial', 'old', 'qa')},
     }, scope_sub=sub, **hydration)

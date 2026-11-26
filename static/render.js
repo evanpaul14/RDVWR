@@ -7,6 +7,7 @@ import { isFiltered } from './filters.js';
 import { votingEnabled, voteCtlHtml } from './vote.js';
 import { commentActionsHtml } from './comment.js';
 import { translateBtnHtml } from './translate.js';
+import { restoreBtnHtml, ARCHIVED_MARK } from './restore.js';
 
 const THREAD_MAX_DEPTH = 4;
 
@@ -464,7 +465,7 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
       }
     }
 
-    return `<div class="comment${isDeleted?' comment-deleted':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
+    return `<div class="comment${isDeleted?' comment-deleted':''}${c.restored?' comment-restored':''}${startCollapsed?' collapsed':''}${isStickied?' comment-stickied':''}" data-depth="${depth}">
       <div class="comment-header">
         <button class="comment-collapse">${startCollapsed?'+':'−'}</button>
         ${!isDeleted && settings.showAvatars && settings.layout !== 'minimal' ? (
@@ -482,7 +483,8 @@ export function renderCommentTree(comments, depth=0, sub='', postId='', postAuth
           ? voteCtlHtml('t1_' + c.id, c.likes, c.score, c.score_hidden ? '' : `<span class="vote-score">${fmtNum(c.score)}</span>`, 'comment-score')
           : c.score_hidden ? '' : `<span class="comment-score">▲ ${fmtNum(c.score)}</span>`}
         <a class="comment-time" href="${permalinkHref}" data-nav="${permalinkHref}" title="${fmtDateTime(c.created_utc)}">${timeAgo(c.created_utc)}</a>${c.edited_utc ? ' <span class="edited-mark">*edited</span>' : ''}
-        ${isDeleted ? '' : translateBtnHtml(c.lang)}
+        ${isDeleted ? restoreBtnHtml(c.id) : translateBtnHtml(c.lang)}
+        ${c.restored ? ARCHIVED_MARK : ''}
         ${renderAwards(c.awards)}
       </div>
       <div class="comment-body md">${isDeleted?'<em>[deleted]</em>':renderMd(c.body)}</div>
