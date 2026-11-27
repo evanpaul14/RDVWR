@@ -41,6 +41,10 @@ jobs:
           python3 scripts/update_vendor.py --summary "$RUNNER_TEMP/summary.md"
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
+      # marked and DOMPurify are bundled into app.bundle.js, so it has to be rebuilt.
+      - name: Rebuild bundle
+        run: npx --yes esbuild static/app.js --bundle --minify --outfile=static/app.bundle.js
+
       - name: Tests
         run: |
           python3 -m pytest tests/ -q
@@ -48,7 +52,7 @@ jobs:
 
       - name: Open or update PR
         run: |
-          git add static/marked.min.js static/purify.min.js static/hls.min.js static/vendor.json
+          git add static/marked.min.js static/purify.min.js static/hls.min.js static/vendor.json static/app.bundle.js
           if git diff --cached --quiet; then
             echo "No vendor changes."
             exit 0

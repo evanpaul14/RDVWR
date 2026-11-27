@@ -8,6 +8,7 @@ import { initMedia, initGifVideos } from './media.js';
 import { getSavedPosts } from './saved.js';
 import { getSubs } from './subscriptions.js';
 import { accountActive } from './vote.js';
+import { getAbout, setAbout } from './about-cache.js';
 import { homeFeedScope, isHomeSeen, markHomeSeen, getHomeCursor, setHomeCursor } from './homefeed-seen.js';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -281,8 +282,6 @@ export async function loadSubscribed(sort='hot', time='all', after=null, base='/
 }
 
 // ── Subreddit feed ────────────────────────────────────────────────────────────
-const _aboutCache = new Map();
-const ABOUT_CACHE_TTL = 5 * 60 * 1000;
 const SUB_STATE_LABELS = {
   restricted:      'restricted',
   archived:        'archived',
@@ -299,18 +298,18 @@ export async function loadAbout(sub) {
     let d;
     const key = sub.toLowerCase();
     const inj = window.__INITIAL_ABOUT__;
-    const cached = _aboutCache.get(key);
+    const cached = getAbout(key);
     if (inj && inj._sub === key) {
       window.__INITIAL_ABOUT__ = null;
       d = inj;
-      _aboutCache.set(key, { d, ts: Date.now() });
-    } else if (cached && Date.now() - cached.ts < ABOUT_CACHE_TTL) {
-      d = cached.d;
+      setAbout(key, d);
+    } else if (cached) {
+      d = cached;
     } else {
       const res = await fetch(`/api/r/${encodeURIComponent(sub)}/about`);
       if (!res.ok) return;
       d = await res.json();
-      _aboutCache.set(key, { d, ts: Date.now() });
+      setAbout(key, d);
     }
     // Metadata can finish after the user has left this feed.
     if (!onCurrentRoute() || myGen !== state.feedGen || state.currentSub.toLowerCase() !== key) return;

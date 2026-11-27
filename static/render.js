@@ -9,27 +9,14 @@ import { commentActionsHtml } from './comment.js';
 import { translateBtnHtml } from './translate.js';
 import { restoreBtnHtml, ARCHIVED_MARK } from './restore.js';
 import { originalBtnHtml } from './original.js';
+import { marked } from './marked.min.js';
+import DOMPurify from './purify.min.js';
 
 const THREAD_MAX_DEPTH = 4;
 
-// ── Markdown libs (marked + DOMPurify) — loaded on demand ────────────────────
-let _mdLibsReady = false;
-let _mdLibsPromise = null;
-
-function _loadMdLibs() {
-  if (_mdLibsReady || _mdLibsPromise) return _mdLibsPromise || Promise.resolve();
-  let loaded = 0;
-  _mdLibsPromise = new Promise(resolve => {
-    for (const file of ['marked.min.js', 'purify.min.js']) {
-      const s = document.createElement('script');
-      s.src = `${BASE}/static/${file}`;
-      s.onload = () => { if (++loaded === 2) { _mdLibsReady = true; resolve(); } };
-      document.head.appendChild(s);
-    }
-  });
-  return _mdLibsPromise;
-}
-_loadMdLibs();
+// ── Markdown libs (marked + DOMPurify) ───────────────────────────────────────
+// Bundled rather than loaded as separate <script>s: every page renders markdown, so
+// fetching them after the bundle ran only added two requests and a waterfall.
 
 // Reddit's image viewer link (reddit.com/media?url=<image>) -> the image URL itself.
 export function unwrapRedditMedia(href) {
@@ -126,7 +113,8 @@ export function linkifyReddit(text) {
       (m, skip, slash, user) => skip ? skip : `[u/${user}](${BASE}/user/${user})`);
 }
 
-export function waitForMdLibs() { return _loadMdLibs(); }
+// Kept so callers' await points (and their stale-navigation checks) stay as they were.
+export function waitForMdLibs() { return Promise.resolve(); }
 
 // Nests chained bare-caret superscripts (^a^b^c -> a<sup>b<sup>c</sup></sup>), matching Reddit's scoping.
 function _nestSup(chain) {
@@ -149,7 +137,6 @@ function unescapeBareUrlUnderscores(text) {
 
 export function renderMd(text) {
   if (!text) return '';
-  if (!_mdLibsReady) return '';
   _initMarked();
   const processed = embedRedditCommentVideos(linkifyReddit(unescapeBareUrlUnderscores(text)))
     .replace(new RegExp(`(${_CODE_SKIP})|>!([\\s\\S]*?)(?:!<|$)`, 'g'), (m, skip, inner) =>
@@ -439,7 +426,7 @@ export function renderPost(p, idx, showSub=false) {
     </div>`;
   }
 
-  const excerptContent = p.selftext_html && _mdLibsReady
+  const excerptContent = p.selftext_html
     ? DOMPurify.sanitize(p.selftext_html, { ADD_TAGS: ['span'], ADD_ATTR: ['class', 'tabindex', 'role'] })
     : p.selftext ? renderMd(p.selftext) : '';
   const excerptInner = excerptContent ? `<div class="post-excerpt"><div class="md">${excerptContent}</div></div>` : '';

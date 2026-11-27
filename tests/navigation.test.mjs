@@ -24,6 +24,7 @@ const stubs = {
   './home-pagination.js': url('../static/home-pagination.js'),
   './hydration.js': url('../static/hydration.js'),
   './homefeed-seen.js': url('../static/homefeed-seen.js'),
+  './about-cache.js': url('../static/about-cache.js'),
   './settings.js': moduleUrl('export const settings = globalThis.__navigationTest.settings; export const personalizedHomeMode = () => globalThis.__navigationTest.mode;'),
   './utils.js': moduleUrl('export const escHtml=String, fmtNum=String, fmtDate=String, errState=String, buildTimeFilterHtml=()=>"", SKELETON_COUNT=1, openOnReddit=()=>{}, BASE="", appPath=x=>x;'),
   './render.js': moduleUrl('export const renderPost=()=>"", renderUserCommentCard=()=>"", waitForMdLibs=()=>globalThis.__navigationTest.mdReady || Promise.resolve();'),

@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { escHtml, fmtDate, errState, BASE, scrollBehavior } from './utils.js';
 import { setMainOpen } from './feed.js';
+import DOMPurify from './purify.min.js';
 
 const feed    = document.getElementById('feed');
 const sortBar = document.getElementById('sort-bar');

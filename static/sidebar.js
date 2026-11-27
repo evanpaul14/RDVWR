@@ -1,5 +1,6 @@
 import { escHtml, fmtNum, fmtDate, timeAgo, BASE } from './utils.js';
 import { renderMd, waitForMdLibs } from './render.js';
+import { getAbout } from './about-cache.js';
 
 function renderWidget(w) {
   const title = w.name ? `<div class="sidebar-section-title">${escHtml(w.name)}</div>` : '';
@@ -75,12 +76,13 @@ export async function toggleSidebar(sub) {
   sidebarInner.innerHTML = '<div style="padding:10px 0;font-family:var(--mono);font-size:11px;color:var(--tx3)">Loading…</div>';
 
   try {
+    const knownAbout = getAbout(sub);
     const [, aboutRes, rulesRes, widgetsRes] = await Promise.all([waitForMdLibs(),
-      fetch(`/api/r/${encodeURIComponent(sub)}/about`),
+      knownAbout ? null : fetch(`/api/r/${encodeURIComponent(sub)}/about`),
       fetch(`/api/r/${encodeURIComponent(sub)}/rules`),
       fetch(`/api/r/${encodeURIComponent(sub)}/widgets`),
     ]);
-    const about = aboutRes.ok ? await aboutRes.json() : {};
+    const about = knownAbout || (aboutRes.ok ? await aboutRes.json() : {});
     const rulesData = rulesRes.ok ? await rulesRes.json() : {rules:[]};
     const widgetsData = widgetsRes.ok ? await widgetsRes.json() : {widgets:[]};
 
