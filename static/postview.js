@@ -7,6 +7,7 @@ import { rememberPost, saveBtnHtml } from './saved.js';
 import { accountActive, voteCtlHtml } from './vote.js';
 import { commentFormHtml } from './comment.js';
 import { translateBtnHtml } from './translate.js';
+import { showToast } from './toast.js';
 import { originalBtnHtml } from './original.js';
 import { renderCommentTree, renderMd, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
@@ -41,7 +42,7 @@ function buildDownloadBtn(p) {
   if (p.is_video && p.video_url) {
     if (p.hls_url) {
       const href = `${BASE}/api/download/reddit-video?hls=${encodeURIComponent(realMediaUrl(p.hls_url))}&filename=${encodeURIComponent(p.id + '.mp4')}`;
-      return `<a class="share-btn" href="${escHtml(href)}" download="${escHtml(p.id + '.mp4')}" title="Download video">${_DL_SVG} download</a>`;
+      return `<a class="share-btn pv-dl-video" href="${escHtml(href)}" download="${escHtml(p.id + '.mp4')}" title="Download video">${_DL_SVG} download</a>`;
     }
     url = p.video_url; filename = `${p.id}.mp4`;
   } else if (p.gif_url) {
@@ -537,6 +538,42 @@ function _showGalleryDlModal(gallery, postId) {
 
   document.body.appendChild(modal);
 }
+
+// Reddit videos are merged server-side before download, which takes a few seconds and
+// can be refused while the server is busy. Fetch the file here so the button can show
+// progress and a refusal shows a message instead of a broken download.
+document.addEventListener('click', async e => {
+  const link = e.target.closest('a.pv-dl-video');
+  if (!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  if (link.dataset.busy) return;
+  link.dataset.busy = '1';
+  const label = link.innerHTML;
+  link.innerHTML = `${_DL_SVG} preparing…`;
+  link.setAttribute('aria-busy', 'true');
+  try {
+    const res = await fetch(link.href);
+    if (res.status === 503 || res.status === 429) {
+      showToast('Too many video downloads right now. Try again in a moment.');
+      return;
+    }
+    if (!res.ok) { showToast('Video download failed.'); return; }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = link.getAttribute('download') || 'video.mp4';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    showToast('Video download failed.');
+  } finally {
+    delete link.dataset.busy;
+    link.removeAttribute('aria-busy');
+    link.innerHTML = label;
+  }
+});
 
 document.addEventListener('click', e => {
   const btn = e.target.closest('.pv-gallery-dl-btn');

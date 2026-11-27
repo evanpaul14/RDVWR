@@ -2270,3 +2270,14 @@ body.translate-never .translate-btn { display:none; }
 .edit-diff-more > .edit-diff-orig { padding-top:0; }
 .comment.collapsed > .edit-diff { display:none; }
 .translated { white-space:pre-wrap; }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.toast {
+  position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom, 0px)); z-index:1200;
+  transform:translate(-50%, 8px); max-width:min(90vw, 420px); padding:10px 14px;
+  background:var(--bg3); color:var(--tx); border:1px solid var(--b2); border-radius:8px;
+  box-shadow:var(--shadow-dropdown); font:13px/1.4 var(--sans);
+  opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+}
+.toast.show { opacity:1; transform:translate(-50%, 0); }
+@media (max-width:680px) { .toast { bottom:calc(72px + env(safe-area-inset-bottom, 0px)); } }
