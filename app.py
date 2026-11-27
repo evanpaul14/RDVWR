@@ -6,6 +6,7 @@ from core import template_helpers
 from core import base_path
 from core import ratelimit
 from core import stats
+from core import static_compress
 from core.cache import CACHE_TTL_STATIC
 from core.config import PROXY_MEDIA
 from core.helpers import is_same_site_request
@@ -19,6 +20,8 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = CACHE_TTL_STATIC
 # Route Reddit/Imgur media through /api/m/ instead of letting the browser hit the CDNs.
 app.config['PROXY_MEDIA'] = PROXY_MEDIA
 Compress(app)
+# Registered after Compress so it runs first; see core/static_compress.py.
+static_compress.register(app)
 
 
 template_helpers.register(app)
