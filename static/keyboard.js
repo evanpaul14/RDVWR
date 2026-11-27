@@ -47,6 +47,12 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
     if (postView.classList.contains('open')) {
       if (e.key === 'j' || e.key === 'J') { e.preventDefault(); _selectComment(_selectedCommentIdx + 1); }
       else if (e.key === 'k' || e.key === 'K') { e.preventDefault(); _selectComment(Math.max(0, _selectedCommentIdx - 1)); }
+      else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.altKey && !e.metaKey && !e.ctrlKey
+               && !document.getElementById('lightbox').classList.contains('open')) {
+        // Step the post's gallery (the lightbox has its own arrow-key handler).
+        const btn = pvContent.querySelector(e.key === 'ArrowLeft' ? '.gallery-prev' : '.gallery-next');
+        if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
+      }
       return;
     }
     if (e.key === 'j' || e.key === 'J') {
@@ -106,6 +112,7 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
           <kbd>g</kbd><span>Scroll to top</span>
           <kbd>G</kbd><span>Scroll to bottom</span>
           <kbd>/</kbd><span>Focus search</span>
+          <kbd>← →</kbd><span>Previous / next gallery image</span>
           <kbd>Esc</kbd><span>Close panel / lightbox</span>
           <kbd>?</kbd><span>Toggle this help</span>
         </div>

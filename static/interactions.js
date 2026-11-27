@@ -167,6 +167,23 @@ document.addEventListener('click', e => {
   if (!img) return;
   e.preventDefault();
   e.stopPropagation();
+  // An image that belongs to a gallery opens the whole gallery, at that image,
+  // so the lightbox shows prev/next arrows.
+  const gallery = img.classList.contains('gallery-main-img') && img.closest('.gallery');
+  if (gallery) {
+    const thumbs = [...gallery.querySelectorAll('.gallery-thumb')];
+    if (thumbs.length > 1) {
+      const idx = Math.max(0, thumbs.findIndex(t => t.classList.contains('active')));
+      openLightbox(thumbs.map(t => t.dataset.full || t.src), idx);
+      return;
+    }
+  }
+  const stack = img.closest('.minimal-gallery-stack');
+  if (stack) {
+    const imgs = [...stack.querySelectorAll('img')];
+    openLightbox(imgs.map(i => i.dataset.full || i.src), imgs.indexOf(img));
+    return;
+  }
   openLightbox(img.dataset.full || img.src);
 });
 
