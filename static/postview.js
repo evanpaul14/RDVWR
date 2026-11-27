@@ -343,7 +343,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
 
     const p = data.post;
     rememberPost(p);
-    pvOpen.href = p.permalink;
+    setPvOpenHref();
     pvBreadcrumb.innerHTML = `<a href="${BASE}/r/${escHtml(p.subreddit)}" data-nav="/r/${escHtml(p.subreddit)}">r/${escHtml(p.subreddit)}</a>`;
     document.title = p.title + ' — RDVWR';
 
@@ -423,6 +423,14 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
   }
 }
 
+// "↗ reddit" points at the focused comment on a comment permalink, else at the post.
+function setPvOpenHref() {
+  const permalink = state._pvData?.post?.permalink;
+  if (!permalink) { pvOpen.href = '#'; return; }
+  const cid = state._pvCommentId;
+  pvOpen.href = cid ? permalink.replace(/\/?$/, '/') + encodeURIComponent(cid) + '/' : permalink;
+}
+
 export async function stepViewFullThread() {
   const area = pvContent.querySelector('.pv-comments-area');
   if (!area || !state._pvCommentId || !state._pvData) return;
@@ -436,6 +444,7 @@ export async function stepViewFullThread() {
   } else {
     state._pvShowingContext = false;
     state._pvCommentId = '';
+    setPvOpenHref();
     await changeCommentSort(state.currentCommentSort);
   }
 }

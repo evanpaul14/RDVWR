@@ -339,7 +339,7 @@
     <span>{{ p.num_comments | fmtnum }} comments</span>
     {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}
     {%- if dl and not minimal %}<a class="share-btn" href="{{ dl }}" download title="Download media"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> download</a>{% endif %}
-    <a class="meta-item link" href="{{ p.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
+    <a class="meta-item link" href="{{ p.permalink.rstrip('/') ~ '/' ~ page.comment_id ~ '/' if page.comment_id and p.permalink else p.permalink }}" target="_blank" rel="noopener">reddit.com &#8599;</a>
     {{ awards(p.awards) }}
   </div>
   {%- if p.crosspost_from or p.linked_post -%}
