@@ -7,6 +7,7 @@ import { rememberPost, saveBtnHtml } from './saved.js';
 import { accountActive, voteCtlHtml } from './vote.js';
 import { commentFormHtml } from './comment.js';
 import { translateBtnHtml } from './translate.js';
+import { originalBtnHtml } from './original.js';
 import { renderCommentTree, renderMd, renderCrosspostFull, renderLinkedPostFull, waitForMdLibs } from './render.js';
 
 // ── Download button ───────────────────────────────────────────────────────────
@@ -356,7 +357,7 @@ export async function loadPostView(sub, postId, commentId='', restorePvScroll=0,
       p.is_oc       ? '<span class="badge badge-oc">oc</span>' : '',
       renderFlair(p, true),
     ].filter(Boolean).join('');
-    const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>` : '';
+    const pvEditedHtml = p.edited_utc ? `<span class="edited-mark" title="edited ${fmtDate(p.edited_utc)}">*edited ${timeAgo(p.edited_utc)}</span>${p.is_self && !p.archived ? originalBtnHtml('post', p.id, p.selftext) : ''}` : '';
     const bodyInner = p.selftext?.trim() ? `<div class="pv-body md">${renderMd(p.selftext)}</div>` : '';
     const bodyHtml = (bodyInner && p.over_18)
       ? veilWrap('nsfw', bodyInner, 'text')

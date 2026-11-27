@@ -106,7 +106,7 @@ def post(sub, post_id, slug='', comment_id=''):
         sort = get_pref('comment_sort')
     more = ','.join(i for i in _arg('more').split(',') if COMMENT_ID_RE.fullmatch(i) or GQL_CURSOR_RE.match(i))
     return _respond(build_post(sub, post_id, comment_id, sort, _arg('context') == '1', more,
-                               restore=_arg('restore') == '1'))
+                               restore=_arg('restore') == '1', original=_arg('original') == '1'))
 
 
 @bp.route("/r/<sub>/duplicates/<post_id>", strict_slashes=False)

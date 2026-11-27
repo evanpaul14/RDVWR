@@ -2248,4 +2248,13 @@ body.translate-never .translate-btn { display:none; }
 .restore-btn[data-busy] { opacity:.6; cursor:progress; }
 .restore-btn:disabled { cursor:default; opacity:.6; }
 .restored-mark { font-family:var(--mono); font-size:10px; color:var(--tx3); border:1px solid var(--b2); border-radius:3px; padding:0 4px; }
+.original-btn { margin-left:4px; }
+/* "view original": word diff from the archived original to the current text (original.js) */
+.edit-diff { margin:8px 0 10px; border:1px solid var(--b2); border-radius:6px; background:var(--bg2); overflow:hidden; }
+.edit-diff-head { padding:6px 10px; font-family:var(--mono); font-size:10px; color:var(--tx3); border-bottom:1px solid var(--b); }
+.edit-diff-head:last-child { border-bottom:0; }
+.edit-diff-text { padding:8px 10px; font-family:var(--mono); font-size:12px; line-height:1.6; color:var(--tx2); white-space:pre-wrap; overflow-wrap:anywhere; max-height:60vh; overflow-y:auto; }
+.edit-diff del { background:rgba(230,70,70,.22); color:var(--tx); text-decoration:line-through; text-decoration-color:rgba(230,70,70,.8); border-radius:2px; }
+.edit-diff ins { background:rgba(60,190,100,.22); color:var(--tx); text-decoration:none; border-radius:2px; }
+.comment.collapsed > .edit-diff { display:none; }
 .translated { white-space:pre-wrap; }

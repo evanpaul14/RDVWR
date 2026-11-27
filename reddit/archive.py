@@ -164,3 +164,21 @@ def fetch_archived_comment_bodies(comment_ids, timeout=15):
         if cid in wanted and (body or author != "[deleted]"):
             found[cid] = {"author": author, "body": body}
     return found
+
+
+def fetch_archived_original(kind, item_id, timeout=15):
+    """{"body", "retrieved_utc"} for a comment's or self post's text as the archive first
+    captured it (seconds after it was posted, so usually before any edit; later edits don't
+    overwrite it). None when the archive doesn't have it or only has it deleted. `kind` is
+    "comment" or "post". Raises on a failed request."""
+    path, field = ("/comments/ids", "body") if kind == "comment" else ("/posts/ids", "selftext")
+    resp = arctic_shift_get(path, {"ids": item_id}, timeout=timeout)
+    resp.raise_for_status()
+    for d in resp.json().get("data") or []:
+        if d.get("id") != item_id:
+            continue
+        body = d.get(field) or ""
+        if body.strip() in ("[deleted]", "[removed]"):
+            return None
+        return {"body": body, "retrieved_utc": d.get("retrieved_on") or d.get("created_utc") or 0}
+    return None

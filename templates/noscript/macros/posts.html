@@ -289,6 +289,33 @@
   </div>
 {%- endmacro %}
 
+{# "view original" for an edited comment or self post: a link to its page with ?original=1,
+   or (on that page) the archive's status. `view` is page.original when it is for this item. #}
+{% macro original_link(href, view) -%}
+  {%- if view and view.status == 'missing' %} <span class="restore-btn original-btn">not archived</span>
+  {%- elif view and view.status == 'error' %} <a class="restore-btn original-btn" href="{{ href }}" title="Couldn't reach the archive">failed &mdash; retry</a>
+  {%- elif not view %} <a class="restore-btn original-btn" href="{{ href }}" title="Compare with the original text from the Arctic Shift archive">view original</a>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro diff_captured(view) -%}
+  {%- if view.retrieved_utc %} <span title="{{ view.retrieved_utc | fmtdatetime }}">captured {{ view.retrieved_utc | timeago }}</span>{% endif -%}
+{%- endmacro %}
+
+{# The diff panel (original.js diffPanelHtml); page_data._original_view builds `view`. #}
+{% macro edit_diff(view) -%}
+  {%- if view and view.status in ('diff', 'same') -%}
+  <div class="edit-diff">
+    {%- if view.status == 'same' -%}
+    <div class="edit-diff-head">The archive{{ diff_captured(view) }} only has the edited text, so there's no earlier version to compare.</div>
+    {%- else -%}
+    <div class="edit-diff-head">Changes since the archived original{{ diff_captured(view) }}: <del>removed</del> <ins>added</ins></div>
+    <div class="edit-diff-text">{% for op, text in view.diff %}{% if op == '-' %}<del>{{ text }}</del>{% elif op == '+' %}<ins>{{ text }}</ins>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+    {%- endif -%}
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
 {# ── Full post view ──────────────────────────────────────────────────────────── #}
 
 {% macro detail(p) -%}
@@ -303,7 +330,8 @@
     <span class="up">&#9650; {{ p.score | fmtnum }}</span>{{ vote_form('t3_' ~ p.id, p.likes) }}
     {%- if not minimal %}<span>{{ p.upvote_ratio }}% upvoted</span>{% endif %}
     {% if p.author == '[deleted]' %}<span class="meta-item link">u/[deleted]</span>{% else %}<a class="meta-item link" href="/user/{{ p.author }}">u/{{ p.author }}</a>{% endif %}
-    <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>{% endif %}</span>
+    <span title="{{ p.created_utc | fmtdatetime }}">{{ p.created_utc | timeago }}{% if p.edited_utc %} <span class="edited-mark" title="edited {{ p.edited_utc | fmtdate }}">*edited {{ p.edited_utc | timeago }}</span>
+      {%- if p.is_self and not p.archived %}{{ original_link('/r/' ~ p.subreddit ~ '/comments/' ~ p.id ~ '?original=1', page.original if page.original and page.original.kind == 'post' else None) }}{% endif %}{% endif %}</span>
     <span>{{ p.num_comments | fmtnum }} comments</span>
     {%- if not minimal and not p.is_self and not p.crosspost_from and not p.linked_post %}<a class="meta-item link" href="/r/{{ p.subreddit }}/duplicates/{{ p.id }}">duplicates</a>{% endif %}
     {%- if dl and not minimal %}<a class="share-btn" href="{{ dl }}" download title="Download media"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> download</a>{% endif %}
@@ -322,4 +350,5 @@
   {%- if p.is_self and (p.selftext_html or p.selftext) -%}
     {{ veiled(p, '<div class="pv-body md">' | safe ~ (p.selftext | mdbody(p.selftext_html)) ~ '</div>' | safe, spoiler=False) }}
   {%- endif -%}
+  {%- if page.original and page.original.kind == 'post' %}{{ edit_diff(page.original) }}{% endif -%}
 {%- endmacro %}

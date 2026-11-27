@@ -7,7 +7,8 @@ from core.config import DISABLE_NSFW
 from core.lang import lang_fields
 from parsing.reddit_html import clean_reddit_html
 from reddit.client import reddit_get
-from reddit.archive import fetch_archived_comment_tree, fetch_archived_post, fetch_archived_comment_bodies
+from reddit.archive import (fetch_archived_comment_tree, fetch_archived_post, fetch_archived_comment_bodies,
+                            fetch_archived_original)
 from gql.client import fetch_gql_comments, decode_cursor, CURSOR_PREFIX
 from gql.posts import fetch_gql_post
 from core.cache import fetch_cache, CACHE_TTL_FEED, cached_json, server_cache
@@ -419,3 +420,31 @@ def get_restored_comments():
         return e.response()
     except Exception:
         return error_response(500)
+
+
+@fetch_cache(CACHE_TTL_RESTORED)
+def fetch_original(kind, item_id, timeout=15):
+    """The archive's first copy of an edited comment's or self post's text: {"body",
+    "retrieved_utc"}, or None when it isn't archived. Raises UpstreamError when the archive
+    can't be reached."""
+    try:
+        return fetch_archived_original(kind, item_id, timeout=timeout)
+    except Exception as e:
+        log.warning("archived original failed %s=%s: %s", kind, item_id, e)
+        raise UpstreamError("Couldn't reach the archive", 502)
+
+
+@bp.route("/api/archive/original/<kind>/<item_id>")
+def get_original(kind, item_id):
+    """Text of an edited comment or post as first archived, for the "view original" diff."""
+    if kind not in ("comment", "post") or not (COMMENT_ID_RE if kind == "comment" else POST_ID_RE).fullmatch(item_id):
+        return jsonify({"error": "Bad id"}), 400
+    try:
+        original = fetch_original(kind, item_id)
+    except UpstreamError as e:
+        return e.response()
+    except Exception:
+        return error_response(500)
+    if original is None:
+        return jsonify({"error": "Not archived"}), 404
+    return cached_json(original, CACHE_TTL_RESTORED)

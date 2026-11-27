@@ -44,7 +44,8 @@
         {%- if c.stickied %}<span class="badge badge-sticky">&#128204; stickied</span>{% endif -%}
         {{ posts.author_flair(c) }}
         {%- if not c.score_hidden %}<span class="comment-score">&#9650; {{ c.score | fmtnum }}</span>{% endif %}
-        <a class="comment-time" href="{{ permalink }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>{% if c.edited_utc %} <span class="edited-mark">*edited</span>{% endif %}
+        <a class="comment-time" href="{{ permalink }}" title="{{ c.created_utc | fmtdatetime }}">{{ c.created_utc | timeago }}</a>{% if c.edited_utc %} <span class="edited-mark">*edited</span>
+          {%- if not deleted %}{{ posts.original_link(permalink ~ '?' ~ ({'sort': sort, 'original': 1} | urlencode), page.original if page.original and page.original.kind == 'comment' and page.original.id == c.id else None) }}{% endif %}{% endif %}
         {%- if c.restored %} <span class="restored-mark" title="Deleted on Reddit; restored from the Arctic Shift archive">archived</span>
         {%- elif deleted or c.author == '[deleted]' -%}
           {%- if c.id == page.restore_id and not page.restore_error %} <span class="restore-btn">not archived</span>
@@ -53,6 +54,7 @@
         {{ posts.awards(c.awards) }}
       </summary>
       <div class="comment-body md">{% if deleted %}<em>[deleted]</em>{% else %}{{ c.body | mdbody(c.body_html) }}{% endif %}</div>
+      {%- if page.original and page.original.kind == 'comment' and page.original.id == c.id %}{{ posts.edit_diff(page.original) }}{% endif %}
       {{ posts.vote_form('t1_' ~ c.id, c.likes) }}
       {%- if account_active() and not deleted %}<details class="ns-reply"><summary>reply</summary>{{ comment_form('t1_' ~ c.id, 'reply') }}</details>{% endif %}
       {%- if c.replies -%}
