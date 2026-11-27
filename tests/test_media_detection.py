@@ -381,6 +381,16 @@ class TestProcessPost:
         result = process_post(p)
         assert result["imgur_album_id"] == "ZyXwV"
 
+    def test_imgur_slugged_gallery_id_extracted(self):
+        p = _post(url="https://imgur.com/gallery/wanda-dench-jamal-hinton-thanksgiving-2026-dkNmaJX")
+        result = process_post(p)
+        assert result["imgur_album_id"] == "dkNmaJX"
+
+    def test_imgur_slugged_album_with_suffix(self):
+        p = _post(url="https://imgur.com/a/my-trip-photos-Q1w2E3r?utm_source=x")
+        result = process_post(p)
+        assert result["imgur_album_id"] == "Q1w2E3r"
+
     def test_imgur_direct_image_url(self):
         p = _post(url="https://imgur.com/AbCdEfG")
         result = process_post(p)
