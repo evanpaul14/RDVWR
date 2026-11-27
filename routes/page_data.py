@@ -21,7 +21,7 @@ from routes.home import fetch_frontpage, fetch_personalized_home, fetch_subscrip
 from routes.subreddit import (fetch_feed, fetch_about, fetch_rules, fetch_widgets,
                               fetch_duplicates, fetch_wiki, fetch_multireddit)
 from routes.comments import fetch_comments, fetch_morechildren, fetch_restored_comments, restore_deleted, fetch_original
-from core.textdiff import word_diff
+from core.textdiff import word_diff, similarity, REWRITE_SIMILARITY
 from routes.users import fetch_user_about, fetch_user_overview, fetch_user_posts, fetch_user_comments, fetch_user_trophies
 from routes.search import fetch_search_posts, fetch_search_communities, fetch_search_users
 from routes.live import fetch_live_thread
@@ -285,18 +285,22 @@ def build_post(sub, post_id, comment_id='', sort='confidence', show_context=Fals
 
 def _original_view(kind, item_id, current):
     """The no-JS "view original" panel: {"id", "status", …} where status is "diff" (with
-    "diff" segments and "retrieved_utc"), "same" (the archive only has the edited text),
-    "missing" (not archived) or "error"."""
+    "diff" segments), "rewritten" (shown as the original whole), "same" (the archive only
+    has the edited text), "missing" (not archived) or "error". The first three also carry
+    "original" and "retrieved_utc"."""
     view = {"kind": kind, "id": item_id}
     found, err = _attempt(fetch_original, kind, item_id)
     if err:
         return {**view, "status": "error"}
     if not found:
         return {**view, "status": "missing"}
-    view["retrieved_utc"] = found["retrieved_utc"]
+    view.update(retrieved_utc=found["retrieved_utc"], original=found["body"])
     if found["body"].strip() == current.strip():
         return {**view, "status": "same"}
-    return {**view, "status": "diff", "diff": word_diff(found["body"], current)}
+    diff = word_diff(found["body"], current)
+    if similarity(diff) < REWRITE_SIMILARITY:
+        return {**view, "status": "rewritten"}
+    return {**view, "status": "diff", "diff": diff}
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────

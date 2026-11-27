@@ -24,13 +24,54 @@ def word_diff(old, new):
     ops = [("=", t) for t in a[:start]]
     ops += _middle(a[start:end_a], b[start:end_b])
     ops += [("=", t) for t in a[end_a:]]
-    out = []
+    return _cleanup(ops)
+
+
+def _cleanup(ops):
+    """Readable segments from word ops: each run of changes becomes one removal then one
+    addition, and an unchanged stretch between two changes that is no longer than either of
+    them (a space, a lone "the") is folded into both, so a rewrite reads as whole phrases
+    instead of alternating fragments."""
+    runs = []   # ["=", text] or ["~", removed, added]
     for op, text in ops:
-        if out and out[-1][0] == op:
-            out[-1][1] += text
+        if op == "=":
+            if runs and runs[-1][0] == "=":
+                runs[-1][1] += text
+            else:
+                runs.append(["=", text])
         else:
-            out.append([op, text])
+            if not runs or runs[-1][0] != "~":
+                runs.append(["~", "", ""])
+            runs[-1][1 if op == "-" else 2] += text
+    i = 1
+    while i < len(runs) - 1:
+        eq, before, after = runs[i][1], runs[i - 1], runs[i + 1]
+        if (runs[i][0] == "=" and len(eq) <= max(len(before[1]), len(before[2]))
+                and len(eq) <= max(len(after[1]), len(after[2]))):
+            runs[i - 1:i + 2] = [["~", before[1] + eq + after[1], before[2] + eq + after[2]]]
+            i = max(i - 1, 1)
+        else:
+            i += 1
+    out = []
+    for run in runs:
+        if run[0] == "=":
+            out.append(["=", run[1]])
+        else:
+            out += [[op, text] for op, text in (("-", run[1]), ("+", run[2])) if text]
     return out
+
+
+def similarity(segments):
+    """Share of the longer text left unchanged by `segments` (0–1); a low value means the
+    text was rewritten rather than edited."""
+    kept = sum(len(t) for op, t in segments if op == "=")
+    old = kept + sum(len(t) for op, t in segments if op == "-")
+    new = kept + sum(len(t) for op, t in segments if op == "+")
+    return kept / max(old, new) if max(old, new) else 1.0
+
+
+# Below this similarity the original is shown whole instead of as a diff.
+REWRITE_SIMILARITY = 0.5
 
 
 def _middle(a, b):

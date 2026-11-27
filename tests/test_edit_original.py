@@ -8,7 +8,7 @@ import pytest
 
 from app import app
 from core import cache
-from core.textdiff import word_diff
+from core.textdiff import word_diff, similarity
 from reddit import archive
 from routes import page_data
 
@@ -53,6 +53,15 @@ def test_word_diff_rebuilds_both_sides():
     assert word_diff("same \n", "same") == [["=", "same"]]
 
 
+def test_word_diff_groups_a_rewrite_into_phrases():
+    d = word_diff("Nobody is getting post content props for these. Everyone knows",
+                  "The original post content no longer exists here. The author used")
+    assert d == [["-", "Nobody is getting"], ["+", "The original"], ["=", " post content "],
+                 ["-", "props for these. Everyone knows"], ["+", "no longer exists here. The author used"]]
+    assert similarity(d) < 0.5
+    assert similarity(word_diff("the quick brown fox", "the slow brown fox")) > 0.5
+
+
 def test_word_diff_huge_middle_falls_back_to_replace():
     old = " ".join(f"a{i}" for i in range(2000))
     new = " ".join(f"b{i}" for i in range(2000))
@@ -64,19 +73,22 @@ CASES = [
     ("a b c d e", "e d c b a"),
     ("Hello  world\n\n* one\n* two", "Hello world\n\n* one\n* two\n* three"),
     ("", "x"), ("x y", "x y"), ("  padded\n", "padded"),
+    ("Nobody is getting post content props for these.", "The original post content no longer exists here."),
     ("I think so. EDIT: wrong", "I don't think so.\n\nEDIT: wrong, see below"),
 ]
 
 
 def test_js_diff_matches_python():
-    script = ("import { wordDiff } from './static/textdiff.js';"
-              f"console.log(JSON.stringify({json.dumps(CASES)}.map(([a, b]) => wordDiff(a, b))));")
+    script = ("import { wordDiff, similarity } from './static/textdiff.js';"
+              f"console.log(JSON.stringify({json.dumps(CASES)}.map(([a, b]) => "
+              "{ const d = wordDiff(a, b); return [d, similarity(d)]; })));")
     try:
         out = subprocess.run(["node", "--input-type=module", "-e", script], cwd=ROOT,
                              capture_output=True, text=True, check=True).stdout
     except FileNotFoundError:
         pytest.skip("node not installed")
-    assert json.loads(out) == [word_diff(a, b) for a, b in CASES]
+    expected = [[word_diff(a, b), similarity(word_diff(a, b))] for a, b in CASES]
+    assert json.loads(out) == expected
 
 
 # ── archive fetch and API ──────────────────────────────────────────────────────
@@ -154,3 +166,13 @@ def test_noscript_post_original_states():
             patch.object(archive, "arctic_shift_get", return_value=_resp([])):
         html = app.test_client().get("/r/x/comments/p1?original=1").get_data(as_text=True)
     assert '<span class="restore-btn original-btn">not archived</span>' in html
+
+
+def test_noscript_rewritten_comment_shows_original_whole():
+    with patch.object(page_data, "fetch_comments", return_value=_data()), \
+            patch.object(archive, "arctic_shift_get", return_value=_resp(
+                [{"id": "aaa", "body": "something **entirely** different", "retrieved_on": 61}])):
+        html = app.test_client().get("/r/x/comments/p1/_/aaa?original=1").get_data(as_text=True)
+    assert "Rewritten since the archived original" in html
+    assert '<div class="edit-diff-orig md"><p>something <strong>entirely</strong> different</p>' in html
+    assert "edit-diff-text" not in html

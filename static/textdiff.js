@@ -20,13 +20,57 @@ export function wordDiff(oldText, newText) {
     ...middle(a.slice(start, endA), b.slice(start, endB)),
     ...a.slice(endA).map(t => ['=', t]),
   ];
-  const out = [];
+  return cleanup(ops);
+}
+
+/** Readable segments from word ops: each run of changes becomes one removal then one
+ *  addition, and an unchanged stretch between two changes that is no longer than either of
+ *  them (a space, a lone "the") is folded into both, so a rewrite reads as whole phrases
+ *  instead of alternating fragments. */
+function cleanup(ops) {
+  const runs = [];   // ['=', text] or ['~', removed, added]
   for (const [op, text] of ops) {
-    if (out.length && out[out.length - 1][0] === op) out[out.length - 1][1] += text;
-    else out.push([op, text]);
+    const last = runs[runs.length - 1];
+    if (op === '=') {
+      if (last?.[0] === '=') last[1] += text;
+      else runs.push(['=', text]);
+    } else {
+      if (last?.[0] !== '~') runs.push(['~', '', '']);
+      runs[runs.length - 1][op === '-' ? 1 : 2] += text;
+    }
+  }
+  let i = 1;
+  while (i < runs.length - 1) {
+    const eq = runs[i][1], before = runs[i - 1], after = runs[i + 1];
+    if (runs[i][0] === '=' && eq.length <= Math.max(before[1].length, before[2].length)
+        && eq.length <= Math.max(after[1].length, after[2].length)) {
+      runs.splice(i - 1, 3, ['~', before[1] + eq + after[1], before[2] + eq + after[2]]);
+      i = Math.max(i - 1, 1);
+    } else {
+      i++;
+    }
+  }
+  const out = [];
+  for (const run of runs) {
+    if (run[0] === '=') out.push(['=', run[1]]);
+    else for (const [op, text] of [['-', run[1]], ['+', run[2]]]) if (text) out.push([op, text]);
   }
   return out;
 }
+
+/** Share of the longer text left unchanged by `segments` (0–1); a low value means the
+ *  text was rewritten rather than edited. */
+export function similarity(segments) {
+  let kept = 0, removed = 0, added = 0;
+  for (const [op, t] of segments) {
+    if (op === '=') kept += t.length; else if (op === '-') removed += t.length; else added += t.length;
+  }
+  const longer = Math.max(kept + removed, kept + added);
+  return longer ? kept / longer : 1;
+}
+
+// Below this similarity the original is shown whole instead of as a diff.
+export const REWRITE_SIMILARITY = 0.5;
 
 function middle(a, b) {
   const n = a.length, m = b.length;

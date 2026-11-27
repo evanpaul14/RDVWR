@@ -2253,8 +2253,17 @@ body.translate-never .translate-btn { display:none; }
 .edit-diff { margin:8px 0 10px; border:1px solid var(--b2); border-radius:6px; background:var(--bg2); overflow:hidden; }
 .edit-diff-head { padding:6px 10px; font-family:var(--mono); font-size:10px; color:var(--tx3); border-bottom:1px solid var(--b); }
 .edit-diff-head:last-child { border-bottom:0; }
-.edit-diff-text { padding:8px 10px; font-family:var(--mono); font-size:12px; line-height:1.6; color:var(--tx2); white-space:pre-wrap; overflow-wrap:anywhere; max-height:60vh; overflow-y:auto; }
-.edit-diff del { background:rgba(230,70,70,.22); color:var(--tx); text-decoration:line-through; text-decoration-color:rgba(230,70,70,.8); border-radius:2px; }
-.edit-diff ins { background:rgba(60,190,100,.22); color:var(--tx); text-decoration:none; border-radius:2px; }
+.edit-diff-text { padding:10px 12px; font-size:14px; line-height:1.75; color:var(--tx2); white-space:pre-wrap; overflow-wrap:anywhere; max-height:60vh; overflow-y:auto; }
+.edit-diff del, .edit-diff ins { color:var(--tx); border-radius:3px; padding:1px 2px; -webkit-box-decoration-break:clone; box-decoration-break:clone; }
+.edit-diff del { background:rgba(230,70,70,.18); text-decoration:line-through; text-decoration-color:rgba(230,70,70,.7); }
+.edit-diff ins { background:rgba(60,190,100,.2); text-decoration:none; }
+.edit-diff-head del, .edit-diff-head ins { padding:0 3px; }
+.edit-diff-orig { padding:10px 12px; font-size:14px; max-height:60vh; overflow-y:auto; }
+.edit-diff-orig > :first-child { margin-top:0; }
+.edit-diff-orig > :last-child { margin-bottom:0; }
+.edit-diff-more { border-top:1px solid var(--b); }
+.edit-diff-more > summary { padding:6px 10px; font-family:var(--mono); font-size:10px; color:var(--tx3); cursor:pointer; }
+.edit-diff-more > summary:hover { color:var(--tx); }
+.edit-diff-more > .edit-diff-orig { padding-top:0; }
 .comment.collapsed > .edit-diff { display:none; }
 .translated { white-space:pre-wrap; }

@@ -2,7 +2,8 @@
 // first captured it (GET /api/archive/original/<kind>/<id>, usually seconds after posting,
 // before any edit) and show a word diff from that to the current text under the body.
 import { escHtml, timeAgo, fmtDateTime } from './utils.js';
-import { wordDiff } from './textdiff.js';
+import { wordDiff, similarity, REWRITE_SIMILARITY } from './textdiff.js';
+import { renderMd } from './render.js';
 
 // Current markdown of the edited comments/posts on the page, by id, for diffing against.
 const current = new Map();
@@ -15,18 +16,28 @@ export function originalBtnHtml(kind, id, body) {
 
 const OP_TAG = { '-': 'del', '+': 'ins' };
 
-/** The diff panel's HTML for `original` ({body, retrieved_utc}) against `now`. */
+/** The diff panel's HTML for `original` ({body, retrieved_utc}) against `now`: a diff, or
+ *  the original whole when the text was mostly rewritten. Mirrors posts.html edit_diff. */
 export function diffPanelHtml(original, now) {
   const captured = original.retrieved_utc
-    ? ` <span title="${fmtDateTime(original.retrieved_utc)}">captured ${timeAgo(original.retrieved_utc)}</span>` : '';
+    ? ` <span title="${fmtDateTime(original.retrieved_utc)}">(captured ${timeAgo(original.retrieved_utc)})</span>` : '';
   if (original.body.trim() === now.trim()) {
     return `<div class="edit-diff"><div class="edit-diff-head">The archive${captured} only has the edited text, so there's no earlier version to compare.</div></div>`;
   }
-  const text = wordDiff(original.body, now)
+  const segments = wordDiff(original.body, now);
+  const originalHtml = renderMd(original.body);
+  if (similarity(segments) < REWRITE_SIMILARITY) {
+    return `<div class="edit-diff">
+    <div class="edit-diff-head">Rewritten since the archived original${captured}. The original:</div>
+    <div class="edit-diff-orig md">${originalHtml}</div>
+  </div>`;
+  }
+  const text = segments
     .map(([op, t]) => OP_TAG[op] ? `<${OP_TAG[op]}>${escHtml(t)}</${OP_TAG[op]}>` : escHtml(t)).join('');
   return `<div class="edit-diff">
     <div class="edit-diff-head">Changes since the archived original${captured}: <del>removed</del> <ins>added</ins></div>
     <div class="edit-diff-text">${text}</div>
+    <details class="edit-diff-more"><summary>original text</summary><div class="edit-diff-orig md">${originalHtml}</div></details>
   </div>`;
 }
 

@@ -299,18 +299,22 @@
 {%- endmacro %}
 
 {% macro diff_captured(view) -%}
-  {%- if view.retrieved_utc %} <span title="{{ view.retrieved_utc | fmtdatetime }}">captured {{ view.retrieved_utc | timeago }}</span>{% endif -%}
+  {%- if view.retrieved_utc %} <span title="{{ view.retrieved_utc | fmtdatetime }}">(captured {{ view.retrieved_utc | timeago }})</span>{% endif -%}
 {%- endmacro %}
 
 {# The diff panel (original.js diffPanelHtml); page_data._original_view builds `view`. #}
 {% macro edit_diff(view) -%}
-  {%- if view and view.status in ('diff', 'same') -%}
+  {%- if view and view.status in ('diff', 'rewritten', 'same') -%}
   <div class="edit-diff">
     {%- if view.status == 'same' -%}
     <div class="edit-diff-head">The archive{{ diff_captured(view) }} only has the edited text, so there's no earlier version to compare.</div>
+    {%- elif view.status == 'rewritten' -%}
+    <div class="edit-diff-head">Rewritten since the archived original{{ diff_captured(view) }}. The original:</div>
+    <div class="edit-diff-orig md">{{ view.original | mdbody }}</div>
     {%- else -%}
     <div class="edit-diff-head">Changes since the archived original{{ diff_captured(view) }}: <del>removed</del> <ins>added</ins></div>
     <div class="edit-diff-text">{% for op, text in view.diff %}{% if op == '-' %}<del>{{ text }}</del>{% elif op == '+' %}<ins>{{ text }}</ins>{% else %}{{ text }}{% endif %}{% endfor %}</div>
+    <details class="edit-diff-more"><summary>original text</summary><div class="edit-diff-orig md">{{ view.original | mdbody }}</div></details>
     {%- endif -%}
   </div>
   {%- endif -%}
