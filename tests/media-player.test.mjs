@@ -1,4 +1,4 @@
-// Exercise the real media module with deterministic DOM/player adapters; no browser or network.
+// Exercise the real video module (media-video.js) with deterministic DOM/player adapters; no browser or network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -30,7 +30,7 @@ const imports = {
   './settings.js': stub('export const settings = {};'),
   './utils.js': stub('export const BASE="", GALLERY_SWIPE_MIN=30; export const escHtml=x=>x, evictMap=()=>{}, renderPoll=()=>{}, veilWrap=()=>{}, realMediaUrl=x=>x, isLocalUrl=()=>true;'),
 };
-let source = await readFile(new URL('../static/media.js', import.meta.url), 'utf8');
+let source = await readFile(new URL('../static/media-video.js', import.meta.url), 'utf8');
 for (const [path, replacement] of Object.entries(imports)) source = source.replace(`'${path}'`, JSON.stringify(replacement));
 const { initVideos } = await import(stub(source));
 
