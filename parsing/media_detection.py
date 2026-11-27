@@ -263,13 +263,18 @@ def _embed(p):
     return out
 
 
+def https_url(url):
+    """Old posts link media over plain http; the page's CSP only loads https media."""
+    return 'https://' + url[7:] if url and url[:7].lower() == 'http://' else url
+
+
 def _gif(post_url):
     """(gif_url, gif_is_video) for direct .gif/.gifv links and bare imgur image pages."""
     lower_url = post_url.lower().split("?")[0]
     if lower_url.endswith(".gif"):
-        return post_url, False
+        return https_url(post_url), False
     if lower_url.endswith(".gifv"):
-        return GIFV_RE.sub(".mp4", post_url), True
+        return https_url(GIFV_RE.sub(".mp4", post_url)), True
     imgur_id = _first_group(IMGUR_DIRECT_RE, post_url)
     return (f"https://i.imgur.com/{imgur_id}.jpg" if imgur_id else None), False
 

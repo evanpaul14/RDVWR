@@ -388,6 +388,16 @@ class TestProcessPost:
 
     # GIF / GIFV
 
+    def test_http_gifv_upgraded_to_https(self):
+        p = _post(url="http://i.imgur.com/Hkd5N8S.gifv")
+        result = process_post(p)
+        assert result["gif_url"] == "https://i.imgur.com/Hkd5N8S.mp4"
+        assert result["gif_is_video"] is True
+
+    def test_http_gif_upgraded_to_https(self):
+        p = _post(url="http://example.com/animated.gif")
+        assert process_post(p)["gif_url"] == "https://example.com/animated.gif"
+
     def test_gif_url(self):
         p = _post(url="https://example.com/animated.gif")
         result = process_post(p)

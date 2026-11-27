@@ -4,7 +4,7 @@ from parsing.reddit_html import sanitize_reddit_html
 from datetime import datetime
 from urllib.parse import urlparse
 from parsing.media_detection import (extract_redgifs_id, YOUTUBE_RE, STREAMABLE_RE, VREDDDIT_RE, LINK_POST_RE,
-                              GIFV_RE, proxy_if_reddit_preview, build_reddit_video_urls, proxy_hls)
+                              GIFV_RE, https_url, proxy_if_reddit_preview, build_reddit_video_urls, proxy_hls)
 
 
 def _is_nsfw(el):
@@ -248,6 +248,7 @@ def _parse_shreddit_post(el):
             else:
                 gif_url = content_href
                 gif_is_video = True
+        gif_url = https_url(gif_url)
 
     is_devvit = post_type == 'custom'
     devvit_url = (f'https://sh.reddit.com/r/{el.get("subreddit-name", "")}/comments/{post_id}'
