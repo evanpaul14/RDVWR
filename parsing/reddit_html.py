@@ -104,6 +104,16 @@ def linkify_plain_text(text):
     return ''.join(f'<p>{_linkify_mentions(p.strip()).replace(chr(10), "<br>")}</p>' for p in paras)
 
 
+def _reddit_media_target(parsed):
+    """The image URL inside a reddit.com/media?url=<image> viewer link, else None."""
+    if (re.fullmatch(r'(?:www\.|old\.|new\.)?reddit\.com', parsed.hostname or '', re.I)
+            and parsed.path.rstrip('/') == '/media'):
+        inner = parse_qs(parsed.query).get('url', [''])[0]
+        if inner.startswith('https://') and not inner.startswith('https://www.reddit.com/media'):
+            return inner
+    return None
+
+
 def _inline_img_src(href, explicit=False):
     """(src, is_third_party) for a link that should render as an inline image, else None."""
     try:
@@ -112,6 +122,9 @@ def _inline_img_src(href, explicit=False):
         return None
     if parsed.scheme != 'https' or not parsed.hostname:
         return None
+    inner = _reddit_media_target(parsed)
+    if inner:
+        return _inline_img_src(inner, explicit)
     if parsed.hostname in _INLINE_IMG_HOSTS and _INLINE_IMG_EXT_RE.search(parsed.path):
         return app_path('/api/img?url=' + url_quote(href, safe='')), False
     m = _GIPHY_PAGE_RE.match(href)

@@ -56,6 +56,14 @@ def test_links_images_and_escaped_url_underscores():
     assert doc.select('img')[1]['src'] == 'https://media.giphy.com/media/abc123/giphy.gif'
 
 
+def test_reddit_media_viewer_links_render_the_wrapped_image():
+    doc = soup('[that image](https://www.reddit.com/media?url=https%3A%2F%2Fi.redd.it%2Fvlha9ew7e0ke1.jpeg)\n\n'
+               '[page](https://www.reddit.com/media?url=https%3A%2F%2Fexample.com%2Fpage)')
+    assert doc.select_one('img')['src'] == '/api/img?url=https%3A%2F%2Fi.redd.it%2Fvlha9ew7e0ke1.jpeg'
+    assert doc.select_one('.md-img-caption').get_text() == 'that image'
+    assert len(doc.select('img')) == 1
+
+
 @pytest.mark.parametrize('text', [
     '<script>alert(1)</script><style>bad</style>**ok**',
     '<img src="javascript:alert(1)" onerror="alert(1)">',

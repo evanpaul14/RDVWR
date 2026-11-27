@@ -30,6 +30,18 @@ function _loadMdLibs() {
 }
 _loadMdLibs();
 
+// Reddit's image viewer link (reddit.com/media?url=<image>) -> the image URL itself.
+export function unwrapRedditMedia(href) {
+  try {
+    const u = new URL(href);
+    if (/^(?:www\.|old\.|new\.)?reddit\.com$/i.test(u.hostname) && u.pathname.replace(/\/$/, '') === '/media') {
+      const inner = u.searchParams.get('url');
+      if (inner && /^https:\/\//i.test(inner)) return inner;
+    }
+  } catch (_) {}
+  return href;
+}
+
 let _markedReady = false;
 function _initMarked() {
   if (_markedReady) return;
@@ -54,6 +66,7 @@ function _initMarked() {
       const hls = proxyHls(`${rawBase}/HLSPlaylist.m3u8`);
       return `<div class="md-video-embed post-video" data-hls="${hls}" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
     }
+    href = unwrapRedditMedia(href);
     try {
       const h = new URL(href).hostname;
       if (h === 'preview.redd.it' || h === 'cf.preview.redd.it' || h === 'external-preview.redd.it')
@@ -64,6 +77,7 @@ function _initMarked() {
     return _asLink(href, escHtml(text || 'image')) ?? _img(href, title, text);
   };
   r.link = (href, title, text) => {
+    href = href && unwrapRedditMedia(href);
     const decodedText = text ? text.replace(/&amp;/g, '&') : text;
     const proxied = href && ((href.includes('preview.redd.it') || href.includes('external-preview.redd.it'))
       ? `${BASE}/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href));
