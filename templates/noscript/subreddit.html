@@ -5,6 +5,17 @@
 {# Same wording as feed.js SUB_STATE_LABELS. #}
 {% set SUB_STATE_LABELS = {'restricted': 'restricted', 'archived': 'archived', 'quarantined': 'quarantined', 'gold_restricted': 'coin-restricted', 'employees_only': 'staff-only', 'user': 'user profile'} %}
 {% set about = page.about %}
+{# Wiki/RSS links, then the join button, at the right of the title strip (ctx-links + ctx-sub-btn in the JS app). #}
+{% set ctx_actions -%}
+  <div class="ctx-links">{% if page.show_wiki %}<a class="popular-btn ctx-link" href="/r/{{ page.sub }}/wiki">wiki</a>{% endif %}<a class="popular-btn ctx-link" href="{{ page.rss_url }}" title="Atom feed for this listing" target="_blank" rel="noopener">rss</a></div>
+  {%- if about and account_active() and about.user_is_subscriber is not none and '+' not in page.sub %}
+  <form class="ns-join" method="post" action="/actions/subscribe">
+    <input type="hidden" name="sub" value="{{ page.sub }}"><input type="hidden" name="next" value="{{ current_url() }}">
+    <input type="hidden" name="action" value="{{ 'unsub' if about.user_is_subscriber else 'sub' }}">
+    <button type="submit" class="popular-btn ctx-sub-btn{% if about.user_is_subscriber %} is-subscribed{% endif %}">{{ 'joined' if about.user_is_subscriber else 'join' }}</button>
+  </form>
+  {%- endif %}
+{%- endset %}
 
 {% if about %}
   {% set stats -%}
@@ -12,16 +23,9 @@
     {%- if about.active %} &middot; <span>{{ about.active | fmtnum }}</span> online{% endif -%}
     {%- if about.state %} &middot; <span class="ctx-state">{{ SUB_STATE_LABELS.get(about.state, about.state) }}</span>{% endif -%}
   {%- endset %}
-  {{ ui.ctx_header(about.title or 'r/' ~ page.sub, stats, about.icon) }}
-  {% if account_active() and about.user_is_subscriber is not none and '+' not in page.sub %}
-  <form class="ns-join" method="post" action="/actions/subscribe">
-    <input type="hidden" name="sub" value="{{ page.sub }}"><input type="hidden" name="next" value="{{ current_url() }}">
-    <input type="hidden" name="action" value="{{ 'unsub' if about.user_is_subscriber else 'sub' }}">
-    <button type="submit" class="ctx-sub-btn{% if about.user_is_subscriber %} is-subscribed{% endif %}">{{ 'joined' if about.user_is_subscriber else 'join' }}</button>
-  </form>
-  {% endif %}
+  {{ ui.ctx_header(about.title or 'r/' ~ page.sub, stats, about.icon, ctx_actions) }}
 {% else %}
-  {{ ui.ctx_header('r/' ~ page.sub) }}
+  {{ ui.ctx_header('r/' ~ page.sub, '', '', ctx_actions) }}
 {% endif %}
 
 {% if (about and (about.sidebar_html or about.description)) or page.rules or page.widgets %}
@@ -40,7 +44,6 @@
   </div>
 {% endif %}
 
-{% set wiki_link %}{% if page.show_wiki %}<a class="sort-btn sort-btn-wiki" href="/r/{{ page.sub }}/wiki">wiki</a>{% endif %}<a class="sort-btn sort-btn-wiki" href="{{ page.rss_url }}" title="Atom feed for this listing" target="_blank" rel="noopener">rss</a>{% endset %}
 {% if page.error and page.error.state == 'quarantined' %}
   <div class="feed-list">
     <div class="state state-quarantine">
@@ -53,7 +56,7 @@
 {% elif page.error %}
   {{ ui.error_state(page.error) }}
 {% else %}
-  {{ ui.feed_sort_bar(page.nav, wiki_link) }}
+  {{ ui.feed_sort_bar(page.nav) }}
   {{ posts.feed(page.posts) }}
   {{ ui.next_link(page.nav.next_url) }}
 {% endif %}

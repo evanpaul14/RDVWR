@@ -433,6 +433,9 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 }
 .ctx-meta { display:flex; flex-direction:column; gap:3px; flex:1; min-width:0; }
 .ctx-sub-btn { align-self:center; }
+.ctx-links { display:flex; align-self:center; gap:6px; flex-shrink:0; }
+.ctx-links:empty { display:none; }
+.ctx-link { text-decoration:none; }
 .ctx-subs { position:relative; display:inline-block; }
 .ctx-subs summary { cursor:pointer; list-style:none; -webkit-tap-highlight-color:transparent; }
 .ctx-subs summary::-webkit-details-marker { display:none; }
@@ -2107,7 +2110,7 @@ details.comment:not([open]) > .comment-replies { display:none; }
 .comment-score.vote-ctl .vote-btn { font-size:10px; padding:1px 2px; }
 .ns-vote { display:inline-flex; margin:0; }
 .ns-vote .vote-btn { font-size:12px; padding:2px 5px; }
-.ns-join { margin:0 0 8px; }
+.ns-join { margin:0; align-self:center; }
 
 /* Commenting (only rendered while logged in to Reddit via localhost) */
 .comment-actions { margin-top:2px; }

@@ -1,6 +1,7 @@
 import { accountActive } from './vote.js';
 import { getSubs, isSubscribed, isSubscribable, toggleSub, MAX_SUBS } from './subscriptions.js';
 import { onRoute } from './nav.js';
+import { escHtml, BASE } from './utils.js';
 
 // Subscribe / unsubscribe. Local list by default; while logged in to Reddit (localhost
 // only) the button joins/leaves the real subreddit instead.
@@ -55,4 +56,16 @@ ctxSubBtn.addEventListener('click', async () => {
   _renderSubscribeBtn(sub);
 });
 
-onRoute(route => { if (route.type !== 'post') updateSubscribeBtn(route); });
+// Wiki and RSS links, left of the subscribe button on subreddit pages.
+const ctxLinks = document.getElementById('ctx-links');
+function updateCtxLinks(route) {
+  if (route.type !== 'sub' || !route.sub) { ctxLinks.innerHTML = ''; return; }
+  const sub = escHtml(route.sub), sort = route.sort || 'hot';
+  const timed = sort === 'top' || sort === 'controversial';
+  const wiki = route.sub.toLowerCase() === 'popular' ? ''
+    : `<a class="popular-btn ctx-link" href="${BASE}/r/${sub}/wiki" data-nav="/r/${sub}/wiki">wiki</a>`;
+  const rss = `<a class="popular-btn ctx-link" href="${BASE}/r/${sub}/${escHtml(sort)}.rss${timed && route.time ? `?t=${escHtml(route.time)}` : ''}" title="Atom feed for this listing" target="_blank" rel="noopener">rss</a>`;
+  ctxLinks.innerHTML = wiki + rss;
+}
+
+onRoute(route => { if (route.type !== 'post') { updateCtxLinks(route); updateSubscribeBtn(route); } });

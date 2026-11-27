@@ -22,14 +22,15 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro ctx_header(title, stats='', icon='') -%}
-  {# The title strip above a feed (.ctx-info in the JS shell). `stats` is trusted markup. #}
+{% macro ctx_header(title, stats='', icon='', actions='') -%}
+  {# The title strip above a feed (.ctx-info in the JS shell). `stats` and `actions` (right-hand buttons) are trusted markup. #}
   <div class="ctx-info visible">
     {% if icon %}<img class="ctx-icon" src="{{ icon }}" alt="" loading="lazy">{% endif %}
     <div class="ctx-meta">
       <div class="ctx-title">{{ title }}</div>
       {% if stats %}<div class="ctx-stats">{{ stats }}</div>{% endif %}
     </div>
+    {{ actions }}
   </div>
 {%- endmacro %}
 
