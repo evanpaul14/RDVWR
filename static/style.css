@@ -741,7 +741,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .md ul,.md ol { padding-left:1.5em; margin:.4em 0; }
 .md li { margin-bottom:.2em; }
 .md blockquote { border-left:2px solid var(--b2); margin:.6em 0; padding:.2em .8em; color:var(--tx3); font-style:italic; }
-.md img { max-width:100%; border-radius:4px; margin:6px 0; display:block; }
+.md img, .md video.md-gif-video { max-width:100%; border-radius:4px; margin:6px 0; display:block; }
 .md h1,.md h2,.md h3 { font-family:var(--serif); margin:.8em 0 .3em; color:var(--tx); font-weight:normal; }
 .md hr { border:none; border-top:1px solid var(--b); margin:.8em 0; }
 .md table { border-collapse:collapse; width:100%; margin:.6em 0; font-size:.9em; }
@@ -752,7 +752,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .md .md-video-embed { width:100%; max-width:480px; border-radius:4px; overflow:hidden; margin:6px 0; border-top:none; border-bottom:none; }
 .md .md-video-embed video { max-height:480px; }
 .md .md-img-block { display:block; }
-.md .md-img-block img { margin-bottom:2px; }
+.md .md-img-block img, .md .md-img-block video { margin-bottom:2px; }
 .md .md-img-caption { display:block; text-align:center; font-size:.85em; color:var(--tx3); margin:0 0 6px; }
 .spoiler { background:var(--tx); color:var(--tx); border-radius:3px; cursor:pointer; padding:0 2px; user-select:none; transition:background .15s,color .15s; }
 .spoiler.revealed { background:var(--bg3); color:var(--tx); }
@@ -788,7 +788,7 @@ html,body { background:var(--bg); color:var(--tx); font-family:var(--sans); min-
 .devvit-iframe { display:block; width:100%; border:none; border-radius:6px; }
 
 /* Comments: keep images compact */
-.pv-comments .md img { max-height:300px; width:auto; max-width:100%; }
+.pv-comments .md img, .pv-comments .md video.md-gif-video { max-height:300px; width:auto; max-width:100%; }
 .pv-comments .md .md-gif-embed { max-width:360px; }
 
 /* ── Skeletons ───────────────────────────────────────────────────────────── */
@@ -1005,7 +1005,7 @@ body.pagination-mode #scroll-sentinel { height:auto; padding:16px 0; }
 }
 .pv-article-desc:empty { display:none; }
 .pv-body { margin-bottom:24px; font-size:14px; line-height:1.7; color:var(--tx); }
-.pv-body .md img { max-height:500px; }
+.pv-body .md img, .pv-body .md video.md-gif-video { max-height:500px; }
 
 .pv-divider {
   display:flex; align-items:center; gap:12px; margin-bottom:20px;

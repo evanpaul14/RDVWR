@@ -64,6 +64,17 @@ def test_reddit_media_viewer_links_render_the_wrapped_image():
     assert len(doc.select('img')) == 1
 
 
+def test_mp4_gif_previews_render_as_looping_video():
+    doc = soup('[gif](https://www.reddit.com/media?url=https%3A%2F%2Fexternal-preview.redd.it%2Fabc.gif'
+               '%3Fwidth%3D400%26format%3Dmp4%26s%3Ddef)')
+    video = doc.select_one('video.md-gif-video')
+    assert video['src'] == ('/api/img?url=https%3A%2F%2Fexternal-preview.redd.it%2Fabc.gif'
+                            '%3Fwidth%3D400%26format%3Dmp4%26s%3Ddef')
+    assert video.has_attr('autoplay') and video.has_attr('loop') and video.has_attr('muted')
+    assert not doc.select('img')
+    assert doc.select_one('.md-img-caption').get_text() == 'gif'
+
+
 @pytest.mark.parametrize('text', [
     '<script>alert(1)</script><style>bad</style>**ok**',
     '<img src="javascript:alert(1)" onerror="alert(1)">',

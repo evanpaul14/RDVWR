@@ -43,6 +43,16 @@ export function unwrapRedditMedia(href) {
   return href;
 }
 
+// Reddit's preview of a GIF re-encoded as video (…/x.gif?format=mp4&s=…): the URL is
+// signed, so it can't be swapped for a still format — it has to play as a <video>.
+function isMp4Preview(href) {
+  try {
+    const u = new URL(href);
+    return /^(?:cf\.|external-)?preview\.redd\.it$/i.test(u.hostname) && u.searchParams.get('format') === 'mp4';
+  } catch (_) { return false; }
+}
+const _gifVideo = src => `<video class="md-gif-video" src="${src}" autoplay loop muted playsinline></video>`;
+
 let _markedReady = false;
 function _initMarked() {
   if (_markedReady) return;
@@ -68,6 +78,7 @@ function _initMarked() {
       return `<div class="md-video-embed post-video" data-hls="${hls}" data-src="${base}/DASH_480.mp4" data-audio="${base}/DASH_audio.mp4"><video controls preload="metadata" playsinline muted></video></div>`;
     }
     href = unwrapRedditMedia(href);
+    const mp4 = isMp4Preview(href);
     try {
       const h = new URL(href).hostname;
       if (h === 'preview.redd.it' || h === 'cf.preview.redd.it' || h === 'external-preview.redd.it')
@@ -75,7 +86,7 @@ function _initMarked() {
       else
         href = proxyMedia(href);
     } catch (_) {}
-    return _asLink(href, escHtml(text || 'image')) ?? _img(href, title, text);
+    return _asLink(href, escHtml(text || 'image')) ?? (mp4 ? _gifVideo(href) : _img(href, title, text));
   };
   r.link = (href, title, text) => {
     href = href && unwrapRedditMedia(href);
@@ -84,7 +95,8 @@ function _initMarked() {
       ? `${BASE}/api/img?url=${encodeURIComponent(href)}` : proxyMedia(href));
     // Unproxied image links stay plain links under the "link instead of embedding" setting.
     if (href && /\.(jpe?g|gif|png|webp|avif)(\?|$)/i.test(href) && !(settings.linkExternalMedia && !isLocalUrl(proxied))) {
-      const img = `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
+      const img = isMp4Preview(href) ? _gifVideo(proxied)
+        : `<a href="${proxied}" target="_blank" rel="noopener"><img src="${proxied}" alt="" loading="lazy"></a>`;
       if (decodedText && decodedText !== href)
         return `<span class="md-img-block">${img}<span class="md-img-caption">${text}</span></span>`;
       return img;

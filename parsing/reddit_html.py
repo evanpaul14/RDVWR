@@ -135,8 +135,22 @@ def _inline_img_src(href, explicit=False):
     return None
 
 
+def _is_mp4_preview(href):
+    """A Reddit preview of a GIF re-encoded as video (signed, so it can't become a still)."""
+    try:
+        parsed = urlparse(href)
+    except ValueError:
+        return False
+    parsed = urlparse(_reddit_media_target(parsed) or href)
+    return (parsed.hostname in _INLINE_IMG_HOSTS
+            and parse_qs(parsed.query).get('format') == ['mp4'])
+
+
 def _image_link(href, source, alt=''):
     src, third_party = source
+    if not third_party and _is_mp4_preview(href):
+        return (f'<video class="md-gif-video" src="{html_lib.escape(src, quote=True)}" '
+                'autoplay loop muted playsinline></video>')
     link = href if third_party else src
     cls = f' class="{EXTERNAL_MEDIA_CLASS}"' if third_party else ''
     return (f'<a{cls} href="{html_lib.escape(link, quote=True)}" target="_blank" rel="noopener">'
