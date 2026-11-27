@@ -4,6 +4,7 @@ import re
 import shutil
 import tempfile
 import subprocess
+import threading
 from functools import wraps
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse
@@ -11,7 +12,7 @@ import requests
 from flask import Blueprint, jsonify, request, Response
 from reddit.client import SESSION, HEADERS
 from core.helpers import STREAM_CHUNK_SIZE, error_response, log
-from core.config import DISABLE_DOWNLOADS
+from core.config import DISABLE_DOWNLOADS, FFMPEG_MAX_JOBS
 
 bp = Blueprint("downloads", __name__)
 
@@ -160,6 +161,14 @@ def download_gallery():
 
 # ── Reddit video+audio merge download ────────────────────────────────────────
 
+# Each merge can hold a worker thread for up to _FFMPEG_TIMEOUT seconds, so cap how
+# many run at once instead of letting a few clients occupy every thread.
+_ffmpeg_slots = threading.BoundedSemaphore(FFMPEG_MAX_JOBS)
+_FFMPEG_TIMEOUT = 180
+# Network protocols only: an HLS playlist can name other inputs (file:, concat:, ...),
+# and ffmpeg would otherwise open whatever it points at.
+_FFMPEG_PROTOCOLS = 'https,tls,tcp,crypto'
+
 @bp.route("/api/download/reddit-video")
 @_downloads_enabled
 def download_reddit_video():
@@ -173,18 +182,31 @@ def download_reddit_video():
     if parsed.scheme not in ('http', 'https') or parsed.netloc != 'v.redd.it':
         return jsonify({'error': 'URL not allowed'}), 400
 
-    tmpdir = tempfile.mkdtemp()
+    if not _ffmpeg_slots.acquire(blocking=False):
+        resp = jsonify({'error': 'Too many video downloads in progress, try again shortly'})
+        resp.headers['Retry-After'] = '30'
+        return resp, 503
+
+    try:
+        tmpdir = tempfile.mkdtemp()
+    except Exception:
+        _ffmpeg_slots.release()
+        return error_response(500)
     out_path = os.path.join(tmpdir, 'merged.mp4')
     try:
         cmd = [
-            'ffmpeg', '-y',
+            'ffmpeg', '-nostdin', '-y',
+            '-protocol_whitelist', _FFMPEG_PROTOCOLS,
             '-user_agent', HEADERS['User-Agent'],
             '-i', hls_url,
             '-c', 'copy',
             '-movflags', '+faststart',
             out_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=_FFMPEG_TIMEOUT)
+        finally:
+            _ffmpeg_slots.release()
         if result.returncode != 0:
             shutil.rmtree(tmpdir, ignore_errors=True)
             return jsonify({'error': 'ffmpeg failed'}), 502

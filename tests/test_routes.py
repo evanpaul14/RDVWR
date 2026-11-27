@@ -1080,6 +1080,37 @@ class TestDownloadRedditVideo:
         resp = client.get("/api/download/reddit-video?hls=")
         assert resp.status_code == 400
 
+    def test_ffmpeg_limited_to_network_protocols(self, client):
+        from routes import downloads
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen['cmd'] = cmd
+            return MagicMock(returncode=1)
+
+        with patch.object(downloads.subprocess, 'run', side_effect=fake_run):
+            resp = client.get("/api/download/reddit-video?hls=https://v.redd.it/abc/HLSPlaylist.m3u8")
+        assert resp.status_code == 502
+        cmd = seen['cmd']
+        whitelist = cmd[cmd.index('-protocol_whitelist') + 1].split(',')
+        assert 'file' not in whitelist and 'https' in whitelist
+        assert cmd.index('-protocol_whitelist') < cmd.index('-i')
+        # The slot is handed back after a failed merge.
+        assert downloads._ffmpeg_slots.acquire(blocking=False)
+        downloads._ffmpeg_slots.release()
+
+    def test_busy_when_all_ffmpeg_slots_taken(self, client):
+        import threading
+        from routes import downloads
+        with patch.object(downloads, '_ffmpeg_slots', threading.BoundedSemaphore(1)) as slots, \
+             patch.object(downloads.subprocess, 'run') as run:
+            slots.acquire()
+            resp = client.get("/api/download/reddit-video?hls=https://v.redd.it/abc/HLSPlaylist.m3u8")
+            slots.release()
+        assert resp.status_code == 503
+        assert resp.headers['Retry-After'] == '30'
+        run.assert_not_called()
+
 
 # ── /api/redgifs/<gif_id> ────────────────────────────────────────────────────
 

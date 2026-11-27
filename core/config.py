@@ -61,6 +61,8 @@ REDIS_URL = os.environ.get('REDIS_URL', '').strip()
 # Requests per client IP per minute (0 turns the bucket off); see core/ratelimit.py.
 RATE_LIMIT = int_env('RATE_LIMIT', 600)
 RATE_LIMIT_DOWNLOADS = int_env('RATE_LIMIT_DOWNLOADS', 20)
+# ffmpeg merges /api/download/reddit-video runs at once per process; more get a 503.
+FFMPEG_MAX_JOBS = max(1, int_env('FFMPEG_MAX_JOBS', 2))
 
 
 # ── Features ─────────────────────────────────────────────────────────────────────
