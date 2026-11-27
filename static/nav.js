@@ -27,9 +27,18 @@ export function navigateOrOpen(path, e) {
   navigate(path);
 }
 
+// The feed a post was opened over. The post view is an overlay, so the feed stays in the
+// DOM underneath; going back to this exact URL while nothing has re-rendered the feed just
+// closes the post view, keeping the loaded pages, sort, tab and scroll position.
+let _feedUnderPost = null;
+const _here = () => location.pathname + location.search;
+
 export function navigate(path, { replace=false }={}) {
   const pvScrollTop = document.getElementById('pv-scroll')?.scrollTop || 0;
   history.replaceState({ ...(history.state||{}), scrollY: window.scrollY, pvScrollTop }, '', location.href);
+  if (!replace && parseRoute(path).type === 'post' && parseRoute().type !== 'post' && feed.querySelector('.post')) {
+    _feedUnderPost = { url: _here(), feedGen: state.feedGen, title: document.title };
+  }
   if (replace) history.replaceState(null,'',appPath(path));
   else         history.pushState(null,'',appPath(path));
   renderRoute(parseRoute(path));
@@ -43,16 +52,18 @@ export async function renderRoute(route, { restoreScroll=0, restorePvScroll=0 }=
   const isBoot = _isBootRender;
   _isBootRender = false;
   routeHooks.forEach(fn => fn(route));
-  if (route.type !== 'search') {
+  // A post opened over a loaded feed leaves that feed (and its mode) untouched for going back.
+  const keepFeed = route.type === 'post' && !!feed.querySelector('.post');
+  if (route.type !== 'search' && !keepFeed) {
     searchTypeBar.style.display = 'none';
     state.searchType = 'posts';
   }
-  if (route.type !== 'home') state.homeMode = false;
+  if (route.type !== 'home' && !keepFeed) state.homeMode = false;
   if (route.type !== 'post') window.scrollTo({top: restoreScroll, behavior: 'instant'});
-  if (route.type !== 'duplicates') state.duplicatesMode = false;
+  if (route.type !== 'duplicates' && !keepFeed) state.duplicatesMode = false;
   if (route.type !== 'wiki') state.wikiMode = false;
-  if (route.type !== 'saved') state.savedMode = false;
-  if (route.type !== 'account') { state.accountMode = false; leaveAccount(); }
+  if (route.type !== 'saved' && !keepFeed) state.savedMode = false;
+  if (route.type !== 'account' && !keepFeed) { state.accountMode = false; leaveAccount(); }
   if (!['home', 'subscribed', 'post'].includes(route.type)) state.subsMode = false;
   if (route.type !== 'live') { state.liveMode = false; cancelLivePoll(); }
   switch (route.type) {
@@ -155,6 +166,15 @@ window.addEventListener('popstate', (e) => {
   if (route.type !== 'post') {
     document.querySelectorAll('#post-view iframe').forEach(f => f.setAttribute('src', 'about:blank'));
     closePostView();
+  }
+  const under = _feedUnderPost;
+  if (route.type !== 'post' && under && under.url === _here() && under.feedGen === state.feedGen
+      && !['wiki', 'live'].includes(route.type) && feed.querySelector('.post')) {
+    state.navigationGen++;
+    document.title = under.title;
+    routeHooks.forEach(fn => fn(route));
+    window.scrollTo({top: savedScroll, behavior: 'instant'});
+    return;
   }
   const hasFeedPosts = !!feed.querySelector('.post');
   if (route.type === 'sub' && hasFeedPosts && route.sub === state.currentSub && !state.searchMode && !state.profileMode && !state.duplicatesMode && !state.multiMode && !state.homeMode && route.sort === state.currentSort && (route.time || 'all') === state.currentTime && (route.after || null) === state.currentAfter) {
