@@ -9,6 +9,7 @@ let _lbDragging = false, _lbDragX = 0, _lbDragY = 0;
 let _lbPinchDist = 0, _lbPinchScale = 1;
 let _lbTouchX = 0, _lbTouchY = 0, _lbTouchInitX = 0, _lbTouchInitY = 0;
 let _lbGallery = null, _lbIndex = 0;
+let _lbPrevFocus = null;
 
 function _lbApply() {
   lightboxImg.style.transform = _lbScale === 1 ? '' : `translate(${_lbX}px,${_lbY}px) scale(${_lbScale})`;
@@ -41,18 +42,32 @@ export function openLightbox(src, index = 0) {
   }
   lightbox.classList.add('open');
   document.body.style.overflow = 'hidden';
+  _lbPrevFocus = document.activeElement;
+  document.getElementById('lightbox-close').focus();
 }
 export function closeLightbox() {
   lightbox.classList.remove('open');
   document.body.style.overflow = '';
   lightboxImg.src = ''; _lbReset();
   _lbGallery = null;
+  if (_lbPrevFocus?.isConnected) _lbPrevFocus.focus();
+  _lbPrevFocus = null;
 }
 
 function _lbGoPrev(e) { e.stopPropagation(); if (_lbGallery && _lbIndex > 0) _lbShowIndex(_lbIndex - 1); }
 function _lbGoNext(e) { e.stopPropagation(); if (_lbGallery && _lbIndex < _lbGallery.length - 1) _lbShowIndex(_lbIndex + 1); }
 lightboxPrev.addEventListener('click', _lbGoPrev);
 lightboxNext.addEventListener('click', _lbGoNext);
+// Keep Tab inside the open lightbox: it's modal, so focus shouldn't wander to the page behind.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab' || !lightbox.classList.contains('open')) return;
+  const btns = [...lightbox.querySelectorAll('button')].filter(b => !b.disabled && b.offsetParent !== null);
+  if (!btns.length) return;
+  const i = btns.indexOf(document.activeElement);
+  const next = e.shiftKey ? (i <= 0 ? btns.length - 1 : i - 1) : (i === -1 || i === btns.length - 1 ? 0 : i + 1);
+  e.preventDefault();
+  btns[next].focus();
+});
 document.addEventListener('keydown', e => {
   if (!lightbox.classList.contains('open') || !_lbGallery) return;
   if (e.key === 'ArrowLeft') _lbGoPrev(e);

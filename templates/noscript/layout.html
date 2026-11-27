@@ -3,6 +3,7 @@
    `page` (see routes/page_data.py). Markup reuses the JS app's classes (static/render.js,
    feed.js, postview.js) so style.css styles both. #}
 <div class="ns-root{% if ns.layout == 'minimal' %} minimal-mode{% endif %}">
+  <a class="skip-link" href="#ns-main">Skip to content</a>
   <header class="header">
     <div class="header-inner">
       <a class="logo" href="/">RDVWR</a>
@@ -35,5 +36,7 @@
       </a>
     </div>
   </header>
+  <main id="ns-main" tabindex="-1">
   {% include 'noscript/' ~ ns_view ~ '.html' %}
+  </main>
 </div>

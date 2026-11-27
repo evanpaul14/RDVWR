@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { scrollBehavior } from './utils.js';
 
 export function initKeyboard({ navigate, feed, pvContent, postView, subInput, settingsPanel, closeSettingsPanel, closeLightbox, refreshFeed }) {
   function _isTyping() {
@@ -17,7 +18,7 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
     idx = Math.max(0, Math.min(idx, posts.length - 1));
     posts.forEach((p, i) => p.classList.toggle('keyboard-selected', i === idx));
     state.selectedPostIdx = idx;
-    posts[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    posts[idx].scrollIntoView({ behavior: scrollBehavior(), block: 'nearest' });
   }
 
   let _selectedCommentIdx = -1;
@@ -31,7 +32,7 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
     idx = Math.max(0, Math.min(idx, comments.length - 1));
     comments.forEach((c, i) => c.classList.toggle('keyboard-selected', i === idx));
     _selectedCommentIdx = idx;
-    comments[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    comments[idx].scrollIntoView({ behavior: scrollBehavior(), block: 'nearest' });
   }
 
   document.addEventListener('keydown', e => {
@@ -86,10 +87,10 @@ export function initKeyboard({ navigate, feed, pvContent, postView, subInput, se
       if (refreshFeed) refreshFeed();
     } else if (e.key === 'g') {
       e.preventDefault();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: scrollBehavior() });
     } else if (e.key === 'G') {
       e.preventDefault();
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      window.scrollTo({ top: document.body.scrollHeight, behavior: scrollBehavior() });
     } else if (e.key === '/') {
       e.preventDefault();
       subInput.focus();

@@ -95,6 +95,14 @@ class TestPrefs:
 
 
 class TestSettingsPage:
+    def test_layout_has_skip_link_to_main(self, client):
+        resp = client.get("/settings?next=/r/pics")
+        html = _noscript(resp)
+        assert '<a class="skip-link" href="#ns-main">' in html
+        assert '<main id="ns-main"' in html
+        page = resp.get_data(as_text=True)
+        assert 'href="#main-content"' in page and '<main id="main-content"' in page
+
     def test_get_renders_form(self, client):
         html = _noscript(client.get("/settings?next=/r/pics"))
         assert 'name="next" value="/r/pics"' in html

@@ -4,7 +4,7 @@ import { observeMedia, unobserveMedia, mediaDisposed, mediaSleeping } from './me
 import { settings } from './settings.js';
 import { escHtml, evictMap, veilWrap, isLocalUrl } from './utils.js';
 import { setupHls, trackVideoMute } from './media-video.js';
-import { renderGallery } from './media-gallery.js';
+import { renderGallery, ZOOM_ATTRS } from './media-gallery.js';
 import { dlOk, dlHref, dlFilename, dlFilenamePos, DL_ICON } from './media-download.js';
 
 // Resolved URL cache shared across feed and postview — keyed by redgifs ID.
@@ -131,8 +131,8 @@ export async function initImgurAlbums(container) {
       const imgs = data.images.map(img => ({url: img.url, width: img.width, height: img.height, caption: img.description || ''}));
       if (settings.linkExternalMedia && imgs.some(img => !isLocalUrl(img.url))) throw new Error('unproxied');
       const newHtml = imgs.length === 1
-        ? `<div class="post-media"><img src="${escHtml(imgs[0].url)}" loading="lazy" alt="${escHtml(imgs[0].caption)}"></div>`
-        : renderGallery(imgs);
+        ? `<div class="post-media"><img src="${escHtml(imgs[0].url)}"${wrap.classList.contains('pv-media') ? ZOOM_ATTRS : ''} loading="lazy" alt="${escHtml(imgs[0].caption)}"></div>`
+        : renderGallery(imgs, wrap.classList.contains('pv-media'));
       wrap.insertAdjacentHTML('afterend', newHtml);
       wrap.remove();
       // Activate pv-meta placeholder if present
@@ -199,7 +199,8 @@ export function initOgImages(container) {
           }
         } else {
           const cls = wrap.classList.contains('pv-media') ? 'pv-media' : 'post-media';
-          wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}" loading="lazy" alt="" data-onerror="no-media"></div>`);
+          const zoom = cls === 'pv-media' ? ZOOM_ATTRS : '';
+          wrap.insertAdjacentHTML('afterend', `<div class="${cls}"><img src="${escHtml(d.url)}"${zoom} loading="lazy" alt="" data-onerror="no-media"></div>`);
           wrap.remove();
         }
       })

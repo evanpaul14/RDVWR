@@ -2281,3 +2281,24 @@ body.translate-never .translate-btn { display:none; }
 }
 .toast.show { opacity:1; transform:translate(-50%, 0); }
 @media (max-width:680px) { .toast { bottom:calc(72px + env(safe-area-inset-bottom, 0px)); } }
+
+/* ── Accessibility ───────────────────────────────────────────────────────── */
+/* Keyboard focus ring. :where() keeps it at zero specificity, so components
+   with their own focus style keep it. */
+:where(a, button, summary, select, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline:2px solid var(--ac); outline-offset:2px;
+}
+main:focus, #pv-scroll:focus, #ns-main:focus { outline:none; }
+.gallery-thumb:focus-visible { opacity:1; }
+.skip-link {
+  position:absolute; left:8px; top:-100px; z-index:1300;
+  padding:8px 12px; border-radius:4px; background:var(--ac); color:#fff;
+  font:13px var(--sans); text-decoration:none;
+}
+.skip-link:focus { top:8px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:.01ms !important; animation-iteration-count:1 !important;
+    transition-duration:.01ms !important; scroll-behavior:auto !important;
+  }
+}

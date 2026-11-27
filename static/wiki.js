@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { escHtml, fmtDate, errState, BASE } from './utils.js';
+import { escHtml, fmtDate, errState, BASE, scrollBehavior } from './utils.js';
 import { setMainOpen } from './feed.js';
 
 const feed    = document.getElementById('feed');
@@ -35,7 +35,7 @@ export async function loadWikiPage(sub, page) {
       if (!a) return;
       const id = a.getAttribute('href').slice(1);
       const target = feed.querySelector(`#${CSS.escape(id)}`);
-      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }); }
     }, { once: true });
   } catch {
     feed.innerHTML = errState('Network error', 'wiki');

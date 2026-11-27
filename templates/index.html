@@ -29,6 +29,7 @@
 <body class="theme-{{ ns.theme }}{% if ns.layout == 'minimal' %} minimal-mode{% endif %}{% if ns.nsfw_blur %} nsfw-blur{% endif %}{% if ns.nsfw_hide %} nsfw-hide{% endif %}">
 <noscript><style>#app-shell{display:none}</style></noscript>
 <div id="app-shell">
+<a class="skip-link" href="#main-content">Skip to content</a>
 <!-- ── Header ── -->
 <header class="header">
   <div class="header-inner">
@@ -91,7 +92,7 @@
   <div class="autocomplete-dropdown" id="mobile-search-dropdown" role="listbox"></div>
 </div>
 
-<main>
+<main id="main-content" tabindex="-1">
 <!-- ── Context info (sub or user) ── -->
 <div class="ctx-info" id="ctx-info">
   <div id="ctx-icon-wrap"></div>
@@ -192,7 +193,7 @@
   </div>
 </div>
 
-<div id="lightbox"><button id="lightbox-close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><img id="lightbox-img" alt=""><button id="lightbox-prev" class="lightbox-nav-btn" aria-label="Previous image">‹</button><button id="lightbox-next" class="lightbox-nav-btn" aria-label="Next image">›</button><span id="lightbox-counter"></span></div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Image viewer"><button id="lightbox-close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><img id="lightbox-img" alt=""><button id="lightbox-prev" class="lightbox-nav-btn" aria-label="Previous image">‹</button><button id="lightbox-next" class="lightbox-nav-btn" aria-label="Next image">›</button><span id="lightbox-counter" aria-live="polite"></span></div>
 
 <!-- ── Settings panel ── -->
 <div class="settings-overlay" id="settings-overlay"></div>

@@ -162,6 +162,30 @@ document.addEventListener('click', e => {
 });
 
 
+// Skip link: move focus straight to the content. Following the #fragment would fire
+// popstate, which the router treats as a navigation.
+document.addEventListener('click', e => {
+  const link = e.target.closest('.skip-link');
+  if (!link) return;
+  e.preventDefault();
+  const target = document.getElementById('post-view')?.classList.contains('open')
+    ? document.getElementById('pv-scroll')
+    : document.getElementById('main-content');
+  if (target && !target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target?.focus();
+});
+
+// Images given role="button" (gallery thumbnails, post-view images that open the
+// lightbox) act like buttons from the keyboard.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target;
+  if (!(el instanceof HTMLImageElement) || el.getAttribute('role') !== 'button') return;
+  e.preventDefault();
+  e.stopPropagation();
+  el.click();
+});
+
 document.addEventListener('click', e => {
   const img = e.target.closest('.post-media img, .pv-media img, .md img, .gallery-main-img');
   if (!img) return;

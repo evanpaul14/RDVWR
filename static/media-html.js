@@ -1,7 +1,7 @@
 // Media markup for feed cards and the post view, per layout and embed setting.
 import { settings } from './settings.js';
 import { escHtml, renderPoll, veilWrap, realMediaUrl, isLocalUrl } from './utils.js';
-import { galleryThumb, renderGallery } from './media-gallery.js';
+import { galleryThumb, renderGallery, ZOOM_ATTRS } from './media-gallery.js';
 
 // Where a post's media lives upstream, for a plain outbound link.
 function _mediaLink(p) {
@@ -142,14 +142,14 @@ export function mediaHtml(p, full = false) {
   } else if (p.gif_url) {
     html = p.gif_is_video
       ? `<div class="${vc}"><video src="${escHtml(p.gif_url)}" controls autoplay loop muted playsinline></video></div>`
-      : `<div class="${ic}"><img src="${escHtml(p.gif_url)}" loading="lazy" alt="" data-onerror="no-media"></div>`;
+      : `<div class="${ic}"><img src="${escHtml(p.gif_url)}"${full ? ZOOM_ATTRS : ''} loading="lazy" alt="" data-onerror="no-media"></div>`;
   } else if (p.gallery?.length > (full ? 0 : 1)) {
     html = renderGallery(p.gallery, full);
   } else {
     const imgSrc = p.gallery?.length ? (full ? p.gallery[0].url : galleryThumb(p.gallery[0])) : (!p.is_self ? (full ? p.preview_img : (p.thumb_url ?? p.preview_img)) : null);
     if (imgSrc) {
       const fullAttr = p.gallery?.length && !full ? ` data-full="${escHtml(p.gallery[0].url)}"` : '';
-      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}"${fullAttr} loading="lazy" alt="" data-onerror="no-media"></div>`;
+      html = `<div class="${ic}"><img src="${escHtml(imgSrc)}"${fullAttr}${full ? ZOOM_ATTRS : ''} loading="lazy" alt="" data-onerror="no-media"></div>`;
     } else if (!p.is_self && p.url && /^https?:\/\//.test(p.url)) {
       html = `<div class="og-placeholder ${ic}" data-og-url="${escHtml(p.url)}"></div>`;
     }

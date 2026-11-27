@@ -161,12 +161,17 @@ const _gifObserver = new IntersectionObserver((entries) => {
     const v = entry.target;
     if (mediaDisposed(v) || mediaSleeping(v)) return;
     if (entry.isIntersecting) {
-      v.play().catch(() => {});
+      if (!_reduceMotion()) v.play().catch(() => {});
     } else {
       v.pause();
     }
   });
 }, { threshold: 0.1 });
+
+// Reduced motion: gif videos stay paused (they keep their controls) instead of autoplaying.
+function _reduceMotion() {
+  return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
 
 // Animated <img> gifs (giphy embeds in comments) have no play/pause API and decode
 // every frame forever once loaded, even off-screen — a thread with many gif reactions
