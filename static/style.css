@@ -2269,7 +2269,6 @@ body.translate-never .translate-btn { display:none; }
 .edit-diff-more > summary:hover { color:var(--tx); }
 .edit-diff-more > .edit-diff-orig { padding-top:0; }
 .comment.collapsed > .edit-diff { display:none; }
-.translated { white-space:pre-wrap; }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 .toast {
